@@ -3,7 +3,6 @@ import {
   ArrowRight,
   ArrowUpRight,
   CheckCheck,
-  CircleHelp,
   ShieldCheck,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
@@ -18,8 +17,8 @@ export default function DashboardPage() {
           <p className="text-sm font-medium text-brand">Workspace perusahaan</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-ink">Ringkasan terpadu</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-            Satu ruang kerja untuk operasi, keuangan, SDM, dan kepatuhan. Angka lintas modul akan
-            ditampilkan setelah sumber data dan aksesnya disambungkan.
+            Satu ruang kerja untuk CRM, operasional, keuangan, SDM, dan kepatuhan. Catatan tahap awal
+            disimpan di database ERP ini dengan akses per organisasi.
           </p>
         </div>
         <Button variant="secondary" asChild>
@@ -41,9 +40,9 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center border-t border-line bg-canvas px-6 py-5 md:border-l md:border-t-0 md:px-7">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted">Status integrasi</p>
-            <p className="mt-1 text-lg font-bold text-ink">Belum tersambung</p>
-            <p className="mt-1 text-xs text-muted">Tidak ada angka dummy ditampilkan</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted">Database workspace</p>
+            <p className="mt-1 text-lg font-bold text-ink">Supabase ERP GSP</p>
+            <p className="mt-1 text-xs text-muted">Data baru dicatat langsung di workspace ini</p>
           </div>
         </div>
       </Card>
@@ -52,7 +51,7 @@ export default function DashboardPage() {
         <div className="mb-4 flex items-end justify-between">
           <div>
             <h2 className="text-lg font-bold text-ink">Modul perusahaan</h2>
-            <p className="mt-1 text-sm text-muted">Batas modul jelas, ringkasan akan mengikuti akses Anda.</p>
+            <p className="mt-1 text-sm text-muted">MVP tahap awal untuk pencatatan data tiap modul.</p>
           </div>
           <Link href="/modul/crm" className="hidden items-center gap-1 text-sm font-semibold text-brand sm:inline-flex">
             Jelajahi modul <ArrowRight size={15} />
@@ -73,7 +72,7 @@ export default function DashboardPage() {
                 <div className="mt-5 flex items-center justify-between border-t border-line pt-4">
                   <span className="text-xs text-muted">Sumber: {source}</span>
                   <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-800">
-                    {status === "foundation" ? "Fondasi" : "Menunggu integrasi"}
+                    {status === "foundation" ? "Fondasi laporan" : "MVP tahap 1"}
                   </span>
                 </div>
               </Card>
@@ -84,10 +83,10 @@ export default function DashboardPage() {
 
       <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex gap-3">
-          <CircleHelp size={18} className="mt-0.5 shrink-0 text-brand" />
+          <ShieldCheck size={18} className="mt-0.5 shrink-0 text-brand" />
           <div>
-            <p className="text-sm font-semibold text-ink">Belum ada data lintas sistem?</p>
-            <p className="mt-1 text-sm text-muted">Mulai dengan menyiapkan migration dan mendaftarkan organisasi.</p>
+            <p className="text-sm font-semibold text-ink">Modul ERP baru</p>
+            <p className="mt-1 text-sm text-muted">Data pada tahap ini diinput langsung di workspace; sinkronisasi sistem eksternal belum tersedia.</p>
           </div>
         </div>
         <Button variant="secondary" asChild>

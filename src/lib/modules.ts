@@ -23,60 +23,60 @@ export type ModuleDefinition = {
   source: string
   href: string
   icon: LucideIcon
-  status: "foundation" | "integration"
+  status: "foundation" | "mvp"
 }
 
 export const modules: ModuleDefinition[] = [
   {
     key: "crm",
     name: "CRM & Proyek",
-    description: "Prospek, klien, penawaran, proyek, dan dokumen operasional.",
-    source: "GSP-staging",
+    description: "Catat kontak/prospek dan proyek; penawaran dan dokumen menyusul.",
+    source: "ERP GSP · Supabase",
     href: "/modul/crm",
     icon: ContactRound,
-    status: "integration",
+    status: "mvp",
   },
   {
     key: "operasional",
     name: "Operasional",
-    description: "Alur kerja, persetujuan, aktivitas proyek, dan kontrol proses.",
-    source: "GSP-staging",
+    description: "Catat pekerjaan, prioritas, dan tenggat; workflow lanjutan menyusul.",
+    source: "ERP GSP · Supabase",
     href: "/modul/operasional",
     icon: BriefcaseBusiness,
-    status: "integration",
+    status: "mvp",
   },
   {
     key: "keuangan",
     name: "Keuangan & Akuntansi",
-    description: "COA, jurnal, kas-bank, laporan keuangan, dan konsolidasi.",
-    source: "bindex-main",
+    description: "Kelola bagan akun dasar; jurnal dan posting akuntansi menyusul.",
+    source: "ERP GSP · Supabase",
     href: "/modul/keuangan",
     icon: Calculator,
-    status: "integration",
+    status: "mvp",
   },
   {
     key: "sdm",
     name: "SDM",
-    description: "Data karyawan, peran, penugasan, dan fondasi pengelolaan SDM.",
-    source: "bindex-main · GSP-staging",
+    description: "Catat data dasar karyawan; payroll dan absensi menyusul.",
+    source: "ERP GSP · Supabase",
     href: "/modul/sdm",
     icon: UsersRound,
-    status: "integration",
+    status: "mvp",
   },
   {
     key: "perpajakan",
     name: "Perpajakan",
-    description: "Kalkulasi pajak, rekonsiliasi, pelaporan, dan ekspor Coretax.",
-    source: "aplikasi-pajak",
+    description: "Catat masa dan nilai pajak; kalkulasi dan pelaporan menyusul.",
+    source: "ERP GSP · Supabase",
     href: "/modul/perpajakan",
     icon: ClipboardCheck,
-    status: "integration",
+    status: "mvp",
   },
   {
     key: "manajemen",
     name: "Manajemen & Laporan",
     description: "Ringkasan lintas unit dengan akses sesuai wewenang.",
-    source: "Fondasi baru",
+    source: "ERP GSP · Supabase",
     href: "/modul/manajemen",
     icon: ChartNoAxesCombined,
     status: "foundation",
