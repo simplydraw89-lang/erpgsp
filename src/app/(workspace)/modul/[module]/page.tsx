@@ -1,402 +1,32 @@
-import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowLeft, Cable, ShieldCheck } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import { Card } from "@/components/ui/card"
-import { requireWorkspace, type OrganizationRole } from "@/lib/auth/context"
-import { getModule, type ModuleKey } from "@/lib/modules"
-import { createModuleRecord } from "../actions"
+import { Button } from "@/components/ui/button"
+import { RecordForm } from "@/components/workflow/record-form"
+import { MigrationNotice } from "@/components/workflow/migration-notice"
+import { ModuleFilters } from "@/components/workflow/module-filters"
+import { requireWorkspace } from "@/lib/auth/context"
+import { getModule } from "@/lib/modules"
+import {
+  recordSpecs,
+  isRecordType,
+  isWorkflowMissing,
+  displayValue,
+  labels,
+  type RecordType,
+  type WorkflowDocument,
+} from "@/lib/workflow"
+import { loadReferences } from "@/lib/workflow-server"
+import { calendarDate } from "@/lib/dashboard"
 
-type ModuleRecord = {
-  id: string
-  title: string
-  detail: string
-  status: string
-  createdAt: string
-}
+type Row = Record<string, unknown> & { id: string; row_version?: number }
 
-type ModuleMetric = {
-  label: string
-  count: number
-}
-
-const writeRoles: Record<ModuleKey, OrganizationRole[]> = {
-  crm: ["owner", "director", "operations", "staff"],
-  operasional: ["owner", "director", "operations", "staff"],
-  keuangan: ["owner", "finance"],
-  sdm: ["owner", "hr"],
-  perpajakan: ["owner", "finance"],
-  manajemen: [],
-}
-
-const statusLabels: Record<string, string> = {
-  prospect: "Prospek",
-  client: "Klien",
-  inactive: "Tidak aktif",
-  planned: "Direncanakan",
-  active: "Aktif",
-  on_hold: "Ditunda",
-  completed: "Selesai",
-  cancelled: "Dibatalkan",
-  todo: "Belum dikerjakan",
-  in_progress: "Sedang dikerjakan",
-  blocked: "Terhambat",
-  done: "Selesai",
-  asset: "Aset",
-  liability: "Liabilitas",
-  equity: "Ekuitas",
-  revenue: "Pendapatan",
-  expense: "Beban",
-  debit: "Debit",
-  credit: "Kredit",
-  active_employee: "Aktif",
-  on_leave: "Cuti",
-  resigned: "Keluar",
-  draft: "Draft",
-  reviewed: "Ditinjau",
-  reported: "Dilaporkan",
-  ppn: "PPN",
-  pph21: "PPh 21",
-  pph23: "PPh 23",
-  pph4_2: "PPh 4(2)",
-  pph25: "PPh 25",
-  pph29: "PPh 29",
-  other: "Lainnya",
-}
-
-function isMissingModuleSchema(error: { code?: string }) {
-  return error.code === "PGRST205" || error.code === "42P01"
-}
-
-async function loadModuleData(
-  moduleKey: ModuleKey,
-  supabase: Awaited<ReturnType<typeof requireWorkspace>>["supabase"],
-  organizationId: string,
-) {
-  let records: ModuleRecord[] = []
-  let metrics: ModuleMetric[] = []
-  let schemaPending = false
-
-  if (moduleKey === "crm") {
-    const [clients, projects] = await Promise.all([
-      supabase
-        .from("crm_clients")
-        .select("id, name, company_name, status, created_at")
-        .eq("organization_id", organizationId)
-        .order("created_at", { ascending: false })
-        .limit(50),
-      supabase
-        .from("crm_projects")
-        .select("id, code, name, status, created_at")
-        .eq("organization_id", organizationId)
-        .order("created_at", { ascending: false })
-        .limit(50),
-    ])
-    const error = clients.error ?? projects.error
-    if (error && isMissingModuleSchema(error)) schemaPending = true
-    else if (error) throw new Error(`Gagal memuat data CRM: ${error.message}`)
-    if (!schemaPending) {
-      records = [
-        ...(clients.data ?? []).map((row) => ({
-          id: `client-${row.id}`,
-          title: row.name,
-          detail: row.company_name ?? "Kontak",
-          status: row.status,
-          createdAt: row.created_at,
-        })),
-        ...(projects.data ?? []).map((row) => ({
-          id: `project-${row.id}`,
-          title: row.name,
-          detail: `Proyek ${row.code}`,
-          status: row.status,
-          createdAt: row.created_at,
-        })),
-      ].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    }
-  } else if (moduleKey === "operasional") {
-    const { data, error } = await supabase
-      .from("operational_work_items")
-      .select("id, title, description, status, priority, created_at")
-      .eq("organization_id", organizationId)
-      .order("created_at", { ascending: false })
-      .limit(100)
-    if (error && isMissingModuleSchema(error)) schemaPending = true
-    else if (error) throw new Error(`Gagal memuat pekerjaan: ${error.message}`)
-    records = (data ?? []).map((row) => ({
-      id: row.id,
-      title: row.title,
-      detail: [row.description, `Prioritas ${statusLabels[row.priority] ?? row.priority}`]
-        .filter(Boolean)
-        .join(" · "),
-      status: row.status,
-      createdAt: row.created_at,
-    }))
-  } else if (moduleKey === "keuangan") {
-    const { data, error } = await supabase
-      .from("finance_accounts")
-      .select("id, code, name, account_type, normal_balance, created_at")
-      .eq("organization_id", organizationId)
-      .order("code")
-      .limit(100)
-    if (error && isMissingModuleSchema(error)) schemaPending = true
-    else if (error) throw new Error(`Gagal memuat bagan akun: ${error.message}`)
-    records = (data ?? []).map((row) => ({
-      id: row.id,
-      title: `${row.code} · ${row.name}`,
-      detail: `${statusLabels[row.account_type] ?? row.account_type} · saldo normal ${statusLabels[row.normal_balance] ?? row.normal_balance}`,
-      status: "active",
-      createdAt: row.created_at,
-    }))
-  } else if (moduleKey === "sdm") {
-    const { data, error } = await supabase
-      .from("hr_employees")
-      .select("id, employee_number, full_name, job_title, department, employment_status, created_at")
-      .eq("organization_id", organizationId)
-      .order("full_name")
-      .limit(100)
-    if (error && isMissingModuleSchema(error)) schemaPending = true
-    else if (error) throw new Error(`Gagal memuat data SDM: ${error.message}`)
-    records = (data ?? []).map((row) => ({
-      id: row.id,
-      title: `${row.employee_number} · ${row.full_name}`,
-      detail: [row.job_title, row.department].filter(Boolean).join(" · ") || "Karyawan",
-      status: row.employment_status,
-      createdAt: row.created_at,
-    }))
-  } else if (moduleKey === "perpajakan") {
-    const { data, error } = await supabase
-      .from("tax_records")
-      .select("id, tax_period, tax_type, reference_number, tax_amount, status, created_at")
-      .eq("organization_id", organizationId)
-      .order("tax_period", { ascending: false })
-      .limit(100)
-    if (error && isMissingModuleSchema(error)) schemaPending = true
-    else if (error) throw new Error(`Gagal memuat catatan pajak: ${error.message}`)
-    records = (data ?? []).map((row) => ({
-      id: row.id,
-      title: `${row.tax_period} · ${statusLabels[row.tax_type] ?? row.tax_type}`,
-      detail: [
-        row.reference_number,
-        new Intl.NumberFormat("id-ID", {
-          style: "currency",
-          currency: "IDR",
-          maximumFractionDigits: 0,
-        }).format(row.tax_amount),
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      status: row.status,
-      createdAt: row.created_at,
-    }))
-  } else if (moduleKey === "manajemen") {
-    const [clients, projects, workItems, accounts, employees, taxes] =
-      await Promise.all([
-        supabase.from("crm_clients").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
-        supabase.from("crm_projects").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
-        supabase.from("operational_work_items").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
-        supabase.from("finance_accounts").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
-        supabase.from("hr_employees").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
-        supabase.from("tax_records").select("id", { count: "exact", head: true }).eq("organization_id", organizationId),
-      ])
-    const results = [clients, projects, workItems, accounts, employees, taxes]
-    const missing = results.find((result) => result.error && isMissingModuleSchema(result.error))
-    const error = results.find((result) => result.error && !isMissingModuleSchema(result.error))
-    if (missing) schemaPending = true
-    if (error?.error) throw new Error(`Gagal memuat ringkasan manajemen: ${error.error.message}`)
-    if (!schemaPending) {
-      metrics = [
-        { label: "Kontak CRM", count: clients.count ?? 0 },
-        { label: "Proyek", count: projects.count ?? 0 },
-        { label: "Pekerjaan", count: workItems.count ?? 0 },
-        { label: "Akun keuangan", count: accounts.count ?? 0 },
-        { label: "Karyawan", count: employees.count ?? 0 },
-        { label: "Catatan pajak", count: taxes.count ?? 0 },
-      ]
-    }
-  }
-
-  return { records, metrics, schemaPending }
-}
-
-function TextField({
-  name,
-  label,
-  type = "text",
-  required = false,
-  placeholder,
-}: {
-  name: string
-  label: string
-  type?: string
-  required?: boolean
-  placeholder?: string
-}) {
-  return (
-    <label className="block space-y-1.5 text-sm font-medium text-ink">
-      {label}
-      <input
-        name={name}
-        type={type}
-        required={required}
-        placeholder={placeholder}
-        className="h-10 w-full rounded-lg border border-line bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-      />
-    </label>
-  )
-}
-
-function SelectField({
-  name,
-  label,
-  options,
-}: {
-  name: string
-  label: string
-  options: { value: string; label: string }[]
-}) {
-  return (
-    <label className="block space-y-1.5 text-sm font-medium text-ink">
-      {label}
-      <select
-        name={name}
-        required
-        defaultValue={options[0]?.value}
-        className="h-10 w-full rounded-lg border border-line bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
-    </label>
-  )
-}
-
-function ModuleForm({ moduleKey }: { moduleKey: ModuleKey }) {
-  const formClass = "space-y-4"
-  const gridClass = "grid gap-3 sm:grid-cols-2"
-
-  return (
-    <Card className="p-5">
-      <h2 className="text-base font-semibold text-ink">Tambah data</h2>
-      <p className="mt-1 text-sm text-muted">Data baru akan masuk ke organisasi ini dan tercatat di audit.</p>
-      <form action={createModuleRecord} className={`${formClass} mt-5`}>
-        <input type="hidden" name="moduleKey" value={moduleKey} />
-        {moduleKey === "crm" && (
-          <>
-            <input type="hidden" name="recordType" value="client" />
-            <TextField name="name" label="Nama kontak" required />
-            <div className={gridClass}>
-              <TextField name="company_name" label="Perusahaan" />
-              <SelectField name="status" label="Status kontak" options={[
-                { value: "prospect", label: "Prospek" },
-                { value: "client", label: "Klien" },
-                { value: "inactive", label: "Tidak aktif" },
-              ]} />
-            </div>
-            <div className={gridClass}>
-              <TextField name="email" label="Email" type="email" />
-              <TextField name="phone" label="Telepon" />
-            </div>
-            <TextField name="notes" label="Catatan" />
-          </>
-        )}
-        {moduleKey === "operasional" && (
-          <>
-            <input type="hidden" name="recordType" value="work_item" />
-            <TextField name="title" label="Judul pekerjaan" required />
-            <TextField name="description" label="Deskripsi" />
-            <div className={gridClass}>
-              <SelectField name="priority" label="Prioritas" options={[
-                { value: "normal", label: "Normal" },
-                { value: "low", label: "Rendah" },
-                { value: "high", label: "Tinggi" },
-                { value: "urgent", label: "Mendesak" },
-              ]} />
-              <TextField name="due_on" label="Tenggat" type="date" />
-            </div>
-          </>
-        )}
-        {moduleKey === "keuangan" && (
-          <>
-            <input type="hidden" name="recordType" value="account" />
-            <div className={gridClass}>
-              <TextField name="code" label="Kode akun" required />
-              <TextField name="name" label="Nama akun" required />
-            </div>
-            <SelectField name="account_type" label="Kelompok akun" options={[
-                { value: "asset", label: "Aset" },
-                { value: "liability", label: "Liabilitas" },
-                { value: "equity", label: "Ekuitas" },
-                { value: "revenue", label: "Pendapatan" },
-                { value: "expense", label: "Beban" },
-              ]} />
-            <p className="text-xs text-muted">Saldo normal ditentukan otomatis dari kelompok akun.</p>
-          </>
-        )}
-        {moduleKey === "sdm" && (
-          <>
-            <input type="hidden" name="recordType" value="employee" />
-            <div className={gridClass}>
-              <TextField name="employee_number" label="Nomor karyawan" required />
-              <TextField name="full_name" label="Nama lengkap" required />
-            </div>
-            <TextField name="email" label="Email" type="email" />
-            <div className={gridClass}>
-              <TextField name="job_title" label="Jabatan" />
-              <TextField name="department" label="Departemen" />
-            </div>
-            <TextField name="started_on" label="Tanggal mulai" type="date" />
-          </>
-        )}
-        {moduleKey === "perpajakan" && (
-          <>
-            <input type="hidden" name="recordType" value="tax_record" />
-            <div className={gridClass}>
-              <TextField name="tax_period" label="Masa pajak (YYYY-MM)" required placeholder="2026-10" />
-              <SelectField name="tax_type" label="Jenis pajak" options={[
-                { value: "ppn", label: "PPN" },
-                { value: "pph21", label: "PPh 21" },
-                { value: "pph23", label: "PPh 23" },
-                { value: "pph4_2", label: "PPh 4(2)" },
-                { value: "pph25", label: "PPh 25" },
-                { value: "pph29", label: "PPh 29" },
-                { value: "other", label: "Lainnya" },
-              ]} />
-            </div>
-            <TextField name="reference_number" label="Nomor referensi" />
-            <div className={gridClass}>
-              <TextField name="tax_base" label="Dasar pajak (IDR)" type="number" required />
-              <TextField name="tax_amount" label="Nilai pajak (IDR)" type="number" required />
-            </div>
-            <TextField name="due_on" label="Jatuh tempo" type="date" />
-            <p className="text-xs leading-5 text-muted">
-              Tahap ini hanya mencatat angka yang dimasukkan pengguna; belum menghitung atau melaporkan pajak.
-            </p>
-          </>
-        )}
-        <Button type="submit">Simpan data</Button>
-      </form>
-    </Card>
-  )
-}
-
-function ProjectForm() {
-  return (
-    <Card className="mt-4 p-5">
-      <h2 className="text-base font-semibold text-ink">Tambah proyek</h2>
-      <form action={createModuleRecord} className="mt-4 space-y-4">
-        <input type="hidden" name="moduleKey" value="crm" />
-        <input type="hidden" name="recordType" value="project" />
-        <TextField name="code" label="Kode proyek" required />
-        <TextField name="name" label="Nama proyek" required />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <TextField name="starts_on" label="Tanggal mulai" type="date" />
-          <TextField name="ends_on" label="Tanggal selesai" type="date" />
-        </div>
-        <Button type="submit">Simpan proyek</Button>
-      </form>
-    </Card>
-  )
+function validDate(value?: string) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined
+  const date = new Date(`${value}T00:00:00.000Z`)
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
+    ? value
+    : undefined
 }
 
 export default async function ModulePage({
@@ -404,141 +34,357 @@ export default async function ModulePage({
   searchParams,
 }: {
   params: Promise<{ module: string }>
-  searchParams: Promise<{ saved?: string }>
+  searchParams: Promise<{
+    type?: string
+    edit?: string
+    q?: string
+    field?: string
+    dateField?: string
+    from?: string
+    to?: string
+    status?: string
+  }>
 }) {
-  const [{ module: key }, { saved }, workspace] = await Promise.all([
+  const [{ module: key }, query, workspace] = await Promise.all([
     params,
     searchParams,
     requireWorkspace(),
   ])
-  const moduleDefinition = getModule(key)
-  if (!moduleDefinition) notFound()
-  const moduleKey = moduleDefinition.key
-  const Icon = moduleDefinition.icon
-  const isManager = workspace.role === "owner" || workspace.role === "director"
-  const { records, metrics, schemaPending } =
-    moduleKey === "manajemen" && !isManager
-      ? { records: [], metrics: [], schemaPending: false }
-      : await loadModuleData(
-          moduleKey,
-          workspace.supabase,
-          workspace.organizationId,
-        )
-  const canWrite = writeRoles[moduleKey].includes(workspace.role)
-
-  return (
-    <div className="mx-auto max-w-6xl space-y-7">
-      <Button variant="ghost" size="sm" asChild>
-        <Link href="/dashboard"><ArrowLeft size={15} /> Kembali ke ringkasan</Link>
-      </Button>
-
-      <Card className="overflow-hidden">
-        <div className="border-b border-line bg-white p-7 md:p-9">
-          <div className="flex size-12 items-center justify-center rounded-xl bg-brand-light text-brand">
-            <Icon size={23} />
-          </div>
-          <p className="mt-6 text-xs font-semibold uppercase tracking-[0.15em] text-brand">Modul ERP internal · MVP tahap 1</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-ink">{moduleDefinition.name}</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">{moduleDefinition.description}</p>
+  const definition = getModule(key)
+  if (!definition) notFound()
+  const { supabase, organizationId, role } = workspace
+  const Icon = definition.icon
+  if (key === "manajemen") {
+    if (!["owner", "director"].includes(role))
+      return (
+        <Card className="p-6">
+          Anda tidak memiliki akses laporan manajemen.
+        </Card>
+      )
+    const metrics = await Promise.all(
+      Object.entries(recordSpecs).map(async ([type, spec]) => {
+        const { count, error } = await supabase
+          .from(spec.table)
+          .select("id", { count: "exact", head: true })
+          .eq("organization_id", organizationId)
+        if (error && !isWorkflowMissing(error))
+          throw new Error("Ringkasan gagal dimuat.")
+        return { type, label: spec.label, count: count ?? 0, missing: !!error }
+      }),
+    )
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">Manajemen & Laporan</h1>
+        <p className="text-sm text-muted">
+          Jumlah record resmi yang sudah dicatat. Draft dan pengajuan belum
+          dieksekusi tidak dihitung.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {metrics.map((metric) => (
+            <Card key={metric.type} className="p-5">
+              <p className="text-sm text-muted">{metric.label}</p>
+              <p className="mt-3 text-3xl font-bold">
+                {metric.missing ? "Belum aktif" : metric.count}
+              </p>
+            </Card>
+          ))}
         </div>
-        <div className="grid gap-4 bg-canvas p-6 md:grid-cols-2 md:p-8">
-          <div className="rounded-lg border border-line bg-white p-5">
-            <Cable size={19} className="text-brand" />
-            <h2 className="mt-4 text-sm font-semibold text-ink">Penyimpanan data</h2>
-            <p className="mt-1 text-sm text-muted">Supabase project ERP GSP</p>
-            <p className="mt-3 text-xs leading-5 text-muted">
-              Data baru dicatat di database ERP ini. Belum ada sinkronisasi otomatis dengan aplikasi lain.
+      </div>
+    )
+  }
+  const types = (Object.keys(recordSpecs) as RecordType[]).filter(
+    (type) => recordSpecs[type].module === key,
+  )
+  const readable = types.filter((type) =>
+    recordSpecs[type].readers.includes(role),
+  )
+  if (!readable.length)
+    return <Card className="p-6">Anda tidak memiliki akses ke modul ini.</Card>
+  const selected =
+    query.type && isRecordType(query.type) && readable.includes(query.type)
+      ? query.type
+      : readable[0]
+  const spec = recordSpecs[selected]
+  let liveQuery = supabase
+    .from(spec.table)
+    .select("*")
+    .eq("organization_id", organizationId)
+    .order("created_at", { ascending: false })
+    .limit(100)
+  const searchableFields = spec.fields.filter((field) =>
+    [
+      "code",
+      "employee_number",
+      "reference_number",
+      "serial_number",
+      "phone",
+      "email",
+      "payee_name",
+      "payment_number",
+      "tax_period",
+      "title",
+      "name",
+      "full_name",
+    ].includes(field.name),
+  )
+  const dateFields = spec.fields.filter((field) => field.type === "date")
+  const searchField = searchableFields.some((field) => field.name === query.field)
+    ? query.field!
+    : searchableFields[0]?.name
+  const dateField = dateFields.some((field) => field.name === query.dateField)
+    ? query.dateField!
+    : dateFields[0]?.name
+  if (query.q && searchField)
+    liveQuery = liveQuery.ilike(searchField, `%${query.q.slice(0, 100)}%`)
+  const configuredStatusField = spec.fields.find(
+    (field) => field.name === "status" || field.name === "employment_status",
+  ) ?? (spec.fields.some((field) => field.name === "is_active")
+    ? { name: "is_active", label: "Status akun", type: "select" as const, options: ["true", "false"] }
+    : undefined)
+  const statusField = selected === "payment" && configuredStatusField
+    ? { ...configuredStatusField, options: [...(configuredStatusField.options ?? []), "overdue"] }
+    : configuredStatusField
+  if (selected === "payment" && query.status === "overdue")
+    liveQuery = liveQuery.eq("status", "unpaid").lt("due_on", calendarDate())
+  else if (configuredStatusField?.options?.includes(query.status ?? ""))
+    liveQuery = liveQuery.eq(configuredStatusField.name, query.status!)
+  const fromDate = validDate(query.from)
+  const toDate = validDate(query.to)
+  if (dateField && fromDate) liveQuery = liveQuery.gte(dateField, fromDate)
+  if (dateField && toDate) liveQuery = liveQuery.lte(dateField, toDate)
+  const [recordsResult, documentsResult, references] = await Promise.all([
+    liveQuery,
+    supabase
+      .from("workflow_documents")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("module_key", key)
+      .order("created_at", { ascending: false })
+      .limit(100),
+    loadReferences(supabase, organizationId, selected),
+  ])
+  for (const result of [recordsResult, documentsResult])
+    if (result.error && !isWorkflowMissing(result.error))
+      throw new Error(`Data modul gagal dimuat: ${result.error.message}`)
+  const migrationPending = !!recordsResult.error || !!documentsResult.error
+  const records = (recordsResult.data ?? []) as Row[]
+  const documents = (documentsResult.data ?? []) as WorkflowDocument[]
+  const canWrite = spec.writers.includes(role)
+  let editing: Row | null = null
+  if (query.edit && canWrite && !migrationPending) {
+    const { data, error } = await supabase
+      .from(spec.table)
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("id", query.edit)
+      .maybeSingle()
+    if (error || !data) notFound()
+    editing = data as Row
+  }
+  const lockedPaidPayment = selected === "payment" && editing?.status === "paid"
+  return (
+    <div className="space-y-7">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <Icon className="mb-3 text-brand" size={30} />
+          <h1 className="text-3xl font-bold">{definition.name}</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
+            {definition.description}
+          </p>
+        </div>
+        <Button asChild variant="secondary">
+          <Link href="/approvals">Pusat persetujuan</Link>
+        </Button>
+      </div>
+      <Card className="border-brand/20 bg-brand-light/40 p-4 text-sm leading-6">
+        Draft → Diajukan → Disetujui / Ditolak → Dieksekusi. Data resmi berubah
+        setelah eksekusi. Dokumen yang diajukan terkunci; versi yang ditolak
+        dapat direvisi dan diajukan ulang.
+      </Card>
+      {migrationPending && <MigrationNotice />}
+      {types.length > 1 && (
+        <nav className="flex gap-3">
+          {readable.map((type) => (
+            <Link
+              key={type}
+              href={`/modul/${key}?type=${type}`}
+              className={`rounded-lg border px-4 py-2 text-sm ${selected === type ? "border-brand bg-brand-light text-brand" : "border-line"}`}
+            >
+              {recordSpecs[type].label}
+            </Link>
+          ))}
+        </nav>
+      )}
+      <div className="grid items-start gap-6 xl:grid-cols-[250px_minmax(0,1fr)]">
+        <ModuleFilters
+          key={`${selected}-${JSON.stringify(query)}`}
+          type={selected}
+          searchableFields={searchableFields.map(({ name, label }) => ({ name, label }))}
+          dateFields={dateFields.map(({ name, label }) => ({ name, label }))}
+          statusField={statusField}
+          asset={key === "asset"}
+        />
+        <div className="grid min-w-0 items-start gap-6 2xl:grid-cols-[0.85fr_1.5fr]">
+        {canWrite && !migrationPending && !lockedPaidPayment ? (
+          <Card className="p-5">
+            <h2 className="mb-4 text-lg font-semibold">
+              {editing
+                ? `Usulan perubahan ${spec.label.toLowerCase()}`
+                : `Draft ${spec.label.toLowerCase()} baru`}
+            </h2>
+            {editing && (
+              <p className="mb-4 text-xs text-muted">
+                Versi record saat ini: {editing.row_version}. Data resmi tetap
+                berlaku selama usulan diperiksa.
+              </p>
+            )}
+            <RecordForm
+              key={`${selected}-${editing?.id ?? "new"}`}
+              type={selected}
+              values={editing ?? undefined}
+              references={references}
+              targetId={editing?.id}
+              targetVersion={editing?.row_version}
+            />
+          </Card>
+        ) : (
+          <Card className="p-5 text-sm text-muted">
+            {migrationPending
+              ? "Pembuatan draft tersedia setelah pembaruan database."
+              : lockedPaidPayment
+                ? "Pembayaran yang sudah lunas dikunci dan tidak dapat diubah."
+              : "Akses baca. Peran Anda tidak dapat membuat perubahan pada jenis data ini."}
+          </Card>
+        )}
+        <Card className="overflow-hidden">
+          <div className="border-b border-line p-5">
+            <h2 className="text-lg font-semibold">
+              {key === "asset"
+                ? "Daftar aset perusahaan"
+                : key === "pembayaran"
+                  ? "Daftar pembayaran perusahaan"
+                  : "Data resmi"}
+            </h2>
+            <p className="mt-1 text-xs text-muted">
+              {records.length} record ditampilkan, maksimal 100. Data lama
+              sebelum workflow tetap dipertahankan.
             </p>
           </div>
-          <div className="rounded-lg border border-line bg-white p-5">
-            <ShieldCheck size={19} className="text-brand" />
-            <h2 className="mt-4 text-sm font-semibold text-ink">Akses & kontrol</h2>
-            <p className="mt-1 text-sm text-muted">Sesuai peran dan organisasi</p>
-            <p className="mt-3 text-xs leading-5 text-muted">
-              Hak akses diperiksa di server dan Row Level Security; perubahan dicatat di audit.
-            </p>
+          <div className="divide-y divide-line">
+            {!records.length && (
+              <p className="p-8 text-center text-sm text-muted">
+                Belum ada data yang sesuai.
+              </p>
+            )}
+            {records.map((row) => (
+              <article key={row.id} className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">
+                      {String(
+                        row.name ??
+                          row.title ??
+                          row.full_name ??
+                          row.payee_name ??
+                          row.tax_period,
+                      )}
+                    </p>
+                    <p className="mt-1 text-xs text-muted">
+                      {String(
+                        row.code ??
+                          row.employee_number ??
+                          row.payment_number ??
+                          row.reference_number ??
+                          spec.label,
+                      )}{" "}
+                      · Versi {row.row_version ?? 1}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-canvas px-3 py-1 text-xs">
+                    {statusField
+                      ? displayValue(
+                          selected === "payment" &&
+                            row.status === "unpaid" &&
+                            String(row.due_on ?? "") < calendarDate()
+                            ? "overdue"
+                            : row[statusField.name],
+                        )
+                      : displayValue(row.is_active)}
+                  </span>
+                </div>
+                <dl className="mt-4 grid gap-x-5 gap-y-3 text-xs sm:grid-cols-2">
+                  {spec.fields
+                    .filter(
+                      (field) =>
+                        ![
+                          "name",
+                          "title",
+                          "full_name",
+                          "notes",
+                          "description",
+                        ].includes(field.name),
+                    )
+                    .map((field) => (
+                      <div key={field.name}>
+                        <dt className="text-muted">{field.label}</dt>
+                        <dd className="mt-1 break-words text-ink">
+                          {references[field.name]?.find(
+                            (option) => option.value === row[field.name],
+                          )?.label ?? displayValue(row[field.name], field)}
+                        </dd>
+                      </div>
+                    ))}
+                </dl>
+                {canWrite &&
+                  !migrationPending &&
+                  !(selected === "payment" && row.status === "paid") && (
+                  <Link
+                    href={`/modul/${key}?type=${selected}&edit=${row.id}`}
+                    className="mt-4 inline-block text-sm font-semibold text-brand"
+                  >
+                    Usulkan perubahan →
+                  </Link>
+                )}
+              </article>
+            ))}
           </div>
+        </Card>
+        </div>
+      </div>
+      <Card className="overflow-hidden">
+        <div className="border-b border-line p-5">
+          <h2 className="text-lg font-semibold">Dokumen & pengajuan</h2>
+          <p className="mt-1 text-xs text-muted">
+            Buka dokumen untuk mengedit draft, mengajukan, memeriksa, atau
+            mengeksekusi.
+          </p>
+        </div>
+        <div className="divide-y divide-line">
+          {!documents.length && (
+            <p className="p-6 text-sm text-muted">
+              Belum ada dokumen workflow.
+            </p>
+          )}
+          {documents.map((document) => (
+            <Link
+              key={document.id}
+              href={`/dokumen/${document.id}`}
+              className="flex items-center justify-between gap-4 p-5 hover:bg-canvas"
+            >
+              <div>
+                <p className="text-sm font-semibold">{document.title}</p>
+                <p className="mt-1 text-xs text-muted">
+                  {recordSpecs[document.record_type]?.label} ·{" "}
+                  {labels[document.operation]} · v{document.version}
+                </p>
+              </div>
+              <span className="rounded-full bg-brand-light px-3 py-1 text-xs text-brand">
+                {labels[document.state]}
+              </span>
+            </Link>
+          ))}
         </div>
       </Card>
-
-      {saved === "1" && (
-        <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          Data berhasil disimpan dan dicatat di audit.
-        </p>
-      )}
-
-      {schemaPending ? (
-        <Card className="p-6">
-          <h2 className="font-semibold text-ink">Migration modul belum diterapkan</h2>
-          <p className="mt-2 text-sm leading-6 text-muted">
-            Terapkan file <code>supabase/migrations/202610290002_module_mvp.sql</code> di SQL Editor Supabase untuk membuat tabel, kebijakan akses, dan audit modul.
-          </p>
-        </Card>
-      ) : moduleKey === "manajemen" ? (
-        <section>
-          {!isManager ? (
-            <Card className="p-6 text-sm text-muted">Ringkasan ini hanya tersedia untuk owner dan direksi.</Card>
-          ) : (
-            <>
-              <h2 className="mb-4 text-lg font-bold text-ink">Ringkasan data organisasi</h2>
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {metrics.map((metric) => (
-                  <Card key={metric.label} className="p-5">
-                    <p className="text-sm text-muted">{metric.label}</p>
-                    <p className="mt-2 text-3xl font-bold text-ink">{metric.count}</p>
-                  </Card>
-                ))}
-              </div>
-              <p className="mt-4 text-xs leading-5 text-muted">
-                Angka ini hanya menghitung catatan pada ERP baru. Belum mencakup saldo akuntansi, payroll, atau pelaporan pajak resmi.
-              </p>
-            </>
-          )}
-        </section>
-      ) : (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <section>
-            {canWrite ? (
-              <>
-                <ModuleForm moduleKey={moduleKey} />
-                {moduleKey === "crm" && <ProjectForm />}
-              </>
-            ) : (
-              <Card className="p-5 text-sm leading-6 text-muted">
-                Peran Anda memiliki akses baca, tetapi tidak dapat menambahkan data pada modul ini.
-              </Card>
-            )}
-          </section>
-          <section>
-            <Card className="overflow-hidden">
-              <div className="border-b border-line px-5 py-4">
-                <h2 className="text-base font-semibold text-ink">Data terbaru</h2>
-                <p className="mt-1 text-sm text-muted">{records.length} catatan ditampilkan</p>
-              </div>
-              {!records.length ? (
-                <p className="px-5 py-12 text-center text-sm text-muted">Belum ada data pada modul ini.</p>
-              ) : (
-                <ul className="divide-y divide-line">
-                  {records.map((record) => (
-                    <li key={record.id} className="flex items-start justify-between gap-4 px-5 py-4">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-ink">{record.title}</p>
-                        <p className="mt-1 truncate text-xs text-muted">{record.detail}</p>
-                        <time className="mt-2 block text-[11px] text-muted">
-                          {new Date(record.createdAt).toLocaleDateString("id-ID")}
-                        </time>
-                      </div>
-                      <span className="shrink-0 rounded-full bg-canvas px-2.5 py-1 text-xs font-medium text-ink">
-                        {statusLabels[record.status] ?? record.status}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          </section>
-        </div>
-      )}
     </div>
   )
 }

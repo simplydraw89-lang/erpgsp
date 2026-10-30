@@ -26,7 +26,7 @@ export default async function SetupPage({
         <p className="mt-3 text-sm leading-6 text-muted">
           {configured
             ? "Sesi login valid, tetapi keanggotaan organisasi belum ditemukan. Minta administrator organisasi menambahkan akun Anda."
-            : "Konfigurasikan URL dan anon key Supabase di .env.local, lalu jalankan migration awal dari folder supabase/migrations."}
+            : "Konfigurasikan URL dan publishable key Supabase di .env.local, lalu jalankan migration awal dari folder supabase/migrations."}
         </p>
         {reason && (
           <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -36,7 +36,7 @@ export default async function SetupPage({
         {!configured && (
           <div className="mt-6 space-y-3 rounded-lg bg-canvas p-4 text-sm">
             <p className="flex items-center gap-2 font-medium"><KeyRound size={16} className="text-brand" /> NEXT_PUBLIC_SUPABASE_URL</p>
-            <p className="flex items-center gap-2 font-medium"><KeyRound size={16} className="text-brand" /> NEXT_PUBLIC_SUPABASE_ANON_KEY</p>
+            <p className="flex items-center gap-2 font-medium"><KeyRound size={16} className="text-brand" /> NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</p>
           </div>
         )}
         {configured && <div className="mt-6"><LogoutButton /></div>}

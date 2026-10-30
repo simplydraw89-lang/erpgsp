@@ -3,7 +3,7 @@ import type { OrganizationRole } from "@/lib/auth/context"
 import { LogoutButton } from "@/components/auth/logout-button"
 
 const roleLabels: Record<OrganizationRole, string> = {
-  owner: "Pemilik sistem",
+  owner: "Superuser",
   director: "Direksi",
   finance: "Keuangan",
   hr: "SDM",

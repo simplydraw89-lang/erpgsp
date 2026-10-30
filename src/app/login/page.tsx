@@ -1,4 +1,4 @@
-import Link from "next/link"
+import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import { Activity } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { LoginForm } from "./login-form"

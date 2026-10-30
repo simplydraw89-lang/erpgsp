@@ -1,16 +1,12 @@
 import { redirect } from "next/navigation"
+import { cache } from "react"
 import { createClient } from "@/lib/supabase/server"
 
+// "owner" remains the legacy database key for the technical Superuser.
 export type OrganizationRole =
-  | "owner"
-  | "director"
-  | "finance"
-  | "hr"
-  | "operations"
-  | "auditor"
-  | "staff"
+  "owner" | "director" | "finance" | "hr" | "operations" | "auditor" | "staff"
 
-export async function requireWorkspace() {
+export const requireWorkspace = cache(async function requireWorkspace() {
   const supabase = await createClient()
   const {
     data: { user },
@@ -47,4 +43,4 @@ export async function requireWorkspace() {
     organizationId: membership.organization_id as string,
     organizationName: organization.name as string,
   }
-}
+})

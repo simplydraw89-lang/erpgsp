@@ -1,5 +1,7 @@
 node_modules
 .next
+.next-workflow-test
+supabase/.temp/
 .env*
 !.env.example
 AGENTS.md

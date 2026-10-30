@@ -1,98 +1,202 @@
-import Link from "next/link"
-import {
-  ArrowRight,
-  ArrowUpRight,
-  CheckCheck,
-  ShieldCheck,
-} from "lucide-react"
-import { Card } from "@/components/ui/card"
-import { modules } from "@/lib/modules"
-import { Button } from "@/components/ui/button"
+import { requireWorkspace } from "@/lib/auth/context"
+import { calendarDate,calendarDay, daysUntil, workspaceTimeZone } from "@/lib/dashboard"
+import { isWorkflowMissing, labels, recordSpecs } from "@/lib/workflow"
+import { NavigationLink as Link } from "@/components/ui/navigation-link"
+import { ApplicationGrid } from "@/components/dashboard/application-grid"
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const { supabase, organizationId, user, role } = await requireWorkspace()
+  const today = calendarDate()
+  const canReadTaxes = recordSpecs.tax_record.readers.includes(role)
+  const canReadPayments = recordSpecs.payment.readers.includes(role)
+  const [processing, drafts, rejected, review, nextTax, overdue, unpaidPayments, nextPayment, latePayments] =
+    await Promise.all([
+      supabase
+        .from("workflow_documents")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("created_by", user.id)
+        .in("state", ["submitted", "approved"]),
+      supabase
+        .from("workflow_documents")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("created_by", user.id)
+        .eq("state", "draft"),
+      supabase
+        .from("workflow_documents")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("created_by", user.id)
+        .eq("state", "rejected"),
+      supabase
+        .from("approval_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("required_role", role)
+        .eq("status", "pending")
+        .neq("requested_by", user.id),
+      canReadTaxes
+        ? supabase
+            .from("tax_records")
+            .select("id,tax_type,tax_period,due_on")
+            .eq("organization_id", organizationId)
+            .neq("status", "reported")
+            .gte("due_on", today)
+            .order("due_on")
+            .limit(1)
+        : Promise.resolve({ data: null, error: null }),
+      canReadTaxes
+        ? supabase
+            .from("tax_records")
+            .select("id", { count: "exact", head: true })
+            .eq("organization_id", organizationId)
+            .neq("status", "reported")
+            .lt("due_on", today)
+        : Promise.resolve({ count: 0, error: null }),
+      canReadPayments
+        ? supabase
+            .from("payment_records")
+            .select("id", { count: "exact", head: true })
+            .eq("organization_id", organizationId)
+            .eq("status", "unpaid")
+        : Promise.resolve({ count: 0, error: null }),
+      canReadPayments
+        ? supabase
+            .from("payment_records")
+            .select("id,payment_number,payee_name,due_on,amount")
+            .eq("organization_id", organizationId)
+            .eq("status", "unpaid")
+            .order("due_on")
+            .limit(1)
+        : Promise.resolve({ data: null, error: null }),
+      canReadPayments
+        ? supabase
+            .from("payment_records")
+            .select("id", { count: "exact", head: true })
+            .eq("organization_id", organizationId)
+            .eq("status", "unpaid")
+            .lt("due_on", today)
+        : Promise.resolve({ count: 0, error: null }),
+    ])
+  const tax = nextTax.data?.[0]
+  const due=calendarDay(tax?.due_on)
+  const days = due ? daysUntil(due, today) : null
+  const taxDate = due
+    ? new Intl.DateTimeFormat("id-ID", {
+        day: "numeric",
+        month: "short",
+        timeZone: workspaceTimeZone,
+      }).format(new Date(`${due}T12:00:00+07:00`))
+    : ""
+  const mySummaryError = processing.error || drafts.error || rejected.error
+  const taxError = nextTax.error || overdue.error || (tax&&!due)
+  const payment = nextPayment.data?.[0]
+  const paymentDue = calendarDay(payment?.due_on)
+  const paymentDays = paymentDue ? daysUntil(paymentDue, today) : null
+  const paymentError = unpaidPayments.error || nextPayment.error || latePayments.error || (payment && !paymentDue)
+  const paymentSchemaPending = isWorkflowMissing(unpaidPayments.error)
+    || isWorkflowMissing(nextPayment.error)
+    || isWorkflowMissing(latePayments.error)
+  const draftCount = drafts.count ?? 0
+  const rejectedCount = rejected.count ?? 0
   return (
-    <div className="space-y-8">
-      <section className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
-        <div>
-          <p className="text-sm font-medium text-brand">Workspace perusahaan</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-ink">Ringkasan terpadu</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-            Satu ruang kerja untuk CRM, operasional, keuangan, SDM, dan kepatuhan. Catatan tahap awal
-            disimpan di database ERP ini dengan akses per organisasi.
+    <div className="space-y-6">
+      <section
+        aria-label="Ringkasan pribadi"
+        className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"
+      >
+        <Link href="/approvals?scope=mine" className="portal-summary">
+          <h2 className="text-xs text-slate-500">Pengajuan Anda</h2>
+          <p className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-[30px] font-semibold leading-none tracking-tight text-slate-950">
+              {mySummaryError ? "—" : (processing.count ?? 0)}
+            </span>
+            <span className="text-[13px] text-slate-600">sedang diproses</span>
           </p>
-        </div>
-        <Button variant="secondary" asChild>
-          <Link href="/approvals"><CheckCheck size={16} /> Buka persetujuan</Link>
-        </Button>
-      </section>
-
-      <Card className="grid gap-0 overflow-hidden md:grid-cols-[1fr_auto]">
-        <div className="p-6 md:p-7">
-          <div className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <ShieldCheck size={18} className="text-brand" />
-            Check and balance aktif sebagai fondasi
-          </div>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">
-            Data keuangan, SDM, dan operasional tidak dicampur tanpa batas. Persetujuan dipisahkan
-            dari pengaju, akses mengikuti organisasi dan peran, dan keputusan penting disiapkan
-            untuk jejak audit.
+          <p className="mt-1.5 text-xs text-slate-500">
+            {mySummaryError
+              ? "Ringkasan belum dapat dimuat. Buka pengajuan untuk memeriksa."
+              : draftCount || rejectedCount
+                ? `${draftCount} draft belum diajukan · ${rejectedCount} perlu revisi`
+                : "Tidak ada draft atau pengajuan yang perlu direvisi"}
           </p>
-        </div>
-        <div className="flex items-center border-t border-line bg-canvas px-6 py-5 md:border-l md:border-t-0 md:px-7">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted">Database workspace</p>
-            <p className="mt-1 text-lg font-bold text-ink">Supabase ERP GSP</p>
-            <p className="mt-1 text-xs text-muted">Data baru dicatat langsung di workspace ini</p>
-          </div>
-        </div>
-      </Card>
-
-      <section>
-        <div className="mb-4 flex items-end justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-ink">Modul perusahaan</h2>
-            <p className="mt-1 text-sm text-muted">MVP tahap awal untuk pencatatan data tiap modul.</p>
-          </div>
-          <Link href="/modul/crm" className="hidden items-center gap-1 text-sm font-semibold text-brand sm:inline-flex">
-            Jelajahi modul <ArrowRight size={15} />
+        </Link>
+        {canReadTaxes ? (
+          <Link
+            href="/modul/perpajakan"
+            className="portal-summary portal-summary-deadline"
+          >
+            <h2 className="text-xs text-slate-500">Tenggat pajak terdekat</h2>
+            <p className="mt-2 flex items-baseline gap-1.5">
+              <span className="text-[30px] font-semibold leading-none tracking-tight text-slate-950">
+                {taxError || days === null
+                  ? "—"
+                  : days === 0
+                    ? "Hari ini"
+                    : days}
+              </span>
+              {days !== null && days > 0 && !taxError && (
+                <span className="text-[13px] text-slate-600">hari lagi</span>
+              )}
+            </p>
+            <p className="mt-1.5 text-xs leading-5 text-[#b77709]">
+              {taxError
+                ? "Ringkasan tenggat belum dapat dimuat."
+                : tax
+                  ? `${labels[tax.tax_type] ?? tax.tax_type} · Masa ${tax.tax_period} · ${taxDate}${overdue.count ? ` · ${overdue.count} catatan lewat tenggat` : ""}`
+                  : overdue.count
+                    ? `${overdue.count} catatan lewat tenggat · Belum ada tenggat berikutnya`
+                    : "Belum ada tenggat dari catatan pajak perusahaan"}
+            </p>
           </Link>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {modules.map(({ href, name, description, source, icon: Icon, status }) => (
-            <Link key={href} href={href} className="group">
-              <Card className="h-full p-5 transition duration-200 group-hover:-translate-y-0.5 group-hover:border-brand/30 group-hover:shadow-md">
-                <div className="flex items-start justify-between">
-                  <span className="flex size-10 items-center justify-center rounded-lg bg-brand-light text-brand">
-                    <Icon size={19} />
-                  </span>
-                  <ArrowUpRight size={17} className="text-muted transition group-hover:text-brand" />
-                </div>
-                <h3 className="mt-5 text-base font-semibold text-ink">{name}</h3>
-                <p className="mt-2 min-h-10 text-sm leading-5 text-muted">{description}</p>
-                <div className="mt-5 flex items-center justify-between border-t border-line pt-4">
-                  <span className="text-xs text-muted">Sumber: {source}</span>
-                  <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-800">
-                    {status === "foundation" ? "Fondasi laporan" : "MVP tahap 1"}
-                  </span>
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
+        ) : (
+          <Link
+            href="/approvals?scope=review"
+            className="portal-summary border-[#c7d8ee]"
+          >
+            <h2 className="text-xs text-slate-500">Perlu pemeriksaan Anda</h2>
+            <p className="mt-2 flex items-baseline gap-1.5">
+              <span className="text-[30px] font-semibold leading-none text-slate-950">
+                {review.error ? "—" : (review.count ?? 0)}
+              </span>
+              <span className="text-[13px] text-slate-600">pengajuan</span>
+            </p>
+            <p className="mt-1.5 text-xs text-slate-500">
+              {review.error
+                ? "Ringkasan belum dapat dimuat."
+                : review.count
+                  ? "Buka untuk memeriksa dokumen sesuai kewenangan Anda"
+                  : "Belum ada permintaan yang memerlukan pemeriksaan Anda"}
+            </p>
+          </Link>
+        )}
+        {canReadPayments && (
+          <Link href="/modul/pembayaran" className="portal-summary">
+            <h2 className="text-xs text-slate-500">Pembayaran perusahaan</h2>
+            <p className="mt-2 flex items-baseline gap-1.5">
+              <span className="text-[30px] font-semibold leading-none tracking-tight text-slate-950">
+                {paymentError ? "—" : (unpaidPayments.count ?? 0)}
+              </span>
+              <span className="text-[13px] text-slate-600">belum lunas</span>
+            </p>
+            <p className="mt-1.5 text-xs text-slate-500">
+              {paymentError
+                ? paymentSchemaPending
+                  ? "Modul menunggu setup database Pembayaran."
+                  : "Ringkasan pembayaran belum dapat dimuat."
+                : payment
+                  ? `${paymentDays !== null && paymentDays < 0 ? "Terlambat" : paymentDays === 0 ? "Jatuh tempo hari ini" : `Jatuh tempo ${paymentDays} hari lagi`} · ${payment.payment_number} · ${payment.payee_name}${latePayments.count ? ` · ${latePayments.count} terlambat` : ""}`
+                  : "Tidak ada tagihan pembayaran yang belum lunas"}
+            </p>
+          </Link>
+        )}
       </section>
-
-      <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-3">
-          <ShieldCheck size={18} className="mt-0.5 shrink-0 text-brand" />
-          <div>
-            <p className="text-sm font-semibold text-ink">Modul ERP baru</p>
-            <p className="mt-1 text-sm text-muted">Data pada tahap ini diinput langsung di workspace; sinkronisasi sistem eksternal belum tersedia.</p>
-          </div>
-        </div>
-        <Button variant="secondary" asChild>
-          <Link href="/setup">Lihat setup <ArrowRight size={15} /></Link>
-        </Button>
-      </Card>
+      <ApplicationGrid role={role} />
+      <footer className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-slate-400">
+        <span>GSP Group · Enterprise Resource Planning</span>
+        <span>Workspace pribadi · Aplikasi mengikuti hak akses Anda</span>
+      </footer>
     </div>
   )
 }

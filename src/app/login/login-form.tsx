@@ -1,17 +1,21 @@
 "use client"
 
-import { useState, type FormEvent } from "react"
+import { useState, useTransition, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
+import { PageLoading } from "@/components/ui/page-loading"
 
 export function LoginForm({ initialError }: { initialError?: string }) {
   const router = useRouter()
   const [errorMessage, setErrorMessage] = useState(initialError ?? "")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isNavigating, startNavigation] = useTransition()
+  const busy = isSubmitting || isNavigating
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (busy) return
     setErrorMessage("")
     setIsSubmitting(true)
 
@@ -26,8 +30,10 @@ export function LoginForm({ initialError }: { initialError?: string }) {
         setErrorMessage(`Login gagal: ${error.message}`)
         return
       }
-      router.replace("/dashboard")
-      router.refresh()
+      startNavigation(() => {
+        router.replace("/dashboard")
+        router.refresh()
+      })
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Login tidak dapat diproses.",
@@ -38,11 +44,19 @@ export function LoginForm({ initialError }: { initialError?: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-7 space-y-4">
+    <form onSubmit={handleSubmit} aria-busy={busy} className="mt-7 space-y-4">
+      {busy && (
+        <PageLoading
+          overlay
+          title={isSubmitting ? "Memverifikasi akun" : "Membuka workspace"}
+          description={isSubmitting ? "Mohon tunggu, kami sedang memproses login Anda." : "Login berhasil. Halaman Anda sedang disiapkan."}
+        />
+      )}
       <label className="block space-y-2 text-sm font-medium text-ink">
         Email
         <input
           required
+          disabled={busy}
           name="email"
           type="email"
           autoComplete="email"
@@ -53,6 +67,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
         Kata sandi
         <input
           required
+          disabled={busy}
           name="password"
           type="password"
           autoComplete="current-password"
@@ -64,8 +79,8 @@ export function LoginForm({ initialError }: { initialError?: string }) {
           {errorMessage}
         </p>
       )}
-      <Button className="w-full" disabled={isSubmitting}>
-        {isSubmitting ? "Memverifikasi..." : "Masuk ke workspace"}
+      <Button className="w-full" disabled={busy}>
+        {busy ? "Mohon tunggu..." : "Masuk ke workspace"}
       </Button>
     </form>
   )

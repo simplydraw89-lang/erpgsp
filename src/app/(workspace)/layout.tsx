@@ -1,7 +1,6 @@
-import { Sidebar } from "@/components/layout/sidebar"
-import { Topbar } from "@/components/layout/topbar"
-import { MobileNav } from "@/components/layout/mobile-nav"
+import { WorkspaceShell } from "@/components/layout/workspace-shell"
 import { requireWorkspace } from "@/lib/auth/context"
+import { getDisplayName, getPersonalGreeting } from "@/lib/dashboard"
 
 export const dynamic = "force-dynamic"
 
@@ -10,18 +9,18 @@ export default async function WorkspaceLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const { organizationName, role } = await requireWorkspace()
+  const { organizationName, role, user } = await requireWorkspace()
+  const userName = getDisplayName(user)
 
   return (
-    <div className="min-h-screen">
-      <Sidebar />
-      <div className="lg:pl-[252px]">
-        <Topbar organizationName={organizationName} role={role} />
-        <MobileNav />
-        <main className="mx-auto max-w-[1500px] px-5 py-7 md:px-8 md:py-9">
-          {children}
-        </main>
-      </div>
-    </div>
+    <WorkspaceShell
+      organizationName={organizationName}
+      role={role}
+      userName={userName}
+      email={user.email ?? ""}
+      {...getPersonalGreeting(userName)}
+    >
+      {children}
+    </WorkspaceShell>
   )
 }

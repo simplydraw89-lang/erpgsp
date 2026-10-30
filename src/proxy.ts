@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
-import { isSupabaseConfigured } from "@/lib/supabase/config"
+import { getSupabaseConfig, isSupabaseConfigured } from "@/lib/supabase/config"
 
 export async function proxy(request: NextRequest) {
   if (!isSupabaseConfigured()) {
@@ -9,9 +9,18 @@ export async function proxy(request: NextRequest) {
   }
 
   let response = NextResponse.next({ request })
+
+  function redirectWithSession(url: URL) {
+    const redirect = NextResponse.redirect(url)
+    // Refreshes and expired-session cleanup must reach the browser even when
+    // this request redirects instead of rendering a page.
+    response.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie))
+    return redirect
+  }
+  const {url,key}=getSupabaseConfig()
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    key,
     {
       cookies: {
         getAll() {
@@ -48,15 +57,15 @@ export async function proxy(request: NextRequest) {
       request.nextUrl.pathname !== "/login" ||
       request.nextUrl.searchParams.get("error") !== "session_verification"
     ) {
-      return NextResponse.redirect(loginUrl)
+      return redirectWithSession(loginUrl)
     }
   }
 
   if (!user && request.nextUrl.pathname !== "/login") {
-    return NextResponse.redirect(new URL("/login", request.url))
+    return redirectWithSession(new URL("/login", request.url))
   }
   if (user && request.nextUrl.pathname === "/login") {
-    return NextResponse.redirect(new URL("/dashboard", request.url))
+    return redirectWithSession(new URL("/dashboard", request.url))
   }
 
   return response

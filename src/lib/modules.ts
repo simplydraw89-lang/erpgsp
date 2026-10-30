@@ -3,7 +3,9 @@ import {
   Calculator,
   ChartNoAxesCombined,
   ClipboardCheck,
+  CreditCard,
   ContactRound,
+  Package,
   UsersRound,
   type LucideIcon,
 } from "lucide-react"
@@ -15,6 +17,8 @@ export type ModuleKey =
   | "sdm"
   | "perpajakan"
   | "manajemen"
+  | "asset"
+  | "pembayaran"
 
 export type ModuleDefinition = {
   key: ModuleKey
@@ -27,6 +31,15 @@ export type ModuleDefinition = {
 }
 
 export const modules: ModuleDefinition[] = [
+  {
+    key: "asset",
+    name: "Asset Perusahaan",
+    description: "Pantau lokasi, penanggung jawab, nilai perolehan, kondisi, dan status aset.",
+    source: "ERP GSP · Supabase",
+    href: "/modul/asset",
+    icon: Package,
+    status: "mvp",
+  },
   {
     key: "crm",
     name: "CRM & Proyek",
@@ -70,6 +83,15 @@ export const modules: ModuleDefinition[] = [
     source: "ERP GSP · Supabase",
     href: "/modul/perpajakan",
     icon: ClipboardCheck,
+    status: "mvp",
+  },
+  {
+    key: "pembayaran",
+    name: "Pembayaran",
+    description: "Kelola tagihan perusahaan, jatuh tempo, dan status pembayarannya.",
+    source: "ERP GSP - Supabase",
+    href: "/modul/pembayaran",
+    icon: CreditCard,
     status: "mvp",
   },
   {
