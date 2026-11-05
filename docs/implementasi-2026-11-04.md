@@ -13,6 +13,14 @@
 
 ## Perubahan yang disiapkan
 
+### Format nominal seluruh modul — 5 November 2026
+
+Formatter uang bersama dan komponen input nominal memakai titik ribuan/koma desimal, termasuk ketika mengetik; tampilan uang dua angka desimal. Diterapkan pada SPH, rincian Pembelian/dasar PPh, jurnal debit/kredit, saldo rekonsiliasi, kasbon/pertanggungjawaban, batas eskalasi approval dan seluruh field workflow bertipe money (aset, pajak, pembayaran, dan lainnya), serta tabel/detail/ringkasan nominal. Nomor dokumen, NPWP, rekening dan identitas tidak diformat sebagai uang.
+
+Input mempertahankan pecahan/nol dan posisi kursor, mengirim nilai desimal kanonis tanpa pemisah ribuan. Format ambigu, karakter tidak valid, pecahan lebih dari dua digit atau nominal di luar batas ditampilkan sebagai kesalahan; guard juga menolak submit draft ketika nominal malformed meskipun tombol draft melewati validasi required. Format tampilan nilai string tidak melewati konversi Number sehingga digit besar tetap utuh. Perhitungan bisnis/SQL dan alur approval tidak diubah; tidak menerapkan migration, membuat transaksi Pembelian atau memulai staging.
+
+Validasi: empat tes nominal baru (format ribuan/jutaan/miliaran, nilai string besar, pecahan, paste ambigu, hidden canonical value, perubahan input dan guard draft) serta 28 tes Sales lulus; lint, typecheck dan build produksi terisolasi lulus. `test:money` ditambahkan ke CI. Pengujian input memakai render/harness lokal; interaksi browser nyata belum diverifikasi.
+
 ### Lanjutan daftar SPH, keputusan dan notifikasi — 5 November 2026
 
 Arahan terbaru dikonfirmasi pemilik: SPK dapat dipersiapkan setelah Direktur Keuangan menyetujui, tanpa tahap Accounting–Tax/Finance SPH. Ini menggantikan alur empat tahap pada catatan Klien/SPH sebelumnya di bawah.

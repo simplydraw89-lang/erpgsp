@@ -1,10 +1,8 @@
+import { formatCurrency as money } from "@/lib/money"
 import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import { Card } from "@/components/ui/card"
 import type { loadBusinessSummary } from "@/lib/business-summary"
 
-const money = (value: string | number) => new Intl.NumberFormat("id-ID", {
-  style: "currency", currency: "IDR", maximumFractionDigits: 2,
-}).format(Number(value))
 
 export function BusinessSummary({ summary, queueOnly = false }: {
   summary: Awaited<ReturnType<typeof loadBusinessSummary>>

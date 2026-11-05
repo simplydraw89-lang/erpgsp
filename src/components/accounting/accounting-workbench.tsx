@@ -1,3 +1,5 @@
+import { formatCurrency as money } from "@/lib/money"
+import { MoneyInput } from "@/components/ui/money-input"
 import { Card } from "@/components/ui/card"
 import {
   closeAccountingPeriod,
@@ -73,13 +75,7 @@ type Reconciliation = {
 
 type Member = { user_id: string; role: OrganizationRole }
 
-function money(value: number | string) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 2,
-  }).format(Number(value))
-}
+
 
 function entityLabel(entity: Entity) {
   return `${entity.entity_code} · ${entity.legal_name}`
@@ -261,8 +257,8 @@ export function AccountingWorkbench({
                       {activeAccounts.map((account) => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
                     </select>
                     <input name={`line_description_${line}`} placeholder="Keterangan baris" maxLength={500} className="rounded border border-line p-2" />
-                    <input name={`debit_${line}`} type="number" min="0" step="0.01" placeholder="Debit" className="rounded border border-line p-2" />
-                    <input name={`credit_${line}`} type="number" min="0" step="0.01" placeholder="Kredit" className="rounded border border-line p-2" />
+                    <MoneyInput name={`debit_${line}`}  min="0"  placeholder="Debit" className="rounded border border-line p-2"  />
+                    <MoneyInput name={`credit_${line}`}  min="0"  placeholder="Kredit" className="rounded border border-line p-2"  />
                     <span className="self-center text-xs text-muted">Baris {line}</span>
                   </div>
                 )
@@ -338,7 +334,7 @@ export function AccountingWorkbench({
               {activeAccounts.filter((account) => account.account_type === "asset").map((account) => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
             </select>
             <input required type="date" name="statement_date" aria-label="Tanggal saldo rekening koran" className="rounded border border-line p-2" />
-            <input required type="number" step="0.01" name="statement_balance" placeholder="Saldo rekening koran" className="rounded border border-line p-2" />
+            <MoneyInput allowNegative required name="statement_balance" placeholder="Saldo rekening koran" className="rounded border border-line p-2"  />
             <input name="note" maxLength={1000} placeholder="Catatan / referensi rekening koran" className="rounded border border-line p-2 sm:col-span-2 xl:col-span-4" />
             <button className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white">Catat rekonsiliasi</button>
           </form>

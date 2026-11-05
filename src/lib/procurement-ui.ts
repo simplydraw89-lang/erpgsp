@@ -1,3 +1,4 @@
+import { formatCurrency } from "@/lib/money"
 export type BusinessUnit = { id: string; code: string; name: string; kind: string }
 export type WorkAssignment = { user_id: string; branch_id: string | null; job_role: string }
 export type ProcurementVendor = { id: string; branch_id: string; name: string; address: string; npwp: string; bank_owner: string; bank_account: string; payment_method: string; status: string; created_by: string }
@@ -26,7 +27,7 @@ export const purchaseStatusLabels: Record<string, string> = {
   draft: "Draft", branch_review: "Verifikasi Manager Cabang", director_review: "Persetujuan Direktur Keuangan",
   accounting_review: "Pemeriksaan Accounting & Tax", payment_ready: "Siap dibayar Finance", paid: "Lunas", rejected: "Ditolak / perlu revisi",
 }
-export function rupiah(value: number | string) { return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 2 }).format(Number(value || 0)) }
+export const rupiah = formatCurrency
 export function isProcurementMissing(error: { code?: string; message?: string } | null) { return Boolean(error && (["42P01", "PGRST205", "PGRST202"].includes(error.code ?? "") || /schema cache.*(purchase_requests|business_units|procurement_vendors)/i.test(error.message ?? ""))) }
 export const procurementInput = "mt-1 block min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/15 disabled:bg-canvas"
 export const procurementLabel = "block text-sm font-medium text-ink"

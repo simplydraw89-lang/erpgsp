@@ -4,6 +4,7 @@ Baseline kebutuhan disepakati melalui arahan pemilik sistem, 4 November 2026. Do
 
 ## Pengelolaan dokumen dan sumber kebutuhan
 
+- Format nominal 5 November: seluruh tampilan dan input uang memakai titik ribuan serta koma desimal, contoh 1.250.000,50. Pemisah muncul saat mengetik; nilai kiriman tetap desimal kanonis untuk database. Isian ambigu/tidak valid harus terlihat dan ditolak, bukan dibuang nolnya atau dianggap nol. Nomor dokumen, NPWP, rekening dan identitas tidak diformat sebagai uang. Perubahan ini tidak memulai pengisian Pembelian atau staging.
 - Arahan navigasi 5 November 2026: pilihan modul pada dashboard membuka halaman di tab baru agar dashboard tetap tersedia, termasuk tujuan Klien/SPH/SPK dari popup Penjualan. Lampiran PDF/PNG/JPEG dibuka sebagai pratinjau di tab baru tanpa unduhan paksa. Endpoint tetap memverifikasi sesi dan akses database/Storage; bucket tidak dijadikan publik.
 - Sebelum menulis dokumentasi, cari PRD, ERD dan aturan pengembangan yang sudah tersedia di repository. Revisi dokumen yang sesuai; jangan membuat salinan baru berdasarkan tanggal, sesi atau nama modul jika dokumen induknya sudah ada.
 - Dokumen baru hanya dibuat bila jenis dokumen tersebut memang belum tersedia atau pemilik meminta artefak terpisah. Perubahan permintaan pengguna merupakan tambahan/revisi pada dokumen induk, bukan PRD/ERD tandingan.

@@ -30,6 +30,7 @@ jobs:
       - run: npm run test:procurement
       - run: npm run test:documents
       - run: npm run test:sales
+      - run: npm run test:money
       - run: npm run build
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://build-placeholder.supabase.co

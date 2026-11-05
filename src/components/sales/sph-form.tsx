@@ -1,5 +1,7 @@
 "use client"
 
+import { MoneyInput } from "@/components/ui/money-input"
+
 import { useActionState, useRef, useState, type FormEvent } from "react"
 import { Card } from "@/components/ui/card"
 import { saveSphRequest } from "@/app/(workspace)/pengajuan/penjualan/actions"
@@ -55,7 +57,7 @@ export function SphForm({ branches, draftId, document: draft, disabled }: { bran
         </div>
         <fieldset className="rounded-xl border border-line p-4"><legend className="px-1 text-sm font-semibold">Lingkup pekerjaan</legend><div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">{sphWorkScopes.map(scope => <label key={scope} className="flex items-center gap-2 text-sm"><input type="checkbox" name="work_scopes" value={scope} defaultChecked={draft?.work_scopes.includes(scope)} className="size-4 accent-brand" />{scope}</label>)}</div></fieldset>
         <div className="grid gap-4 sm:grid-cols-3">
-          <label className={label}>Nilai SPH (Rp)<input name="amount" type="number" min="0.01" step="0.01" required defaultValue={draft?.amount ?? ""} className={input} /></label>
+          <label className={label}>Nilai SPH (Rp)<MoneyInput name="amount" min="0.01" required defaultValue={draft?.amount ?? ""} className={input} /></label>
           <label className={label}>Bidang usaha<input value={client?.industry ?? ""} readOnly className={`${input} bg-canvas`} placeholder="Otomatis dari klien" /></label>
           <label className={label}>Deal Project<select name="deal_status" defaultValue={draft?.deal_status ?? "belum_deal"} required className={input}><option value="belum_deal">Belum deal</option><option value="sudah_deal">Sudah deal</option></select></label>
           <label className={label}>Masa berlaku sampai<input name="valid_until" type="date" required defaultValue={draft?.valid_until ?? ""} className={input} /></label>

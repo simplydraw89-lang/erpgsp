@@ -1,3 +1,4 @@
+import { MoneyInput } from "@/components/ui/money-input"
 import { notFound, redirect } from "next/navigation"
 import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import { Card } from "@/components/ui/card"
@@ -681,13 +682,13 @@ export default async function ModulePage({
                         <form action={submitCashAdvanceSettlement} className="mt-3 grid gap-3 sm:grid-cols-2">
                           <input type="hidden" name="advance_id" value={row.id} />
                           <label className="text-sm">Total biaya aktual
-                            <input required name="expense_total" type="number" min="0" step="0.01" className="mt-1 w-full rounded border border-line bg-white p-2" />
+                            <MoneyInput required name="expense_total"  min="0"  className="mt-1 w-full rounded border border-line bg-white p-2"  />
                           </label>
                           <label className="text-sm">Kas dikembalikan
-                            <input required name="cash_returned" type="number" min="0" step="0.01" defaultValue="0" className="mt-1 w-full rounded border border-line bg-white p-2" />
+                            <MoneyInput required name="cash_returned"  min="0"  defaultValue="0" className="mt-1 w-full rounded border border-line bg-white p-2"  />
                           </label>
                           <label className="text-sm">Tambahan yang harus dibayar
-                            <input required name="additional_due" type="number" min="0" step="0.01" defaultValue="0" className="mt-1 w-full rounded border border-line bg-white p-2" />
+                            <MoneyInput required name="additional_due"  min="0"  defaultValue="0" className="mt-1 w-full rounded border border-line bg-white p-2"  />
                           </label>
                           <label className="text-sm">Jatuh tempo tambahan (jika ada)
                             <input name="additional_due_on" type="date" className="mt-1 w-full rounded border border-line bg-white p-2" />

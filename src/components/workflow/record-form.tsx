@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { MoneyInput } from "@/components/ui/money-input"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
@@ -157,14 +158,12 @@ export function RecordForm({
                   defaultChecked={Boolean(value)}
                   className="size-5 accent-brand"
                 />
+              ) : field.type === "money" ? (
+                <MoneyInput name={field.name} aria-label={field.label} min="0" required={requiredField} defaultValue={String(value)} className={inputClass} />
               ) : (
                 <input
                   name={field.name}
-                  type={
-                    field.type === "money" ? "number" : (field.type ?? "text")
-                  }
-                  min={field.type === "money" ? "0" : undefined}
-                  step={field.type === "money" ? "0.01" : undefined}
+                  type={field.type ?? "text"}
                   maxLength={2000}
                   required={requiredField}
                   readOnly={type === "advance" && field.name === "advance_number"}

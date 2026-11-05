@@ -6,6 +6,8 @@ Rujukan: [ERD](ERD.md), [aturan pengembangan](aturan-pengembangan.md), [dasar pa
 
 ## Tujuan dan prioritas
 
+Format nominal di seluruh modul menggunakan titik ribuan dan koma desimal, termasuk saat input: `1.250.000,50`. Tampilan uang konsisten dua angka desimal. Pengiriman formulir menggunakan nilai kanonis `1250000.50` tanpa pemisah ribuan; isian ambigu/tidak valid ditolak dengan pesan dan tidak diubah diam-diam menjadi nol. Nomor dokumen, rekening, NPWP dan identitas tetap utuh. Tidak mengubah alur persetujuan atau memulai transaksi Pembelian/staging.
+
 Arahan terbaru 5 November 2026: fokus sekarang Klien dan SPH. Pengisian transaksi pembelian serta mulai staging ditunda sampai konfirmasi pemilik. Penyempurnaan Penjualan tidak menjalankan konfigurasi pembukuan atau membuat transaksi pembelian.
 
 Navigasi dashboard membuka setiap modul di tab baru, termasuk pilihan Klien/SPH/SPK dari popup Penjualan. Tautan menggunakan `noopener noreferrer`. Dokumen kelengkapan yang diunggah (PDF/PNG/JPEG) dapat dilihat langsung di tab baru tanpa perlu mengunduh terlebih dahulu; akses pratinjau tetap mengikuti sesi dan RLS/Storage privat.

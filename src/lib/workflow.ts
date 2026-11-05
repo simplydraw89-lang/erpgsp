@@ -1,3 +1,4 @@
+import { formatCurrency } from "@/lib/money"
 import type { OrganizationRole } from "@/lib/auth/context"
 import type { ModuleKey } from "@/lib/modules"
 
@@ -343,11 +344,6 @@ export function displayValue(value: unknown, field?: Field) {
   if (value === null || value === undefined || value === "") return "—"
   if (typeof value === "boolean") return value ? "Ya" : "Tidak"
   if (field?.type === "money")
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(Number(value))
+    return formatCurrency(typeof value === "number" ? value : String(value))
   return labels[String(value)] ?? String(value)
 }

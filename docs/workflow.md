@@ -14,6 +14,8 @@ Jika konektor Supabase menolak akses project, penerapan belum dapat dilakukan me
 
 ## Pemakaian
 
+Semua kolom nominal menambahkan pemisah ribuan saat mengetik, contoh `1.250.000,50`. Gunakan koma untuk pecahan; titik ribuan muncul otomatis. Tabel/ringkasan memakai format yang sama dengan dua angka desimal. Nilai yang dikirim ke server tetap `1250000.50`. Format ambigu seperti `1,234.56` ditolak agar tidak salah nominal, termasuk saat simpan draft.
+
 Arahan 5 November: pengisian transaksi pembelian dan staging menunggu konfirmasi pemilik. Fokus saat ini Klien dan SPH; jangan menjalankan konfigurasi pembukuan sebagai bagian pengujian Penjualan.
 
 Klik modul dari dashboard untuk membukanya di tab baru; dashboard tetap tersedia pada tab asal. Penjualan menampilkan popup pilihan terlebih dahulu, kemudian Klien/SPH/SPK yang dipilih dibuka di tab baru. Pilih **Buka dokumen** atau **Lihat dokumen di tab baru** untuk menampilkan PDF/gambar lampiran langsung di browser. Endpoint memeriksa sesi dan akses, lalu menyajikan berkas secara inline dari Storage privat tanpa unduhan paksa.

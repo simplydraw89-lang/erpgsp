@@ -1,5 +1,7 @@
 "use client"
 
+import { MoneyInput } from "@/components/ui/money-input"
+
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -88,11 +90,9 @@ export function PolicyForm({
           <>
             <label className="text-sm">
               Eskalasi mulai nominal (IDR)
-              <input
+              <MoneyInput
                 aria-label="Eskalasi mulai nominal (IDR)"
-                type="number"
                 name="threshold"
-                step="0.01"
                 min="0"
                 defaultValue={policy.escalation_amount ?? ""}
                 placeholder="Kosong = tanpa eskalasi"

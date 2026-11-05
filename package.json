@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "test:money": "node --test scripts/money.test.cjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
