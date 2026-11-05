@@ -11,13 +11,24 @@ export function LogoutButton() {
 
   async function signOut() {
     setErrorMessage("")
-    const { error } = await createClient().auth.signOut()
-    if (error) {
-      setErrorMessage(`Gagal keluar: ${error.message}`)
-      return
+    try {
+      const previewResponse = await fetch("/api/view-as", { method: "DELETE" })
+      if (!previewResponse.ok) {
+        setErrorMessage("Gagal membersihkan mode lihat sebagai. Coba lagi.")
+        return
+      }
+      const { error } = await createClient().auth.signOut()
+      if (error) {
+        setErrorMessage(`Gagal keluar: ${error.message}`)
+        return
+      }
+      router.replace("/login")
+      router.refresh()
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? `Gagal keluar: ${error.message}` : "Gagal keluar.",
+      )
     }
-    router.replace("/login")
-    router.refresh()
   }
 
   return (

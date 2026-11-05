@@ -25,7 +25,8 @@ export function PolicyForm({
   const [failed, setFailed] = useState(false)
   const router = useRouter()
   const spec = recordSpecs[policy.record_type]
-  const roles = ["owner", "director", "finance", "hr", "operations"].filter(
+  const fixedStages = policy.record_type === "advance"
+  const roles = ["owner", "director", "manager", "finance", "hr", "operations"].filter(
     (role) => spec.readers.some((reader) => reader === role),
   )
   const money = ["asset", "tax_record", "payment"].includes(policy.record_type)
@@ -59,8 +60,13 @@ export function PolicyForm({
       <input type="hidden" name="version" value={policy.version} />
       <h2 className="text-lg font-semibold">{spec.label}</h2>
       <p className="text-xs text-muted">Kebijakan versi {policy.version}</p>
+      {policy.record_type === "advance" && (
+        <p className="rounded-lg bg-brand-light/60 p-3 text-sm leading-6 text-muted">
+          Kasbon selalu memerlukan dua tahap berurutan: Manager, lalu Accounting & Finance. Kedua pemeriksa wajib berbeda dari pengaju.
+        </p>
+      )}
       <fieldset
-        disabled={!canEdit || pending}
+        disabled={!canEdit || pending || fixedStages}
         className="grid gap-4 sm:grid-cols-3"
       >
         <label className="text-sm">
@@ -124,7 +130,7 @@ export function PolicyForm({
           . Batas bersifat inklusif (nominal ≥ batas).
         </p>
       )}
-      {canEdit && (
+      {canEdit && !fixedStages && (
         <Button type="submit" disabled={pending}>
           {pending ? "Menyimpan..." : "Simpan kebijakan"}
         </Button>

@@ -7,7 +7,9 @@ import { isRecordType } from "@/lib/workflow"
 export async function updateApprovalPolicy(
   data: FormData,
 ): Promise<{ error?: string }> {
-  const { supabase, organizationId, role } = await requireWorkspace()
+  const { supabase, organizationId, role, isReadOnlyPreview } = await requireWorkspace()
+  if (isReadOnlyPreview)
+    return { error: "Mode lihat sebagai aktif: perubahan kebijakan dinonaktifkan." }
   const type = String(data.get("recordType") ?? "")
   if (role !== "owner" || !isRecordType(type))
     return { error: "Hanya Superuser dapat mengatur kebijakan persetujuan." }

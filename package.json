@@ -10,7 +10,12 @@
     "typecheck": "tsc --noEmit",
     "test:auth": "node --test scripts/proxy-session.test.cjs",
     "test:workflow": "node --test scripts/workflow-database.test.mjs",
-    "test:dashboard": "node --test scripts/dashboard.test.cjs"
+    "test:dashboard": "node --test scripts/dashboard.test.cjs",
+    "test:access": "node --test scripts/job-access.test.cjs scripts/my-submissions.test.cjs",
+    "test:procurement": "node --test scripts/procurement-database.test.mjs",
+    "test:documents": "node --test scripts/invoice-ocr.test.cjs",
+    "test:sales": "node --test scripts/sales-upload.test.cjs scripts/sales-navigation.test.cjs scripts/document-preview.test.cjs scripts/sales-database.test.mjs",
+    "test:coa": "node --test scripts/coa-database.test.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.2",
@@ -20,6 +25,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^0.469.0",
     "next": "16.4.3",
+    "pdfjs-dist": "6.5.438",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^2.6.0"

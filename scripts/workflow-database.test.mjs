@@ -4,24 +4,27 @@ import { readFile, readdir } from "node:fs/promises"
 import { PGlite } from "@electric-sql/pglite"
 import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto"
 
-test("PostgreSQL workflow security and lifecycle", async (t) => {
+// Preserve regression coverage for the pre-branch workflow. The branch migration
+// intentionally closes these organization-wide paths to non-owner accounts;
+// scripts/procurement-database.test.mjs verifies the replacement and that closure.
+test("Legacy PostgreSQL workflow security and lifecycle (pre-branch baseline)", async (t) => {
   const db = new PGlite({ extensions: { pgcrypto } })
   const ids = Array.from(
-    { length: 9 },
+    { length: 10 },
     (_, i) => `10000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
   )
-  const [owner, director, operations, finance, hr, staff, other, director2] =
+  const [owner, director, operations, finance, hr, staff, other, director2, auditor, manager] =
     ids
   try {
     await db.exec(`create role anon; create role authenticated; create schema auth;
-      create table auth.users(id uuid primary key);
+      create table auth.users(id uuid primary key, email text, raw_user_meta_data jsonb not null default '{}'::jsonb);
       create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
       grant usage on schema auth to authenticated,anon;
       grant execute on function auth.uid() to authenticated,anon;`)
     for (const file of (
       await readdir(new URL("../supabase/migrations/", import.meta.url))
     )
-      .filter((name) => name.endsWith(".sql"))
+      .filter((name) => name.endsWith(".sql") && name <= "20261102000100_accounting_advance_workflows.sql")
       .sort()) {
       await db.exec(
         await readFile(
@@ -50,6 +53,8 @@ test("PostgreSQL workflow security and lifecycle", async (t) => {
       [finance, "finance"],
       [hr, "hr"],
       [staff, "staff"],
+      [auditor, "auditor"],
+      [manager, "manager"],
     ]) {
       await db.query(
         "insert into public.organization_members(organization_id,user_id,role) values($1,$2,$3)",
@@ -560,6 +565,229 @@ test("PostgreSQL workflow security and lifecycle", async (t) => {
         }
       },
     )
+    await t.test("cash advance roles, staged approvals and settlement", async () => {
+      const advancePayload = {
+        advance_number: "ADV-TEST-001",
+        purpose_type: "business_trip",
+        trip_destination: "Bandung",
+        departure_on: "2026-10-10",
+        return_on: "2026-10-12",
+        description: "Perjalanan kerja",
+        amount: "500.00",
+        needed_on: "2026-10-09",
+        settlement_due_on: "2026-10-20",
+      }
+      await assert.rejects(save(auditor, "advance", advancePayload), /tidak diizinkan/)
+      const advanceDraft = await save(staff, "advance", advancePayload)
+      const firstRequest = await submit(staff, advanceDraft)
+      assert.equal(
+        (await as(manager, "select required_role from public.approval_requests where id=$1", [firstRequest])).rows[0].required_role,
+        "manager",
+      )
+      await review(manager, firstRequest)
+      const secondRequest = (
+        await as(director, "select id from public.approval_requests where document_id=$1 and approval_step=2", [advanceDraft])
+      ).rows[0].id
+      await review(finance, secondRequest)
+      const advanceId = (await execute(finance, advanceDraft)).rows[0].id
+      assert.equal(
+        (await db.query("select advance_status from public.cash_advances where id=$1", [advanceId])).rows[0].advance_status,
+        "approved",
+      )
+      await assert.rejects(
+        as(auditor, "select public.submit_cash_advance_settlement($1,$2,450,50,0,'Perjalanan','KWT-1')", [org, advanceId]),
+        /Auditor tidak diizinkan/,
+      )
+      await assert.rejects(
+        as(staff, "select public.submit_cash_advance_settlement($1,$2,450,50,0,'Perjalanan','KWT-1')", [org, advanceId]),
+        /setelah dicairkan/,
+      )
+
+      const payment = (
+        await db.query("select id,payment_number,payee_name,description,invoice_date,due_on,amount,created_by from public.payment_records where cash_advance_id=$1", [advanceId])
+      ).rows[0]
+      const paidDocument = await save(finance, "payment", {
+        payment_number: payment.payment_number,
+        payee_name: payment.payee_name,
+        description: payment.description,
+        invoice_date: payment.invoice_date.toISOString().slice(0, 10),
+        due_on: payment.due_on.toISOString().slice(0, 10),
+        amount: String(payment.amount),
+        status: "paid",
+        paid_on: "2026-10-09",
+        payment_method: "transfer",
+        reference_number: "BANK-ADV-1",
+      }, null, null, payment.id)
+      await review(director2, await submit(finance, paidDocument))
+      await execute(finance, paidDocument)
+      assert.equal(
+        (await db.query("select advance_status from public.cash_advances where id=$1", [advanceId])).rows[0].advance_status,
+        "disbursed",
+      )
+      const settlementId = (
+        await         as(staff, "select public.submit_cash_advance_settlement($1,$2,450,50,0,'Pengeluaran perjalanan','KWT-1,KWT-2') id", [org, advanceId])
+      ).rows[0].id
+      await db.transaction(async (tx) => {
+        await tx.query("select set_config('request.jwt.claim.sub',$1,true)", [owner])
+        await tx.query("update public.cash_advance_settlements set submitted_by=$1 where id=$2", [finance, settlementId])
+      })
+      await assert.rejects(
+        as(finance, "select public.review_cash_advance_settlement($1,'approved','OK')", [settlementId]),
+        /sendiri/,
+      )
+      await db.transaction(async (tx) => {
+        await tx.query("select set_config('request.jwt.claim.sub',$1,true)", [owner])
+        await tx.query("update public.cash_advance_settlements set submitted_by=$1 where id=$2", [staff, settlementId])
+      })
+      await assert.rejects(
+        as(staff, "select public.review_cash_advance_settlement($1,'approved','OK')", [settlementId]),
+        /Hanya Finance/,
+      )
+      await assert.rejects(
+        as(staff, "select public.submit_cash_advance_settlement($1,$2,400,50,0,'Tidak seimbang','KWT-1')", [org, advanceId]),
+        /tidak seimbang/,
+      )
+      await as(finance, "select public.review_cash_advance_settlement($1,'approved','Bukti sesuai')", [settlementId])
+      const decision = (await db.query(
+        "select submitted_by,reviewed_by from public.cash_advance_settlements where id=$1",
+        [settlementId],
+      )).rows[0]
+      assert.notEqual(decision.submitted_by, decision.reviewed_by)
+      assert.equal(
+        (await db.query("select advance_status from public.cash_advances where id=$1", [advanceId])).rows[0].advance_status,
+        "settled",
+      )
+      const additionalAdvanceId = (
+        await db.transaction(async (tx) => {
+          await tx.query("select set_config('request.jwt.claim.sub',$1,true)", [owner])
+          return tx.query(
+            `insert into public.cash_advances(
+              organization_id,advance_number,purpose_type,trip_destination,departure_on,return_on,
+              description,amount,needed_on,settlement_due_on,advance_status,created_by
+            ) values($1,'ADV-TEST-002','business_trip','Jakarta',date '2026-10-10',date '2026-10-11',
+              'Perjalanan tambahan',500,date '2026-10-09',date '2026-10-20','disbursed',$2) returning id`,
+            [org, staff],
+          )
+        })
+      ).rows[0].id
+      const additionalSettlementId = (
+        await as(staff,
+          "select public.submit_cash_advance_settlement($1,$2,550,0,50,'Biaya melebihi uang muka','KWT-3',date '2026-11-15') id",
+          [org, additionalAdvanceId],
+        )
+      ).rows[0].id
+      await as(finance,
+        "select public.review_cash_advance_settlement($1,'approved','Biaya disetujui')",
+        [additionalSettlementId],
+      )
+      const reimbursement = (await db.query(
+        "select amount,due_on,status,cash_advance_settlement_id from public.payment_records where cash_advance_settlement_id=$1",
+        [additionalSettlementId],
+      )).rows[0]
+      assert.equal(Number(reimbursement.amount), 50)
+      assert.equal(reimbursement.due_on.toISOString().slice(0, 10), "2026-11-15")
+      assert.equal(reimbursement.status, "unpaid")
+      assert.equal(reimbursement.cash_advance_settlement_id, additionalSettlementId)
+      await assert.rejects(
+        as(staff, "select public.submit_cash_advance_settlement($1,$2,450,50,0,'Duplikat','KWT-1')", [org, advanceId]),
+        /setelah dicairkan/,
+      )
+    })
+    await t.test("accounting entity, periods, journals, reversal and bank balance reconciliation", async () => {
+      const entityId = (await as(owner,
+        "select public.create_company_entity($1,'GSP','Gema Sinergi Peradaban','parent','IDR',null,null,true) id",
+        [org],
+      )).rows[0].id
+      await as(finance, "select public.set_entity_membership($1,$2,$3,true)", [org, entityId, staff])
+      assert.equal(
+        (await as(staff, "select count(*)::int count from public.entity_memberships where user_id=$1 and entity_id=$2", [staff, entityId])).rows[0].count,
+        1,
+      )
+      await assert.rejects(
+        as(staff, "select public.create_accounting_period($1,$2,'2026',date '2026-01-01',date '2026-12-31')", [org, entityId]),
+        /Hanya Superuser atau Finance/,
+      )
+      const periodId = (await as(finance,
+        "select public.create_accounting_period($1,$2,'2026',date '2026-01-01',date '2026-12-31') id",
+        [org, entityId],
+      )).rows[0].id
+      await assert.rejects(
+        as(finance, "select public.create_accounting_period($1,$2,'2026-H2',date '2026-07-01',date '2026-12-31')", [org, entityId]),
+        /bertumpang tindih/,
+      )
+
+      const existingCashAccount = (await db.query("select id from public.finance_accounts where organization_id=$1 and code='1100'", [org])).rows[0].id
+      const equityDoc = await save(owner, "account", {
+        code: "3199",
+        name: "Modal uji",
+        account_type: "equity",
+        normal_balance: "credit",
+        is_active: true,
+      })
+      await review(director, await submit(owner, equityDoc))
+      await execute(owner, equityDoc)
+      const equityAccount = (await db.query("select id from public.finance_accounts where organization_id=$1 and code='3199'", [org])).rows[0].id
+      const createJournal = (number, debit = "1000.00", credit = "1000.00") =>
+        as(finance, "select public.create_accounting_journal($1,$2,$3,$4,date '2026-10-15','manual','Transaksi uji',$5::jsonb) id", [
+          org,
+          entityId,
+          periodId,
+          number,
+          JSON.stringify([
+            { account_id: existingCashAccount, description: "Kas", debit, credit: "0" },
+            { account_id: equityAccount, description: "Modal", debit: "0", credit },
+          ]),
+        ])
+      const journalId = (await createJournal("JRN-TEST-001")).rows[0].id
+      await assert.rejects(
+        createJournal("JRN-TEST-002", "1000.00", "900.00"),
+        /debit harus sama dengan kredit/,
+      )
+      await assert.rejects(
+        as(staff, "select public.post_accounting_journal($1)", [journalId]),
+        /akses ditolak/,
+      )
+      await as(finance, "select public.post_accounting_journal($1)", [journalId])
+      const reversalId = (await as(finance,
+        "select public.reverse_accounting_journal($1,'REV-TEST-001',date '2026-10-20','Koreksi transaksi') id",
+        [journalId],
+      )).rows[0].id
+      await as(finance, "select public.post_accounting_journal($1)", [reversalId])
+      assert.equal((await db.query("select status from public.accounting_journals where id=$1", [journalId])).rows[0].status, "reversed")
+      await assert.rejects(
+        as(finance, "select public.reverse_accounting_journal($1,'REV-TEST-002',date '2026-10-20','Reversal ganda')", [journalId]),
+        /belum dibalik|sudah memiliki pembalik/,
+      )
+      const remainingJournal = (await createJournal("JRN-TEST-003")).rows[0].id
+      await as(finance, "select public.post_accounting_journal($1)", [remainingJournal])
+      const reconciliationId = (await as(finance,
+        "select public.reconcile_bank_balance($1,$2,$3,$4,date '2026-10-31',1000,'Statement Oktober') id",
+        [org, entityId, periodId, existingCashAccount],
+      )).rows[0].id
+      const reconciliation = (await as(finance,
+        "select status,difference from public.bank_reconciliations where id=$1",
+        [reconciliationId],
+      )).rows[0]
+      assert.equal(reconciliation.status, "matched")
+      assert.equal(Number(reconciliation.difference), 0)
+      const varianceId = (await as(finance,
+        "select public.reconcile_bank_balance($1,$2,$3,$4,date '2026-11-30',900,'Selisih lanjutan') id",
+        [org, entityId, periodId, existingCashAccount],
+      )).rows[0].id
+      assert.equal(
+        (await as(finance, "select status from public.bank_reconciliations where id=$1", [varianceId])).rows[0].status,
+        "variance",
+      )
+      const finalDraft = (await createJournal("JRN-TEST-004")).rows[0].id
+      await assert.rejects(
+        as(finance, "select public.close_accounting_period($1)", [periodId]),
+        /jurnal draft/,
+      )
+      await as(finance, "select public.void_accounting_journal($1)", [finalDraft])
+      assert.equal((await db.query("select status from public.accounting_journals where id=$1", [finalDraft])).rows[0].status, "voided")
+      await as(finance, "select public.close_accounting_period($1)", [periodId])
+      await assert.rejects(createJournal("JRN-TEST-005"), /periode entitas yang terbuka/)
+    })
   } finally {
     await db.close()
   }

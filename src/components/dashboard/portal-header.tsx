@@ -1,15 +1,22 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Bell, ChevronRight, Search, X } from "lucide-react"
+import { Search, X } from "lucide-react"
+import { SalesNotificationBell } from "@/components/sales/notifications"
 import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import { LogoutButton } from "@/components/auth/logout-button"
+import { ViewAsControl } from "@/components/auth/view-as-control"
 import type { OrganizationRole } from "@/lib/auth/context"
 import { getApplications, roleLabels } from "@/lib/app-catalog"
 
 export function PortalHeader({
   organizationName,
   role,
+  navigationRoles = [role],
+  roleLabel,
+  actorRole,
+  isReadOnlyPreview,
+  isPreviewInvalid,
   userName,
   email,
   greeting,
@@ -18,6 +25,11 @@ export function PortalHeader({
 }: {
   organizationName: string
   role: OrganizationRole
+  navigationRoles?: OrganizationRole[]
+  roleLabel?: string
+  actorRole: OrganizationRole
+  isReadOnlyPreview: boolean
+  isPreviewInvalid: boolean
   userName: string
   email: string
   greeting: string
@@ -27,7 +39,7 @@ export function PortalHeader({
   const [query, setQuery] = useState("")
   const dialog = useRef<HTMLDialogElement>(null)
   const searchInput = useRef<HTMLInputElement>(null)
-  const apps = getApplications(role)
+  const apps = getApplications(navigationRoles)
   const results = apps.filter((app) =>
     `${app.name} ${app.group} ${app.description}`
       .toLocaleLowerCase("id")
@@ -131,6 +143,8 @@ export function PortalHeader({
               <Link
                 key={app.href}
                 href={app.href}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"
               >
                 <app.icon size={16} />
@@ -163,27 +177,7 @@ export function PortalHeader({
           </button>
         </div>
         <div className="portal-account-actions">
-          <details className="relative">
-            <summary
-              aria-label="Notifikasi"
-              className="flex size-9 cursor-pointer list-none items-center justify-center rounded-full text-slate-600 hover:bg-white/70"
-            >
-              <Bell size={19} />
-            </summary>
-            <div className="portal-popover right-0 top-12 w-72 p-4">
-              <p className="text-sm font-semibold">Pengajuan & persetujuan</p>
-              <p className="mt-2 text-xs leading-5 text-slate-500">
-                Lihat status pengajuan Anda atau permintaan yang perlu
-                diperiksa.
-              </p>
-              <Link
-                href="/approvals"
-                className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand"
-              >
-                Buka pusat persetujuan <ChevronRight size={14} />
-              </Link>
-            </div>
-          </details>
+          <SalesNotificationBell disabled={isReadOnlyPreview} />
           <details className="relative">
             <summary
               aria-label="Menu akun"
@@ -192,10 +186,16 @@ export function PortalHeader({
               {initials || "U"}
             </summary>
             <div className="portal-popover right-0 top-12 w-72 p-4">
+              <ViewAsControl
+                actorRole={actorRole}
+                role={role}
+                isActive={isReadOnlyPreview}
+                isInvalid={isPreviewInvalid}
+              />
               <p className="font-semibold">{userName}</p>
               <p className="mt-1 break-all text-xs text-slate-500">{email}</p>
               <p className="mt-3 text-xs text-slate-500">
-                {roleLabels[role]} · {organizationName}
+                {roleLabel ?? roleLabels[role]} · {organizationName}
               </p>
               <div className="mt-4 border-t border-slate-100 pt-2">
                 <LogoutButton />
@@ -237,7 +237,9 @@ export function PortalHeader({
               <Link
                 key={app.href}
                 href={app.href}
-                onNavigate={() => dialog.current?.close()}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => dialog.current?.close()}
                 className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-slate-50"
               >
                 <span className="rounded-xl bg-slate-100 p-2 text-slate-600">

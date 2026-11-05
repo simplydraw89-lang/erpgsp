@@ -1,4 +1,8 @@
 import { requireWorkspace } from "@/lib/auth/context"
+import { redirect } from "next/navigation"
+import { PersonalNav } from "@/components/workflow/personal-nav"
+import { BusinessSummary } from "@/components/dashboard/business-summary"
+import { loadBusinessSummary } from "@/lib/business-summary"
 import { Card } from "@/components/ui/card"
 import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import { MigrationNotice } from "@/components/workflow/migration-notice"
@@ -18,6 +22,8 @@ export default async function ApprovalsPage({
     requireWorkspace(),
     searchParams,
   ])
+  if (query.scope === "mine") redirect("/pekerjaan-saya/pengajuan")
+  const businessSummary = await loadBusinessSummary(supabase, organizationId, { includeReport: false })
   const scope = ["mine", "drafts", "review"].includes(query.scope ?? "")
     ? query.scope
     : "all"
@@ -72,10 +78,11 @@ export default async function ApprovalsPage({
           Kebijakan pemeriksa
         </Link>
       </div>
+      <PersonalNav active="review" />
+      <BusinessSummary summary={businessSummary} queueOnly />
       <nav aria-label="Filter pengajuan" className="flex flex-wrap gap-2">
         {[
           { value: "all", name: "Semua dokumen" },
-          { value: "mine", name: "Pengajuan saya" },
           { value: "drafts", name: "Draft saya" },
           { value: "review", name: "Perlu pemeriksaan" },
         ].map((tab) => (

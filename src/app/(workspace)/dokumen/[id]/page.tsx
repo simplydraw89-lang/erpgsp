@@ -22,6 +22,7 @@ type RequestRow = {
   reviewed_by: string | null
   decision_note: string | null
   document_version: number
+  approval_step: number
   created_at: string
   decided_at: string | null
   policy_snapshot: {
@@ -68,11 +69,15 @@ export default async function DocumentPage({
   ])
   if (requestResult.error) throw new Error("Riwayat pengajuan gagal dimuat.")
   const requests = (requestResult.data ?? []) as RequestRow[]
-  const current = requests.find(
+  const versionRequests = requests.filter(
     (request) => request.document_version === document.version,
   )
+  const current =
+    versionRequests.find((request) => request.status === "pending") ??
+    versionRequests.sort((a, b) => b.approval_step - a.approval_step)[0]
   const own = document.created_by === user.id
   const writer = spec.writers.includes(role)
+  const isAdvance = document.record_type === "advance"
   const canReview =
     document.state === "submitted" &&
     !!current &&
@@ -81,9 +86,21 @@ export default async function DocumentPage({
   const canExecute =
     document.state === "approved" &&
     !!current &&
-    ((own && writer) || role === "owner" || role === current.required_role)
+    (isAdvance
+      ? role === "finance" || role === "owner"
+      : (own && writer) || role === "owner" || role === current.required_role)
   const canEdit = own && writer && document.state === "draft"
   const editingDraft = canEdit && query.edit === "1"
+  const advanceStages = ["draft", "manager", "finance", "approved", "executed"]
+  const activeAdvanceStage = document.state === "submitted"
+    ? current?.approval_step ?? 1
+    : document.state === "rejected"
+      ? current?.approval_step ?? 1
+      : document.state === "draft"
+        ? 0
+        : document.state === "approved"
+          ? 3
+          : 4
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <Link
@@ -110,18 +127,16 @@ export default async function DocumentPage({
             {labels[document.state]}
           </span>
         </div>
-        <ol className="mt-6 grid gap-2 sm:grid-cols-4">
-          {[
-            "draft",
-            "submitted",
-            document.state === "rejected" ? "rejected" : "approved",
-            "executed",
-          ].map((state, index) => (
+        <ol className={`mt-6 grid gap-2 ${isAdvance ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
+          {(isAdvance
+            ? advanceStages
+            : ["draft", "submitted", document.state === "rejected" ? "rejected" : "approved", "executed"]
+          ).map((state, index) => (
             <li
               key={state}
-              className={`rounded-lg border px-3 py-2 text-sm ${document.state === state ? "border-brand bg-brand-light font-semibold text-brand" : "border-line text-muted"}`}
+              className={`rounded-lg border px-3 py-2 text-sm ${isAdvance ? index === activeAdvanceStage ? "border-brand bg-brand-light font-semibold text-brand" : "border-line text-muted" : document.state === state ? "border-brand bg-brand-light font-semibold text-brand" : "border-line text-muted"}`}
             >
-              {index + 1}. {labels[state]}
+              {index + 1}. {isAdvance && state === "finance" ? "Accounting & Finance" : isAdvance && state === "manager" ? "Manager" : labels[state]}
             </li>
           ))}
         </ol>
@@ -182,7 +197,9 @@ export default async function DocumentPage({
           <p className="mb-4 text-sm text-muted">
             Pemeriksa:{" "}
             <strong className="text-ink">
-              {labels[current.required_role]}
+              {isAdvance && current.required_role === "finance"
+                ? "Accounting & Finance"
+                : labels[current.required_role]}
             </strong>{" "}
             · Kebijakan versi {current.policy_snapshot?.version ?? "—"}.
             Pengaturan yang berlaku saat pengajuan disimpan bersama versi
@@ -225,7 +242,7 @@ export default async function DocumentPage({
             <article key={request.id} className="py-4">
               <p className="text-sm font-semibold">
                 Versi {request.document_version} · {labels[request.status]} ·
-                Pemeriksa {labels[request.required_role]}
+                Tahap {request.approval_step} · Pemeriksa {isAdvance && request.required_role === "finance" ? "Accounting & Finance" : labels[request.required_role]}
               </p>
               <p className="mt-1 text-xs text-muted">
                 Diajukan {date(request.created_at)} oleh{" "}

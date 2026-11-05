@@ -6,7 +6,9 @@ import { requireWorkspace } from "@/lib/auth/context"
 export async function transitionDocument(
   data: FormData,
 ): Promise<{ error?: string }> {
-  const { supabase, organizationId } = await requireWorkspace()
+  const { supabase, organizationId, isReadOnlyPreview } = await requireWorkspace()
+  if (isReadOnlyPreview)
+    return { error: "Mode lihat sebagai aktif: perubahan dan keputusan dinonaktifkan." }
   const id = String(data.get("documentId") ?? "")
   const version = Number(data.get("version"))
   const action = String(data.get("action") ?? "")
@@ -36,6 +38,9 @@ export async function transitionDocument(
       .select("id")
       .eq("document_id", id)
       .eq("document_version", version)
+      .eq("status", "pending")
+      .order("approval_step", { ascending: false })
+      .limit(1)
       .maybeSingle()
     if (requestError || !request)
       return { error: "Permintaan persetujuan tidak ditemukan." }

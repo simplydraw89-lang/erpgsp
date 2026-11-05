@@ -1,6 +1,6 @@
 # Workflow dokumen, Asset, dan Pembayaran
 
-**Identitas sistem:** key `owner` pada tabel dan contoh teknis di bawah merupakan alias lama Superuser, bukan owner perusahaan. Akun tersebut tidak ditampilkan di directory pengguna perusahaan. Role bisnis dan akun pemeriksa akan ditetapkan kemudian; deployment ini tidak membuat akun perusahaan baru.
+**Identitas sistem:** key `owner` adalah Super Admin pemilik sistem dengan akses penuh sesuai arahan 4 November 2026. Akun sistem terpisah dari direktori karyawan. Untuk alur pusat–cabang/pengajuan baru, baca [aturan pengembangan](aturan-pengembangan.md) dan [status implementasi](implementasi-2026-11-04.md). Dokumen di bawah mempertahankan penjelasan workflow lama; pembukaan akses pengguna perusahaan mengikuti migration pusat–cabang.
 
 ## Penerapan
 
@@ -14,6 +14,35 @@ Jika konektor Supabase menolak akses project, penerapan belum dapat dilakukan me
 
 ## Pemakaian
 
+Arahan 5 November: pengisian transaksi pembelian dan staging menunggu konfirmasi pemilik. Fokus saat ini Klien dan SPH; jangan menjalankan konfigurasi pembukuan sebagai bagian pengujian Penjualan.
+
+Klik modul dari dashboard untuk membukanya di tab baru; dashboard tetap tersedia pada tab asal. Penjualan menampilkan popup pilihan terlebih dahulu, kemudian Klien/SPH/SPK yang dipilih dibuka di tab baru. Pilih **Buka dokumen** atau **Lihat dokumen di tab baru** untuk menampilkan PDF/gambar lampiran langsung di browser. Endpoint memeriksa sesi dan akses, lalu menyajikan berkas secara inline dari Storage privat tanpa unduhan paksa.
+
+### Batas Pengajuan Pembelian dan Pengajuan Penjualan
+
+**Label navigasi terbaru:** gunakan **Pembelian** dan **Penjualan**. Kelompok **Pekerjaan saya** menaungi Pengajuan saya, ruang kerja dan Persetujuan. Daftar Pengajuan saya hanya berisi data buatan akun aktif (filter organisasi dan pembuat pada setiap sumber), sedangkan permintaan pihak lain yang wajib diperiksa/dijalankan tampil di antrean kewenangan tersendiri. Popup Pengajuan saya yang sebelumnya berisi pintasan membuat pengajuan diganti halaman daftar pribadi. Tautan lama `/approvals?scope=mine` dialihkan ke `/pekerjaan-saya/pengajuan`.
+
+- **Pengajuan Pembelian** (`/pengajuan/pembelian`) sementara hanya berisi pembelian: daftar pembelian, verifikasi, utang dan pembayaran, tanpa submenu modul lain. Kelola COA melalui **Keuangan → Bagan Akun**. Pilihan COA pada rincian invoice tetap tersedia.
+- **Vendor** (`/vendor`) merupakan satu menu mandiri pada kelompok Operasional, tanpa tab daftar vendor di Pembelian. Daftar menggabungkan kebutuhan proyek dan nonproyek, termasuk lab/subkon, mengikuti cakupan cabang dan verifikasi Finance. Tautan lama `/pengajuan/vendor` dialihkan sambil mempertahankan pesan proses. Form invoice tetap dapat mengusulkan vendor baru tanpa meninggalkan draft.
+- **Cuti** dan **Perjalanan dinas** tersedia pada kelompok Pengajuan sebagai menu awal; formulir, penyimpanan dan persetujuan belum aktif sampai aturan lanjutannya ditentukan.
+- **Pengajuan Penjualan** (`/pengajuan/penjualan`) membuka popup **Klien**, **SPH**, dan **SPK**. Masing-masing mempunyai halaman tersendiri; SPH dan SPK membuka daftar. Pilih **Buat SPH** untuk formulir baru. Setelah simpan/submit, kembali ke daftar SPH cabang. Sesudah Direktur Keuangan menyetujui, pengaju/Super Admin dapat memilih **Buat SPK** pada daftar untuk membuka persiapan form dengan referensi SPH. Rincian form SPK menunggu arahan. Surat dibuat manual dan diunggah sebagai PDF/PNG/JPEG maksimal 10 MB per berkas, privat tanpa OCR otomatis.
+- Nomor SPH berurutan satu perusahaan lintas cabang mulai 1 tanpa reset periode. Kegagalan transaksi tidak menghabiskan nomor. Nomor tidak dapat diedit dan dokumen bernomor tidak dapat dihapus; akses cabang tetap membatasi nomor/dokumen yang terlihat bagi tiap pengguna.
+- Tahap berikutnya: setelah dokumen penjualan lengkap, buat proyek berdasarkan SPK dengan manpower pada draft; proyek masuk Pekerjaan saya anggota yang ditugaskan. Dokumen RAB, teknis pekerjaan dan timesheet sementara dibuat manual lalu diunggah. Sambungan proyek/unggahan tersebut belum tersedia pada revisi pemisahan menu penjualan.
+- Halaman, pengambilan data, formulir dan server actions penjualan dipisahkan dari pembelian. Infrastruktur identitas, pembatasan cabang dan lampiran privat dapat dipakai bersama. Penyesuaian penjualan tidak menambah formulir atau prasyarat ke pembelian.
+- Tautan lama `/pengajuan?view=...` diarahkan ke halaman domain yang sesuai, dengan pesan berhasil/gagal dipertahankan. Pintasan pembelian dan penjualan tersedia terpisah pada navigasi aplikasi.
+
+### Klien dan SPH — revisi 5 November
+
+1. Daftarkan klien dengan nama, alamat, NPWP, nomor kontak, email dan jenis usaha Mining/Migas/Industri/Umum; informasi lainnya opsional. Tidak memilih cabang dan tidak membutuhkan persetujuan. Data menjadi master perusahaan bersama. Super Admin, Direksi, Manager Cabang, Admin Cabang, Project Manager dan Marketing dapat mencari/membaca daftar; pengguna internal lain dapat mendaftar tanpa melihat daftar. Identitas diperiksa formatnya, bukan validasi NPWP online.
+2. Pada SPH, pilih cabang yang tersedia menurut penugasan, lalu cari klien dalam dropdown. Daftar memuat 10 hasil per pengambilan; scroll untuk hasil berikutnya. Isi judul, daerah pengerjaan, checklist lingkup, status deal dan masa berlaku. Bidang usaha mengikuti klien. Tambahkan catatan/arahan dan berkas manual melalui **+ Tambah lampiran**, maksimal 10 berkas PDF/PNG/JPEG, masing-masing 10 MB.
+3. **Simpan ke draft** cukup memerlukan cabang, klien dan judul. **Submit SPH** memeriksa kelengkapan, termasuk nilai SPH positif, lalu meminta konfirmasi kebenaran data. **Ya** mengajukan; **Tidak** menyimpan draft. Keduanya kembali ke daftar SPH dengan filter cabang. Kegagalan terlihat dan data formulir SPH dipertahankan. Daftar menampilkan urutan, nomor, tanggal, inti judul/keterangan, lingkup, nilai dan posisi/status; rekan satu cabang melihat ringkasannya tanpa membuka detail, catatan atau lampiran. Pengajuan saya tetap hanya buatan akun aktif.
+4. Antrean dashboard/Persetujuan dan lonceng menampilkan **Butuh persetujuan saya** untuk Manager Cabang, lalu Direktur Keuangan. Pengaju Manager langsung ke Direktur. Pilih **Setujui / Approve**, **Revisi**, atau **Tolak**. Alasan wajib untuk Revisi/Tolak. Revisi kembali untuk diperbaiki dan diajukan ulang, Tolak mengakhiri pengajuan. Dokumen terkirim/ditolak terkunci dan versi lama ditolak. Pengaju tidak memeriksa sendiri, selain override Super Admin yang diaudit. Detail hanya tersedia bagi pengaju, pemeriksa tahap aktif dan Super Admin; selesai memutuskan, pemeriksa kembali ke daftar.
+5. Sesudah Direktur menyetujui, pengaju menerima **SPH perlu tindak lanjut** dan tombol **Buat SPK** tersedia. Accounting–Tax/Finance bukan tahap approval SPH terbaru. Revisi/Tolak juga muncul sebagai tindak lanjut dengan alasan verifikator. Lonceng diperbarui saat dibuka, saat tab fokus, dan tiap 30 detik selama tab terlihat. Notifikasi ini di dalam aplikasi, tanpa email/WhatsApp. Status deal atau approval tidak menganggap klien telah menyepakati; bukti bilateral tetap informasi tersendiri. Tidak membuat jurnal atau pembayaran. Lampiran privat dibuka di tab baru sesuai izin dokumen.
+
+### Workflow dokumen lama
+
+Bagian berikut mendokumentasikan workflow dokumen lama; Klien/SPH mengikuti alur khusus di atas dan [PRD](PRD.md).
+
 1. Buka modul, isi data lalu **Simpan draft**. Daftar resmi belum berubah.
 2. Buka detail draft, periksa isi tersimpan. Gunakan **Edit draft** untuk perubahan; simpan sebelum mengajukan.
 3. Pilih **Ajukan pemeriksaan**. Database memilih peran pemeriksa berdasarkan kebijakan dan nominal. Harus ada anggota lain dengan peran tersebut.
@@ -23,6 +52,17 @@ Jika konektor Supabase menolak akses project, penerapan belum dapat dilakukan me
 7. Perubahan record resmi dilakukan melalui **Usulkan perubahan**, termasuk perpindahan lokasi/penanggung jawab, perbaikan atau penonaktifan aset. Dokumen yang sudah dieksekusi tidak diedit ulang.
 
 Untuk aset, nilai perolehan adalah nilai yang dicatat, bukan nilai buku setelah penyusutan. Penyusutan, jurnal pembelian, pemeliharaan berkala dan pelacakan QR belum termasuk implementasi ini.
+
+## Akuntansi dan pertanggungjawaban kasbon
+
+Migration tambahan bertanggal 2 November menambahkan administrasi entitas/keanggotaan, periode, jurnal double-entry, reversal, rekonsiliasi saldo, dan settlement kasbon. Terapkan hanya sesudah membandingkan schema environment; lihat [status rilis migration](deployment-2026-11-02.md).
+
+- Pengelola yang berwenang membuat entitas induk dahulu, kemudian anak/cabang, dan memberi keanggotaan entitas. Membuat periode menolak rentang yang tumpang tindih. Periode dengan jurnal draft tidak dapat ditutup; periode tertutup tidak dapat dipakai untuk jurnal baru.
+- Finance/Superuser membuat jurnal manual dengan dua hingga enam baris pada UI. Database menolak jurnal tidak seimbang, akun nonaktif, dan tanggal di luar periode terbuka. Draft dapat diposting atau dibatalkan. Jurnal posted tidak dapat diedit; reversal membuat draft pembalik, dan jurnal sumber ditandai `reversed` hanya setelah jurnal pembalik berhasil diposting.
+- Rekonsiliasi saat ini membandingkan saldo rekening koran yang diinput dengan total saldo buku besar sampai tanggal tersebut. Selisih disimpan sebagai `variance` untuk investigasi. Ini adalah pemeriksaan saldo, **belum** pencocokan transaksi/mutasi rekening satu per satu atau impor rekening koran.
+- Kasbon memerlukan persetujuan Manager lalu Finance. Setelah pencairan tagihan dicatat lunas, pengaju mengirim total pengeluaran, uang yang dikembalikan, dan/atau tambahan yang perlu dibayar. Rumus wajib `biaya aktual + pengembalian = uang muka + tambahan`; Finance lain menyetujui atau menolak. Approval menutup kasbon; jika ada tambahan, sistem membuat kewajiban pembayaran belum lunas dengan tanggal jatuh tempo yang diberikan.
+- Referensi kuitansi dapat dicatat, tetapi upload dan storage bukti privat belum tersedia. Finance yang mengajukan pertanggungjawaban tidak dapat menyetujui sendiri.
+- Auditor hanya-baca, termasuk untuk kasbon; keputusan tetap ditegakkan di RPC/database, bukan hanya dengan menyembunyikan tombol.
 
 ## Kebijakan dan hak akses
 

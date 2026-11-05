@@ -7,23 +7,30 @@ import { modules } from "@/lib/modules"
 import type { OrganizationRole } from "@/lib/auth/context"
 import { recordSpecs } from "@/lib/workflow"
 import { getApplications } from "@/lib/app-catalog"
+import { SalesMenu } from "@/components/sales/sales-menu"
 import {
   ClipboardCheck,
+  ClipboardList,
+  BriefcaseBusiness,
+  ContactRound,
   Home,
   LayoutGrid,
   Search,
   X,
 } from "lucide-react"
 
-export function ModuleDock({ role }: { role: OrganizationRole }) {
+export function ModuleDock({ role, navigationRoles = [role] }: { role: OrganizationRole; navigationRoles?: OrganizationRole[] }) {
   const pathname = usePathname()
+  const isShortcutActive = (href: string) => href === "/pengajuan/pembelian"
+    ? pathname === "/pengajuan" || pathname.startsWith("/pengajuan/pembelian") || /^\/pengajuan\/[0-9a-f-]{36}$/i.test(pathname)
+    : pathname === href || (href !== "/dashboard" && href !== "/approvals" && pathname.startsWith(href))
   const [open, setOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState("")
   const dialogRef = useRef<HTMLDialogElement>(null)
   const searchDialogRef = useRef<HTMLDialogElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const apps = getApplications(role)
+  const apps = getApplications(navigationRoles)
   const results = apps.filter((app) =>
     `${app.name} ${app.group} ${app.description}`
       .toLocaleLowerCase("id")
@@ -31,9 +38,15 @@ export function ModuleDock({ role }: { role: OrganizationRole }) {
   )
   const shortcuts = [
     { href: "/dashboard", label: "Beranda", icon: Home },
-    { href: "/approvals", label: "Persetujuan", icon: ClipboardCheck },
+    ...(navigationRoles.length ? [
+      { href: "/pengajuan/pembelian", label: "Pembelian", icon: ClipboardCheck },
+      { href: "/pengajuan/penjualan", label: "Penjualan", icon: BriefcaseBusiness },
+      { href: "/vendor", label: "Vendor", icon: ContactRound },
+      { href: "/pekerjaan-saya", label: "Pekerjaan saya", icon: ClipboardList },
+      { href: "/approvals", label: "Persetujuan", icon: ClipboardCheck },
+    ] : [{ href: "/portal-proyek", label: "Portal proyek", icon: ClipboardCheck }]),
     ...modules
-      .filter(({ key }) => Object.values(recordSpecs).some((spec) => spec.module === key && spec.readers.includes(role)))
+      .filter(({ key }) => Object.values(recordSpecs).some((spec) => spec.module === key && navigationRoles.some(role => spec.readers.includes(role))))
       .map(({ href, name, icon }) => ({ href, label: name, icon })),
   ]
 
@@ -81,7 +94,14 @@ export function ModuleDock({ role }: { role: OrganizationRole }) {
         </button>
         <span aria-hidden="true" className="module-dock-divider" />
         {shortcuts.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || (href !== "/dashboard" && href !== "/approvals" && pathname.startsWith(href))
+          const active = isShortcutActive(href)
+          if (href === "/pengajuan/penjualan") return (
+            <SalesMenu key={href} triggerLabel="Penjualan" triggerClassName={`module-dock-item${active ? " is-active" : ""}`}>
+              <Icon size={20} strokeWidth={1.8} />
+              <span className="module-dock-tooltip" role="tooltip">{label}</span>
+              {active && <span className="module-dock-indicator" />}
+            </SalesMenu>
+          )
           return (
             <Link
               key={href}
@@ -142,7 +162,7 @@ export function ModuleDock({ role }: { role: OrganizationRole }) {
             <span>Cari aplikasi</span>
           </button>
           {shortcuts.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || (href !== "/dashboard" && href !== "/approvals" && pathname.startsWith(href))
+            const active = isShortcutActive(href)
             return (
               <Link
                 key={href}

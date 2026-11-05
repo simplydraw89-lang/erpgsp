@@ -2,6 +2,7 @@ import {
   BriefcaseBusiness,
   Calculator,
   ChartNoAxesCombined,
+  GitBranch,
   ClipboardCheck,
   CreditCard,
   ContactRound,
@@ -19,6 +20,8 @@ export type ModuleKey =
   | "manajemen"
   | "asset"
   | "pembayaran"
+  | "akuntansi"
+  | "struktur-perusahaan"
 
 export type ModuleDefinition = {
   key: ModuleKey
@@ -43,7 +46,7 @@ export const modules: ModuleDefinition[] = [
   {
     key: "crm",
     name: "CRM & Proyek",
-    description: "Catat kontak/prospek dan proyek; penawaran dan dokumen menyusul.",
+    description: "Klien dan proyek; alur klien–SPH–SPK tersedia pada Penjualan.",
     source: "ERP GSP · Supabase",
     href: "/modul/crm",
     icon: ContactRound,
@@ -52,7 +55,7 @@ export const modules: ModuleDefinition[] = [
   {
     key: "operasional",
     name: "Operasional",
-    description: "Catat pekerjaan, prioritas, dan tenggat; workflow lanjutan menyusul.",
+    description: "Pekerjaan dan proyek; mulai pengadaan dari Pembelian.",
     source: "ERP GSP · Supabase",
     href: "/modul/operasional",
     icon: BriefcaseBusiness,
@@ -61,7 +64,7 @@ export const modules: ModuleDefinition[] = [
   {
     key: "keuangan",
     name: "Keuangan & Akuntansi",
-    description: "Kelola bagan akun dasar; jurnal dan posting akuntansi menyusul.",
+    description: "Bagan akun yang digunakan pada jurnal dan pengajuan pembelian.",
     source: "ERP GSP · Supabase",
     href: "/modul/keuangan",
     icon: Calculator,
@@ -70,7 +73,7 @@ export const modules: ModuleDefinition[] = [
   {
     key: "sdm",
     name: "SDM",
-    description: "Catat data dasar karyawan; payroll dan absensi menyusul.",
+    description: "Kelola direktori karyawan, departemen, jabatan, dan status kepegawaian.",
     source: "ERP GSP · Supabase",
     href: "/modul/sdm",
     icon: UsersRound,
@@ -95,12 +98,30 @@ export const modules: ModuleDefinition[] = [
     status: "mvp",
   },
   {
+    key: "akuntansi",
+    name: "Akuntansi & Buku Besar",
+    description: "Jurnal umum, buku besar, subledger, bank, dan laporan keuangan berbasis posting.",
+    source: "ERP GSP · Supabase",
+    href: "/modul/akuntansi",
+    icon: Calculator,
+    status: "foundation",
+  },
+  {
     key: "manajemen",
     name: "Manajemen & Laporan",
     description: "Ringkasan lintas unit dengan akses sesuai wewenang.",
     source: "ERP GSP · Supabase",
     href: "/modul/manajemen",
     icon: ChartNoAxesCombined,
+    status: "foundation",
+  },
+  {
+    key: "struktur-perusahaan",
+    name: "Struktur Perusahaan",
+    description: "Satu perusahaan, pusat pengawasan, tiga cabang, dan penugasan akses.",
+    source: "ERP GSP · Supabase",
+    href: "/struktur-akses",
+    icon: GitBranch,
     status: "foundation",
   },
 ]

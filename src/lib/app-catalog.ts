@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  CalendarDays,
   BriefcaseBusiness,
   Calculator,
   ChartNoAxesCombined,
@@ -7,9 +8,9 @@ import {
   ClipboardList,
   ContactRound,
   CreditCard,
-  FilePenLine,
   FileText,
   Landmark,
+  Plane,
   ReceiptText,
   Settings2,
   ShieldCheck,
@@ -18,8 +19,9 @@ import {
 import type { OrganizationRole } from "@/lib/auth/context"
 
 export const roleLabels: Record<OrganizationRole, string> = {
-  owner: "Superuser",
+  owner: "Super Admin",
   director: "Direksi",
+  manager: "Manager",
   finance: "Keuangan",
   hr: "SDM",
   operations: "Operasional",
@@ -29,6 +31,7 @@ export const roleLabels: Record<OrganizationRole, string> = {
 const everyone: OrganizationRole[] = [
   "owner",
   "director",
+  "manager",
   "finance",
   "hr",
   "operations",
@@ -42,25 +45,60 @@ export const applicationGroups = [
     tone: "amber",
     apps: [
       {
+        name: "Pembelian",
+        href: "/pengajuan/pembelian",
+        icon: ReceiptText,
+        roles: everyone,
+        description: "Invoice vendor, pemeriksaan berjenjang, utang dan pembayaran per cabang",
+      },
+      {
+        name: "Cuti",
+        href: "/pengajuan/cuti",
+        icon: CalendarDays,
+        roles: everyone,
+        description: "Pengajuan cuti karyawan · segera tersedia",
+      },
+      {
+        name: "Perjalanan dinas",
+        href: "/pengajuan/perjalanan-dinas",
+        icon: Plane,
+        roles: everyone,
+        description: "Pengajuan perjalanan dinas · segera tersedia",
+      },
+      {
+        name: "Penjualan",
+        href: "/pengajuan/penjualan",
+        icon: BriefcaseBusiness,
+        roles: everyone,
+        description: "Daftar klien, draft SPH dan SPK sesuai urutan persetujuan",
+      },
+    ],
+  },
+  {
+    id: "my-work",
+    name: "Pekerjaan saya",
+    tone: "blue",
+    apps: [
+      {
         name: "Pengajuan saya",
-        href: "/approvals?scope=mine",
+        href: "/pekerjaan-saya/pengajuan",
         icon: FileText,
         roles: everyone,
-        description: "Pantau pengajuan dan keputusan Anda",
+        description: "Dokumen dan pengajuan yang Anda buat sendiri",
       },
       {
         name: "Persetujuan",
         href: "/approvals?scope=review",
         icon: ClipboardCheck,
         roles: everyone,
-        description: "Permintaan yang perlu Anda periksa",
+        description: "Permintaan yang perlu Anda verifikasi sesuai kewenangan",
       },
       {
-        name: "Draft saya",
-        href: "/approvals?scope=drafts",
-        icon: FilePenLine,
+        name: "Pekerjaan saya",
+        href: "/pekerjaan-saya",
+        icon: ClipboardList,
         roles: everyone,
-        description: "Lanjutkan dokumen yang belum diajukan",
+        description: "Tugas, persetujuan, dan pekerjaan sesuai peran Anda",
       },
     ],
   },
@@ -70,11 +108,18 @@ export const applicationGroups = [
     tone: "blue",
     apps: [
       {
-        name: "Accounting",
+        name: "Bagan Akun",
         href: "/modul/keuangan",
         icon: Calculator,
         roles: ["owner", "director", "finance", "auditor"],
-        description: "Bagan akun keuangan",
+        description: "COA berjenjang dan pengelompokan akun",
+      },
+      {
+        name: "Accounting",
+        href: "/modul/akuntansi",
+        icon: Calculator,
+        roles: ["owner", "director", "finance", "auditor"],
+        description: "Jurnal dan buku besar perusahaan",
       },
       {
         name: "Assets",
@@ -123,7 +168,7 @@ export const applicationGroups = [
         href: "/modul/sdm",
         icon: UsersRound,
         roles: ["owner", "director", "hr"],
-        description: "Data dasar dan status karyawan",
+        description: "Direktori, departemen, jabatan, dan status karyawan",
       },
     ],
   },
@@ -132,6 +177,20 @@ export const applicationGroups = [
     name: "Operasional",
     tone: "green",
     apps: [
+      {
+        name: "Vendor",
+        href: "/vendor",
+        icon: ContactRound,
+        roles: everyone,
+        description: "Daftar vendor proyek dan nonproyek, termasuk lab dan subkon",
+      },
+      {
+        name: "Portal proyek",
+        href: "/portal-proyek",
+        icon: FileText,
+        roles: everyone,
+        description: "Informasi proyek yang dibagikan, permintaan data, MoM, surat dan ringkasan tagihan",
+      },
       {
         name: "Pekerjaan",
         href: "/modul/operasional",
@@ -147,11 +206,11 @@ export const applicationGroups = [
         description: "Daftar proyek dan klien terkait",
       },
       {
-        name: "CRM & Klien",
+        name: "Kontak",
         href: "/modul/crm?type=client",
         icon: ContactRound,
         roles: everyone,
-        description: "Kontak, prospek, dan klien perusahaan",
+        description: "Direktori kontak perusahaan; klien penawaran dikelola di Penjualan",
       },
     ],
   },
@@ -160,6 +219,13 @@ export const applicationGroups = [
     name: "Bantuan dan sistem",
     tone: "slate",
     apps: [
+      {
+        name: "Struktur & akses",
+        href: "/struktur-akses",
+        icon: UsersRound,
+        roles: everyone,
+        description: "Pusat, cabang, status individu dan penugasan pekerjaan",
+      },
       {
         name: "Kebijakan Approval",
         href: "/pengaturan/persetujuan",
@@ -185,18 +251,21 @@ export const applicationGroups = [
   },
 ] as const
 
-export function getApplicationGroups(role: OrganizationRole) {
+export function getApplicationGroups(role: OrganizationRole | OrganizationRole[]) {
+  const roles = Array.isArray(role) ? role : [role]
+  const portalOnly = roles.length === 0
   return applicationGroups
     .map((group) => ({
       ...group,
       apps: group.apps.filter((app) =>
-        (app.roles as readonly string[]).includes(role),
+        portalOnly ? ["/portal-proyek", "/struktur-akses"].includes(app.href)
+          : roles.some(role => (app.roles as readonly string[]).includes(role)),
       ),
     }))
     .filter((group) => group.apps.length > 0)
 }
 
-export function getApplications(role: OrganizationRole) {
+export function getApplications(role: OrganizationRole | OrganizationRole[]) {
   return getApplicationGroups(role).flatMap((group) =>
     group.apps.map((app) => ({ ...app, group: group.name })),
   )

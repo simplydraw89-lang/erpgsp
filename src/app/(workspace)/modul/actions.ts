@@ -1,13 +1,17 @@
 "use server"
 
+import { randomUUID } from "node:crypto"
 import { revalidatePath } from "next/cache"
 import { requireWorkspace } from "@/lib/auth/context"
 import { isRecordType, recordSpecs, isWorkflowMissing } from "@/lib/workflow"
+import { calendarDate } from "@/lib/dashboard"
 
 export async function saveWorkflowDraft(
   formData: FormData,
 ): Promise<{ id?: string; error?: string }> {
-  const { supabase, organizationId, role } = await requireWorkspace()
+  const { supabase, organizationId, role, isReadOnlyPreview } = await requireWorkspace()
+  if (isReadOnlyPreview)
+    return { error: "Mode lihat sebagai aktif: perubahan dinonaktifkan." }
   const type = String(formData.get("recordType") ?? "")
   if (!isRecordType(type) || !recordSpecs[type].writers.includes(role))
     return { error: "Anda tidak memiliki izin untuk membuat dokumen ini." }
@@ -27,6 +31,17 @@ export async function saveWorkflowDraft(
     paymentCreate
   )
     payload.status = "unpaid"
+  if (type === "advance" && !payload.advance_number)
+    payload.advance_number = `ADV-${calendarDate().replaceAll("-", "")}-${randomUUID().slice(0, 6).toUpperCase()}`
+  if (type === "advance") {
+    if (payload.purpose_type === "project" && !payload.project_id)
+      return { error: "Pilih proyek untuk kasbon proyek." }
+    if (
+      payload.purpose_type === "business_trip" &&
+      (!payload.trip_destination || !payload.departure_on || !payload.return_on)
+    )
+      return { error: "Tujuan, tanggal berangkat, dan tanggal kembali wajib diisi untuk advance perjalanan dinas." }
+  }
   if (type === "payment" && payload.status === "paid") {
     if (!payload.paid_on || !payload.payment_method)
       return { error: "Tanggal dan metode pembayaran wajib saat menandai lunas." }

@@ -26,6 +26,7 @@ export type RecordType =
   | "tax_record"
   | "asset"
   | "payment"
+  | "advance"
 export type RecordSpec = {
   label: string
   module: ModuleKey
@@ -37,6 +38,7 @@ export type RecordSpec = {
 const all: OrganizationRole[] = [
   "owner",
   "director",
+  "manager",
   "finance",
   "hr",
   "operations",
@@ -219,6 +221,25 @@ export const recordSpecs: Record<RecordType, RecordSpec> = {
       field("notes", "Catatan", "textarea"),
     ],
   },
+  advance: {
+    label: "Kasbon / Advance",
+    module: "pembayaran",
+    table: "cash_advances",
+    writers: ["owner", "director", "manager", "finance", "hr", "operations", "staff"],
+    readers: ["owner", "director", "manager", "finance", "hr", "operations", "auditor", "staff"],
+    fields: [
+      field("advance_number", "Nomor kasbon (otomatis)"),
+      select("purpose_type", "Keperluan advance", ["project", "business_trip"]),
+      field("project_id", "Proyek terkait", "reference"),
+      field("trip_destination", "Tujuan perjalanan dinas"),
+      field("departure_on", "Tanggal berangkat", "date"),
+      field("return_on", "Tanggal kembali", "date"),
+      field("description", "Rincian penggunaan", "textarea", true),
+      field("amount", "Jumlah yang diminta (IDR)", "money", true),
+      field("needed_on", "Dana dibutuhkan tanggal", "date", true),
+      field("settlement_due_on", "Batas pertanggungjawaban", "date", true),
+    ],
+  },
 }
 
 export const labels: Record<string, string> = {
@@ -228,8 +249,9 @@ export const labels: Record<string, string> = {
   rejected: "Ditolak",
   executed: "Dieksekusi",
   pending: "Menunggu keputusan",
-  owner: "Superuser",
+  owner: "Super Admin",
   director: "Direksi",
+  manager: "Manager",
   finance: "Keuangan",
   hr: "SDM",
   operations: "Operasional",
@@ -279,6 +301,14 @@ export const labels: Record<string, string> = {
   pph25: "PPh 25",
   pph29: "PPh 29",
   other: "Lainnya",
+  advance: "Kasbon / Advance",
+  purpose_type: "Keperluan advance",
+  project: "Proyek",
+  business_trip: "Perjalanan dinas",
+  disbursed: "Sudah dicairkan",
+  settled: "Sudah dipertanggungjawabkan",
+  awaiting_disbursement: "Menunggu pencairan",
+  manager_approved: "Disetujui Manager",
 }
 export type WorkflowDocument = {
   id: string

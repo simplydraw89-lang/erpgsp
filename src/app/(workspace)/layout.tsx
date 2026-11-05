@@ -9,13 +9,27 @@ export default async function WorkspaceLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const { organizationName, role, user } = await requireWorkspace()
+  const {
+    organizationName,
+    role,
+    navigationRoles,
+    roleLabel,
+    actorRole,
+    isReadOnlyPreview,
+    isPreviewInvalid,
+    user,
+  } = await requireWorkspace()
   const userName = getDisplayName(user)
 
   return (
     <WorkspaceShell
       organizationName={organizationName}
       role={role}
+      navigationRoles={navigationRoles}
+      roleLabel={roleLabel}
+      actorRole={actorRole}
+      isReadOnlyPreview={isReadOnlyPreview}
+      isPreviewInvalid={isPreviewInvalid}
       userName={userName}
       email={user.email ?? ""}
       {...getPersonalGreeting(userName)}

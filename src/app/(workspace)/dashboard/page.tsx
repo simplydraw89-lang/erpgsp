@@ -3,13 +3,23 @@ import { calendarDate,calendarDay, daysUntil, workspaceTimeZone } from "@/lib/da
 import { isWorkflowMissing, labels, recordSpecs } from "@/lib/workflow"
 import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import { ApplicationGrid } from "@/components/dashboard/application-grid"
+import { BusinessSummary } from "@/components/dashboard/business-summary"
+import { loadBusinessSummary } from "@/lib/business-summary"
 
 export default async function DashboardPage() {
-  const { supabase, organizationId, user, role } = await requireWorkspace()
+  const { supabase, organizationId, user, role, navigationRoles, relationshipStatus } = await requireWorkspace()
+  if (!navigationRoles.length) return <div className="space-y-6">
+    <section className="portal-summary"><h1 className="text-xl font-semibold">Ruang pribadi & proyek Anda</h1>
+      <p className="mt-2 text-sm text-slate-600">Hubungan dengan perusahaan: {relationshipStatus === "client" ? "Klien" : relationshipStatus === "vendor" ? "Vendor" : "Konsultan / tenaga ahli"}.</p>
+      <p className="mt-2 text-sm text-slate-600">Informasi tersedia sesuai penugasan proyek aktif dan dokumen yang dibagikan perusahaan.</p>
+      <Link href="/portal-proyek" className="mt-4 inline-block text-sm font-semibold text-brand">Buka portal proyek →</Link>
+    </section><ApplicationGrid role={role} navigationRoles={navigationRoles} />
+  </div>
+  const businessSummaryPromise = loadBusinessSummary(supabase, organizationId)
   const today = calendarDate()
   const canReadTaxes = recordSpecs.tax_record.readers.includes(role)
   const canReadPayments = recordSpecs.payment.readers.includes(role)
-  const [processing, drafts, rejected, review, nextTax, overdue, unpaidPayments, nextPayment, latePayments] =
+  const [processing, rejected, review, nextTax, overdue, unpaidPayments, nextPayment, latePayments] =
     await Promise.all([
       supabase
         .from("workflow_documents")
@@ -17,12 +27,6 @@ export default async function DashboardPage() {
         .eq("organization_id", organizationId)
         .eq("created_by", user.id)
         .in("state", ["submitted", "approved"]),
-      supabase
-        .from("workflow_documents")
-        .select("id", { count: "exact", head: true })
-        .eq("organization_id", organizationId)
-        .eq("created_by", user.id)
-        .eq("state", "draft"),
       supabase
         .from("workflow_documents")
         .select("id", { count: "exact", head: true })
@@ -89,7 +93,7 @@ export default async function DashboardPage() {
         timeZone: workspaceTimeZone,
       }).format(new Date(`${due}T12:00:00+07:00`))
     : ""
-  const mySummaryError = processing.error || drafts.error || rejected.error
+  const mySummaryError = processing.error || rejected.error
   const taxError = nextTax.error || overdue.error || (tax&&!due)
   const payment = nextPayment.data?.[0]
   const paymentDue = calendarDay(payment?.due_on)
@@ -98,15 +102,16 @@ export default async function DashboardPage() {
   const paymentSchemaPending = isWorkflowMissing(unpaidPayments.error)
     || isWorkflowMissing(nextPayment.error)
     || isWorkflowMissing(latePayments.error)
-  const draftCount = drafts.count ?? 0
   const rejectedCount = rejected.count ?? 0
+  const businessSummary = await businessSummaryPromise
   return (
     <div className="space-y-6">
+      <BusinessSummary summary={businessSummary} />
       <section
         aria-label="Ringkasan pribadi"
         className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"
       >
-        <Link href="/approvals?scope=mine" className="portal-summary">
+        <Link href="/pekerjaan-saya/pengajuan" className="portal-summary">
           <h2 className="text-xs text-slate-500">Pengajuan Anda</h2>
           <p className="mt-2 flex items-baseline gap-1.5">
             <span className="text-[30px] font-semibold leading-none tracking-tight text-slate-950">
@@ -117,9 +122,9 @@ export default async function DashboardPage() {
           <p className="mt-1.5 text-xs text-slate-500">
             {mySummaryError
               ? "Ringkasan belum dapat dimuat. Buka pengajuan untuk memeriksa."
-              : draftCount || rejectedCount
-                ? `${draftCount} draft belum diajukan · ${rejectedCount} perlu revisi`
-                : "Tidak ada draft atau pengajuan yang perlu direvisi"}
+              : rejectedCount
+                ? `${rejectedCount} pengajuan perlu revisi di Pengajuan saya`
+                : "Tidak ada pengajuan yang perlu direvisi"}
           </p>
         </Link>
         {canReadTaxes ? (
@@ -192,7 +197,7 @@ export default async function DashboardPage() {
           </Link>
         )}
       </section>
-      <ApplicationGrid role={role} />
+      <ApplicationGrid role={role} navigationRoles={navigationRoles} />
       <footer className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-slate-400">
         <span>GSP Group · Enterprise Resource Planning</span>
         <span>Workspace pribadi · Aplikasi mengikuti hak akses Anda</span>

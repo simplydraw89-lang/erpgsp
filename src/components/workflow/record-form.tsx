@@ -36,10 +36,17 @@ export function RecordForm({
   const [paymentStatus, setPaymentStatus] = useState(
     String(values.status ?? "unpaid"),
   )
+  const [advancePurpose, setAdvancePurpose] = useState(
+    String(values.purpose_type ?? "project"),
+  )
   const paymentUpdate = Boolean(targetId || operation === "update")
   const fields = recordSpecs[type].fields.filter((field) => {
+    if (type === "advance") {
+      if (advancePurpose === "project" && ["trip_destination", "departure_on", "return_on"].includes(field.name)) return false
+      if (advancePurpose === "business_trip" && field.name === "project_id") return false
+    }
     if (type !== "payment") return true
-    if (!paymentUpdate && ["status", "paid_on", "payment_method"].includes(field.name))
+    if (!paymentUpdate && ["status", "paid_on", "payment_method", "reference_number"].includes(field.name))
       return false
     if (paymentStatus !== "paid" && ["paid_on", "payment_method"].includes(field.name))
       return false
@@ -89,6 +96,9 @@ export function RecordForm({
           const value = values[field.name] ?? field.defaultValue ?? ""
           const requiredField =
             field.required ||
+            (type === "advance" &&
+              ((advancePurpose === "project" && field.name === "project_id") ||
+                (advancePurpose === "business_trip" && ["trip_destination", "departure_on", "return_on"].includes(field.name)))) ||
             (type === "payment" &&
               paymentStatus === "paid" &&
               ["paid_on", "payment_method"].includes(field.name))
@@ -110,7 +120,9 @@ export function RecordForm({
                   onChange={
                     type === "payment" && field.name === "status"
                       ? (event) => setPaymentStatus(event.target.value)
-                      : undefined
+                      : type === "advance" && field.name === "purpose_type"
+                        ? (event) => setAdvancePurpose(event.target.value)
+                        : undefined
                   }
                   className={inputClass}
                 >
@@ -155,6 +167,8 @@ export function RecordForm({
                   step={field.type === "money" ? "0.01" : undefined}
                   maxLength={2000}
                   required={requiredField}
+                  readOnly={type === "advance" && field.name === "advance_number"}
+                  placeholder={type === "advance" && field.name === "advance_number" && !value ? "Dibuat otomatis saat draft disimpan" : undefined}
                   defaultValue={String(value)}
                   className={inputClass}
                 />
@@ -164,8 +178,13 @@ export function RecordForm({
         })}
       </fieldset>
       <p className="text-xs leading-5 text-muted">
-        Draft belum mengubah data resmi. Ajukan pemeriksaan, tunggu persetujuan,
-        lalu eksekusi.
+        {type === "advance"
+          ? "Kasbon harus disetujui Manager lalu Accounting & Finance. Setelah eksekusi, kewajiban pencairan otomatis tercatat di modul Pembayaran."
+          : type === "payment"
+          ? paymentUpdate
+            ? "Perubahan status lunas merupakan usulan pembayaran. Isi tanggal, metode, dan referensi; data resmi baru berubah setelah disetujui dan dieksekusi."
+            : "Tagihan baru selalu dimulai sebagai belum lunas. Draft belum mengubah data resmi; ajukan untuk diperiksa, lalu tunggu persetujuan dan eksekusi."
+          : "Draft belum mengubah data resmi. Ajukan pemeriksaan, tunggu persetujuan, lalu eksekusi."}
       </p>
       {error && (
         <p
