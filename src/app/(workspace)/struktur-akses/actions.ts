@@ -1,4 +1,4 @@
-"use server"
+﻿"use server"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { requireWorkspace } from "@/lib/auth/context"
@@ -10,14 +10,57 @@ async function owner() {
   if (w.actorRole !== "owner" || w.isReadOnlyPreview) finish("error", "Hanya Super Admin di luar mode pratinjau yang dapat mengatur akses.")
   return w
 }
+
 export async function saveWorkAssignment(data: FormData) {
   const { supabase, organizationId } = await owner()
-  const { error } = await supabase.rpc("save_work_assignment", { p_org: organizationId, p_user: text(data, "user_id"), p_branch: text(data, "branch_id") || null, p_job_role: text(data, "job_role"), p_relationship: text(data, "relationship_status") })
+  const userId = text(data, "user_id")
+  const relationship = text(data, "relationship_status")
+  const rolesJson = text(data, "roles_json")
+
+  if (!userId) finish("error", "Akun anggota wajib dipilih.")
+  if (!relationship) finish("error", "Hubungan dengan perusahaan wajib dipilih.")
+
+  if (rolesJson) {
+    let assignments: Array<{ job_role: string; branch_id: string | null }> = []
+    try {
+      assignments = JSON.parse(rolesJson)
+    } catch {
+      finish("error", "Format data penugasan tidak valid.")
+    }
+
+    if (!assignments.length) {
+      finish("error", "Pilih minimal 1 jabatan untuk disimpan.")
+    }
+
+    for (const a of assignments) {
+      const { error } = await supabase.rpc("save_work_assignment", {
+        p_org: organizationId,
+        p_user: userId,
+        p_branch: a.branch_id || null,
+        p_job_role: a.job_role,
+        p_relationship: relationship,
+      })
+      if (error) finish("error", error.message)
+    }
+    revalidatePath(path)
+    revalidatePath("/pengajuan", "layout")
+    finish("notice", `${assignments.length} penugasan jabatan berhasil disimpan untuk akun tersebut.`)
+  }
+
+  // Fallback single assignment
+  const { error } = await supabase.rpc("save_work_assignment", {
+    p_org: organizationId,
+    p_user: userId,
+    p_branch: text(data, "branch_id") || null,
+    p_job_role: text(data, "job_role"),
+    p_relationship: relationship,
+  })
   if (error) finish("error", error.message)
   revalidatePath(path)
   revalidatePath("/pengajuan", "layout")
-  finish("notice", "Status hubungan dan penugasan tersimpan. Penugasan lain pada akun ini tetap tersedia.")
+  finish("notice", "Status hubungan dan penugasan tersimpan.")
 }
+
 export async function linkBusinessUnit(data: FormData) {
   const { supabase, organizationId } = await owner()
   const { error } = await supabase.rpc("link_business_unit_entity", { p_org: organizationId, p_branch: text(data, "branch_id"), p_entity: text(data, "entity_id") })
@@ -25,6 +68,7 @@ export async function linkBusinessUnit(data: FormData) {
   revalidatePath(path)
   finish("notice", "Cabang terhubung ke unit pembukuan.")
 }
+
 export async function removeWorkAssignment(data: FormData) {
   const { supabase, organizationId } = await owner()
   const { error } = await supabase.rpc("remove_work_assignment", { p_org: organizationId, p_id: text(data, "assignment_id") })

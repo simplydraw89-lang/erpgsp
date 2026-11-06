@@ -17,9 +17,11 @@ async function call(path: string, name: string, args: Record<string, unknown>, m
   const { data, error } = await supabase.rpc(name, args)
   if (error) finish(path, "error", error.message)
   revalidatePath("/pengajuan", "layout")
+  revalidatePath("/pengajuan/pembelian")
   revalidatePath("/vendor")
   revalidatePath("/pekerjaan-saya")
   revalidatePath("/dashboard")
+  revalidatePath("/approvals")
   revalidatePath("/modul/akuntansi")
   finish(nextDetail && typeof data === "string" ? `/pengajuan/${data}` : path, "notice", message)
 }
@@ -37,24 +39,78 @@ export async function initializePurchasing(data: FormData) {
   await call(path, "initialize_purchasing_workspace", { p_org: context.organizationId, p_starts_on: start, p_ends_on: end }, "Cabang pembukuan, periode dan COA awal siap. Periksa COA sesuai kebijakan perusahaan sebelum posting pertama.")
 }
 export async function savePurchase(data: FormData) {
-  const path = destination(data)
-  const { organizationId } = await workspace(path)
-  await call(path, "save_purchase_request", {
-    p_org: organizationId, p_branch: value(data, "branch_id"), p_id: value(data, "id") || null,
+  const isSubmit = value(data, "action_type") === "submit";
+  const redirectTarget = "/pengajuan/pembelian";
+  const context = await workspace(redirectTarget);
+
+  // 1. Simpan perubahan pengajuan / invoice
+  const { data: savedId, error: saveError } = await context.supabase.rpc("save_purchase_request", {
+    p_org: context.organizationId,
+    p_branch: value(data, "branch_id"),
+    p_id: value(data, "id") || null,
     p_version: value(data, "version") ? Number(value(data, "version")) : null,
     p_payload: {
-      invoice_number: value(data, "invoice_number"), invoice_date: value(data, "invoice_date"),
-      tax_invoice_number: value(data, "tax_invoice_number") || null, tax_invoice_date: value(data, "tax_invoice_date") || null,
-      vendor_id: value(data, "vendor_id") || null, vendor_snapshot: { name: value(data, "vendor_name"), address: value(data, "vendor_address") },
-      lines: json(data, "lines", path), vat_mode: value(data, "vat_mode"), vat_creditable: data.get("vat_creditable") === "on",
-      withholding_code: value(data, "withholding_code"), withholding_rate: Number(value(data, "withholding_rate") || 0), withholding_timing: value(data, "withholding_timing") || "invoice",
-      withholding_base: Number(value(data, "withholding_base") || value(data, "base_fallback") || 0), requested_payment_date: value(data, "requested_payment_date") || null,
-      notes: value(data, "notes"), attachment_ids: json(data, "attachment_ids", path),
+      invoice_number: value(data, "invoice_number"),
+      invoice_date: value(data, "invoice_date"),
+      tax_invoice_number: value(data, "tax_invoice_number") || null,
+      tax_invoice_date: value(data, "tax_invoice_date") || null,
+      vendor_id: value(data, "vendor_id") || null,
+      vendor_snapshot: { name: value(data, "vendor_name"), address: value(data, "vendor_address") },
+      lines: json(data, "lines", redirectTarget),
+      vat_mode: value(data, "vat_mode"),
+      vat_creditable: data.get("vat_creditable") === "on",
+      withholding_code: value(data, "withholding_code"),
+      withholding_rate: Number(value(data, "withholding_rate") || 0),
+      withholding_timing: value(data, "withholding_timing") || "invoice",
+      withholding_base: Number(value(data, "withholding_base") || value(data, "base_fallback") || 0),
+      requested_payment_date: value(data, "requested_payment_date") || null,
+      notes: value(data, "notes"),
+      attachment_ids: json(data, "attachment_ids", redirectTarget),
     },
-  }, "Draft pembelian tersimpan. Periksa rincian sebelum mengajukan.", true)
+  });
+
+  if (saveError) finish(redirectTarget, "error", saveError.message);
+
+  const purchaseId = typeof savedId === "string" ? savedId : value(data, "id");
+
+  // 2. Jika user mengklik "Kirim pengajuan"
+  if (isSubmit && purchaseId) {
+    const { data: currentDoc } = await context.supabase
+      .from("purchase_requests")
+      .select("version")
+      .eq("id", purchaseId)
+      .maybeSingle();
+
+    const currentVersion = currentDoc?.version ?? 0;
+
+    const { error: submitError } = await context.supabase.rpc("submit_purchase_request", {
+      p_id: purchaseId,
+      p_version: currentVersion,
+    });
+
+    if (submitError) finish(redirectTarget, "error", submitError.message);
+  }
+
+  // 3. Revalidasi semua halaman terkait
+  revalidatePath("/pengajuan", "layout");
+  revalidatePath("/pengajuan/pembelian");
+  revalidatePath("/pekerjaan-saya/pengajuan");
+  revalidatePath("/pekerjaan-saya");
+  revalidatePath("/dashboard");
+  revalidatePath("/modul/akuntansi");
+
+  // 4. SELALU redirect kembali ke /pengajuan/pembelian
+  finish(
+    redirectTarget,
+    "notice",
+    isSubmit
+      ? "Pengajuan pembelian berhasil diajukan ke pemeriksa berikutnya."
+      : "Draft pembelian berhasil disimpan."
+  );
 }
+
 export async function submitPurchase(data: FormData) {
-  await call(destination(data), "submit_purchase_request", { p_id: value(data, "id"), p_version: Number(value(data, "version")) }, "Pengajuan dikirim ke pemeriksa berikutnya.")
+  await call("/pengajuan/pembelian", "submit_purchase_request", { p_id: value(data, "id"), p_version: Number(value(data, "version")) }, "Pengajuan dikirim ke pemeriksa berikutnya.")
 }
 export async function reviewPurchase(data: FormData) {
   const accounting = data.get("accounting") === "yes" ? {

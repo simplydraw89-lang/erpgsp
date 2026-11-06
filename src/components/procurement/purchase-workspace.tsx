@@ -1,3 +1,4 @@
+import { TableFilterBar } from "@/components/ui/table-filter-bar"
 import Link from "next/link"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -7,12 +8,12 @@ import { SubmitButton } from "@/components/procurement/submit-button"
 import { requestVendor, reviewVendor } from "@/app/(workspace)/pengajuan/actions"
 import { type BusinessUnit, type ProcurementVendor, type PurchaseRequest, type WorkAssignment, procurementInput as input, procurementLabel as label, isProcurementMissing, purchaseStatusLabels, rupiah } from "@/lib/procurement-ui"
 
-export async function PurchaseWorkspace({ view, query }: { view: "pembelian" | "vendor"; query: { error?: string; notice?: string } }) {
+export async function PurchaseWorkspace({ view, query }: { view: "pembelian" | "vendor"; query: { error?: string; notice?: string; q?: string; branch_id?: string; status?: string; invoice_date?: string } }) {
   const { supabase, organizationId, user, actorRole, isReadOnlyPreview } = await requireWorkspace()
   const [units, assignments, purchases, vendors] = await Promise.all([
     supabase.from("business_units").select("id,code,name,kind").eq("organization_id", organizationId).order("code"),
     supabase.from("work_assignments").select("user_id,branch_id,job_role").eq("organization_id", organizationId).eq("user_id", user.id),
-    view === "vendor" ? Promise.resolve({ data: [], error: null }) : supabase.from("purchase_requests").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100),
+    supabase.from("purchase_requests").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100),
     supabase.from("procurement_vendors").select("*").eq("organization_id", organizationId).order("name").limit(200),
   ])
   const errors = [units.error, assignments.error, purchases.error, vendors.error]
@@ -23,8 +24,24 @@ export async function PurchaseWorkspace({ view, query }: { view: "pembelian" | "
   const owner = actorRole === "owner"
   const canReviewVendors = owner || jobs.some(j => !j.branch_id && ["finance", "accounting_tax"].includes(j.job_role))
   const writableBranches = owner ? branches : branches.filter(b => jobs.some(j => j.branch_id === b.id))
-  const rows = (purchases.data ?? []) as PurchaseRequest[]
+    const allPurchases = (purchases.data ?? []) as PurchaseRequest[]
   const vendorRows = (vendors.data ?? []) as ProcurementVendor[]
+
+  const rows = allPurchases.filter(r => {
+    if (query.branch_id && r.branch_id !== query.branch_id) return false;
+    if (query.status && r.status !== query.status) return false;
+    if (query.invoice_date && r.invoice_date !== query.invoice_date) return false;
+    if (query.q) {
+      const q = query.q.toLowerCase();
+      const vName = (vendorRows.find(v => v.id === r.vendor_id)?.name ?? r.vendor_snapshot?.name ?? "").toLowerCase();
+      const inv = (r.invoice_number ?? "").toLowerCase();
+      if (!vName.includes(q) && !inv.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const isCentralUser = owner || jobs.some(j => !j.branch_id && ["president", "finance_director", "accounting_tax", "finance"].includes(j.job_role));
+  const userBranchId = jobs.find(j => j.branch_id)?.branch_id ?? null;
   const pending = rows.filter(r => ["branch_review", "director_review", "accounting_review", "payment_ready"].includes(r.status))
   const pendingValue = rows.filter(r => !["draft", "rejected", "paid"].includes(r.status)).reduce((sum, r) => sum + Number(r.payable_amount), 0)
   return <div className="space-y-6">
@@ -35,7 +52,22 @@ export async function PurchaseWorkspace({ view, query }: { view: "pembelian" | "
       {view === "pembelian" && <>
         <div className="grid gap-4 sm:grid-cols-3">{[["Pengajuan terlihat", String(rows.length)], ["Dalam pemeriksaan / pembayaran", String(pending.length)], ["Rencana bayar belum lunas", rupiah(pendingValue)]].map(([title, val]) => <Card key={title} className="p-5"><p className="text-sm text-muted">{title}</p><p className="mt-2 text-2xl font-semibold">{val}</p></Card>)}</div>
         <p className="text-sm leading-6 text-muted">Pengaju → Manager Cabang → Direktur Keuangan → Accounting & Tax → Finance bayar. Pengajuan Manager Cabang / Project Manager langsung ke Direktur Keuangan. Ringkasan mengikuti data yang diizinkan database untuk akun Anda.</p>
-        <Card className="overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-canvas text-muted"><tr>{["Invoice", "Cabang", "Vendor", "Status", "Dibayar ke vendor", ""].map(t => <th key={t} className="px-4 py-3 font-medium">{t}</th>)}</tr></thead><tbody>{rows.map(r => <tr key={r.id} className="border-t border-line"><td className="px-4 py-4 font-medium">{r.invoice_number}<span className="mt-1 block text-xs text-muted">{r.invoice_date}</span></td><td className="px-4 py-4">{branches.find(b => b.id === r.branch_id)?.name ?? "Cabang"}</td><td className="px-4 py-4">{vendorRows.find(v => v.id === r.vendor_id)?.name ?? r.vendor_snapshot?.name ?? "Belum dipilih"}</td><td className="px-4 py-4"><span className="rounded-full bg-canvas px-3 py-1 text-xs">{purchaseStatusLabels[r.status] ?? r.status}</span></td><td className="px-4 py-4">{rupiah(r.payable_amount)}</td><td className="px-4 py-4"><Link href={`/pengajuan/${r.id}`} className="font-medium text-brand">Buka →</Link></td></tr>)}</tbody></table></div>{!rows.length && <p className="p-8 text-center text-sm text-muted">Belum ada pengajuan pembelian dalam cakupan akses Anda.</p>}</Card>
+        <TableFilterBar
+          branches={branches}
+          isCentralUser={isCentralUser}
+          userBranchId={userBranchId}
+          fields={[
+            { key: "q", label: "Nomor Invoice / Vendor", placeholder: "Ketik nomor invoice atau vendor..." },
+            { key: "invoice_date", label: "Tanggal Invoice", type: "date" },
+            {
+              key: "status",
+              label: "Status Dokumen",
+              type: "select",
+              options: Object.entries(purchaseStatusLabels).map(([val, lbl]) => ({ value: val, label: lbl }))
+            }
+          ]}
+        />
+        <Card className="overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-canvas text-muted"><tr>{["No.", "Invoice", "Cabang", "Vendor", "Status", "Dibayar ke vendor", ""].map(t => <th key={t} className="px-4 py-3 font-medium">{t}</th>)}</tr></thead><tbody>{rows.map((r, idx) => <tr key={r.id} className="border-t border-line"><td className="px-4 py-4 text-xs font-semibold text-muted">{idx + 1}</td><td className="px-4 py-4 font-medium">{r.invoice_number}<span className="mt-1 block text-xs text-muted">{r.invoice_date}</span></td><td className="px-4 py-4">{branches.find(b => b.id === r.branch_id)?.name ?? "Cabang"}</td><td className="px-4 py-4">{vendorRows.find(v => v.id === r.vendor_id)?.name ?? r.vendor_snapshot?.name ?? "Belum dipilih"}</td><td className="px-4 py-4"><span className="rounded-full bg-canvas px-3 py-1 text-xs">{purchaseStatusLabels[r.status] ?? r.status}</span></td><td className="px-4 py-4">{rupiah(r.payable_amount)}</td><td className="px-4 py-4"><Link href={`/pengajuan/${r.id}`} target="_blank" rel="noopener noreferrer" className="font-medium text-brand">Buka →</Link></td></tr>)}</tbody></table></div>{!rows.length && <p className="p-8 text-center text-sm text-muted">Belum ada pengajuan pembelian dalam cakupan akses Anda.</p>}</Card>
       </>}
       {view === "vendor" && <>
         <Card className="p-5"><h2 className="font-semibold">Usulkan vendor baru</h2><p className="mt-1 text-sm text-muted">Pendaftaran vendor tidak membuat akun login. Finance memverifikasi identitas, NPWP dan rekening sebelum vendor dipakai untuk pembayaran.</p><form action={requestVendor} className="mt-5"><fieldset disabled={isReadOnlyPreview || !writableBranches.length} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -43,7 +75,118 @@ export async function PurchaseWorkspace({ view, query }: { view: "pembelian" | "
           {[["name", "Nama vendor"], ["address", "Alamat"], ["npwp", "NPWP"], ["bank_owner", "Pemilik rekening"], ["bank_account", "Nomor rekening"]].map(([name, title]) => <label key={name} className={label}>{title}<input name={name} required className={input} maxLength={name === "address" ? 1000 : 200} /></label>)}
           <label className={label}>Metode pembayaran<select name="payment_method" className={input}><option value="bank_transfer">Transfer bank</option><option value="cash">Tunai</option></select></label><div className="flex items-end"><SubmitButton>Ajukan ke Finance</SubmitButton></div>
         </fieldset></form></Card>
-        <div className="grid gap-4 lg:grid-cols-2">{vendorRows.map(v => <Card key={v.id} className="space-y-3 p-5"><div className="flex items-center justify-between gap-3"><h3 className="font-semibold">{v.name}</h3><span className="rounded-full bg-canvas px-3 py-1 text-xs">{v.status === "approved" ? "Terverifikasi" : v.status === "pending" ? "Menunggu Finance" : "Ditolak"}</span></div><p className="text-sm text-muted">{branches.find(b => b.id === v.branch_id)?.name} · {v.address}</p><dl className="grid gap-2 text-sm"><div>NPWP: {v.npwp}</div><div>Rekening: {v.bank_owner} · {v.bank_account}</div><div>Metode: {v.payment_method === "cash" ? "Tunai" : "Transfer bank"}</div></dl>{v.status === "pending" && canReviewVendors && <form action={reviewVendor} className="space-y-3 border-t border-line pt-3"><input type="hidden" name="vendor_id" value={v.id} /><label className={label}>Catatan pemeriksaan<input name="note" required className={input} /></label><div className="flex gap-2"><SubmitButton disabled={isReadOnlyPreview} name="decision" value="approve">Setujui vendor</SubmitButton><SubmitButton disabled={isReadOnlyPreview} name="decision" value="reject" secondary>Tolak</SubmitButton></div></form>}</Card>)}</div>{!vendorRows.length && <p className="p-6 text-center text-sm text-muted">Belum ada vendor dalam cakupan cabang Anda.</p>}
+        <div className="space-y-4">
+          <TableFilterBar
+            branches={branches}
+            isCentralUser={isCentralUser}
+            userBranchId={userBranchId}
+            fields={[
+              { key: "q", label: "Nama / Alamat Vendor", placeholder: "Cari nama vendor..." }
+            ]}
+          />
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-canvas text-muted">
+                  <tr>
+                    {["No.", "Nama Vendor", "Cabang", "NPWP & Rekening", "Lampiran", "Status", "Aksi / Verifikasi"].map(t => (
+                      <th key={t} className="px-4 py-3 font-medium">{t}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {vendorRows.filter(v => {
+                    if (query.branch_id && v.branch_id !== query.branch_id) return false;
+                    if (query.q) {
+                      const q = query.q.toLowerCase();
+                      return v.name.toLowerCase().includes(q) || (v.address && v.address.toLowerCase().includes(q)) || (v.npwp && v.npwp.toLowerCase().includes(q));
+                    }
+                    return true;
+                  }).map((v, idx) => {
+                    const relatedPurchase = allPurchases.find(p => p.vendor_id === v.id || (p.vendor_snapshot && (p.vendor_snapshot.name === v.name || p.vendor_snapshot.id === v.id)));
+                    const attachments = relatedPurchase?.attachment_ids ?? [];
+                    return (
+                      <tr key={v.id} className="border-t border-line align-top">
+                        <td className="px-4 py-4 text-xs font-semibold text-muted">{idx + 1}</td>
+                        <td className="px-4 py-4">
+                          <div className="font-semibold">{v.name}</div>
+                          <div className="mt-1 text-xs text-muted">{v.address}</div>
+                        </td>
+                        <td className="px-4 py-4 text-xs">
+                          {branches.find(b => b.id === v.branch_id)?.name ?? "Cabang"}
+                        </td>
+                        <td className="px-4 py-4 text-xs space-y-1">
+                          <div><span className="text-muted">NPWP:</span> {v.npwp || "—"}</div>
+                          <div><span className="text-muted">Rek:</span> {v.bank_owner} ({v.bank_account})</div>
+                          <div><span className="text-muted">Metode:</span> {v.payment_method === "cash" ? "Tunai" : "Transfer Bank"}</div>
+                        </td>
+                        <td className="px-4 py-4 text-xs">
+                          {attachments.length > 0 ? (
+                            <div className="space-y-1">
+                              {attachments.map((att, attIdx) => (
+                                <a
+                                  key={att}
+                                  href={`/api/invoice-documents/${att}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block font-medium text-brand hover:underline"
+                                >
+                                  Lampiran {attIdx + 1} ↗
+                                </a>
+                              ))}
+                              {relatedPurchase && (
+                                <Link
+                                  href={`/pengajuan/${relatedPurchase.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="mt-1 inline-block text-[11px] text-muted hover:text-brand"
+                                >
+                                  (Invoice: {relatedPurchase.invoice_number})
+                                </Link>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted italic">Tidak ada</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                            v.status === "approved" ? "bg-emerald-50 text-emerald-700" :
+                            v.status === "pending" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"
+                          }`}>
+                            {v.status === "approved" ? "Terverifikasi" : v.status === "pending" ? "Menunggu Finance" : "Ditolak"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          {v.status === "pending" && canReviewVendors ? (
+                            <form action={reviewVendor} className="space-y-2 min-w-[200px]">
+                              <input type="hidden" name="vendor_id" value={v.id} />
+                              <input
+                                name="note"
+                                placeholder="Catatan verifikasi..."
+                                required
+                                className="w-full rounded-md border border-line px-2.5 py-1 text-xs"
+                              />
+                              <div className="flex gap-1.5">
+                                <SubmitButton disabled={isReadOnlyPreview} name="decision" value="approve">Setujui</SubmitButton>
+                                <SubmitButton disabled={isReadOnlyPreview} name="decision" value="reject" secondary>Tolak</SubmitButton>
+                              </div>
+                            </form>
+                          ) : (
+                            <span className="text-xs text-muted">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {!vendorRows.length && (
+              <p className="p-6 text-center text-sm text-muted">Belum ada vendor dalam cakupan cabang Anda.</p>
+            )}
+          </Card>
+        </div>
       </>}
     </>}
   </div>

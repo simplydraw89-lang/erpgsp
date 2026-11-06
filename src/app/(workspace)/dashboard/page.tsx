@@ -21,12 +21,11 @@ export default async function DashboardPage() {
   const canReadPayments = recordSpecs.payment.readers.includes(role)
   const [processing, rejected, review, nextTax, overdue, unpaidPayments, nextPayment, latePayments] =
     await Promise.all([
-      supabase
-        .from("workflow_documents")
-        .select("id", { count: "exact", head: true })
-        .eq("organization_id", organizationId)
-        .eq("created_by", user.id)
-        .in("state", ["submitted", "approved"]),
+      Promise.all([
+        supabase.from("workflow_documents").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("created_by", user.id).in("state", ["submitted", "approved"]),
+        supabase.from("purchase_requests").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("created_by", user.id).not("status", "in", '("draft","paid","rejected")'),
+        supabase.from("sales_documents").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("created_by", user.id).not("status", "in", '("draft","approved","rejected")')
+      ]).then(([wf, pr, sd]) => ({ count: (wf.count ?? 0) + (pr.count ?? 0) + (sd.count ?? 0), error: wf.error || pr.error || sd.error })),
       supabase
         .from("workflow_documents")
         .select("id", { count: "exact", head: true })
@@ -111,7 +110,7 @@ export default async function DashboardPage() {
         aria-label="Ringkasan pribadi"
         className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"
       >
-        <Link href="/pekerjaan-saya/pengajuan" className="portal-summary">
+        <Link href="/pekerjaan-saya/pengajuan" target="_blank" rel="noopener noreferrer" className="portal-summary">
           <h2 className="text-xs text-slate-500">Pengajuan Anda</h2>
           <p className="mt-2 flex items-baseline gap-1.5">
             <span className="text-[30px] font-semibold leading-none tracking-tight text-slate-950">
@@ -155,27 +154,7 @@ export default async function DashboardPage() {
                     : "Belum ada tenggat dari catatan pajak perusahaan"}
             </p>
           </Link>
-        ) : (
-          <Link
-            href="/approvals?scope=review"
-            className="portal-summary border-[#c7d8ee]"
-          >
-            <h2 className="text-xs text-slate-500">Perlu pemeriksaan Anda</h2>
-            <p className="mt-2 flex items-baseline gap-1.5">
-              <span className="text-[30px] font-semibold leading-none text-slate-950">
-                {review.error ? "—" : (review.count ?? 0)}
-              </span>
-              <span className="text-[13px] text-slate-600">pengajuan</span>
-            </p>
-            <p className="mt-1.5 text-xs text-slate-500">
-              {review.error
-                ? "Ringkasan belum dapat dimuat."
-                : review.count
-                  ? "Buka untuk memeriksa dokumen sesuai kewenangan Anda"
-                  : "Belum ada permintaan yang memerlukan pemeriksaan Anda"}
-            </p>
-          </Link>
-        )}
+        ) : null}
         {canReadPayments && (
           <Link href="/modul/pembayaran" className="portal-summary">
             <h2 className="text-xs text-slate-500">Pembayaran perusahaan</h2>

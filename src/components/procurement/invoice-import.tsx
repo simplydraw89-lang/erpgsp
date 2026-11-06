@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useRef, useState } from "react"
 
@@ -9,8 +9,15 @@ export type ExtractedInvoice = {
   invoice_date?: string
   vendor_name?: string
   vendor_address?: string
+  vendor_npwp?: string
+  bank_name?: string
+  bank_account?: string
+  bank_owner?: string
   tax_invoice_number?: string
   tax_invoice_date?: string
+  vat_mode?: "none" | "non_luxury" | "luxury"
+  withholding_code?: string
+  withholding_rate?: number
   lines?: { description: string; amount: number }[]
 }
 
@@ -58,10 +65,11 @@ export function InvoiceImport({ branchId, disabled, mode = "invoice", onExtracte
     <p className="text-sm font-semibold">Unggah {mode === "spk" ? "SPK" : "invoice"} dan baca dokumen</p>
     <p className="text-xs leading-5 text-muted">PDF digital dibaca langsung; PDF pindai dan PNG/JPEG dibaca dengan OCR Windows lokal. Maksimal 10 MB dan lima halaman. Hanya isian yang terbaca disalin ke form; periksa nominal, vendor, pajak, dan COA sebelum menyimpan.</p>
     <input ref={fileRef} type="file" accept="image/png,image/jpeg,application/pdf" disabled={disabled || busy || !branchId} className="block w-full text-sm" aria-label={`Dokumen ${mode}`} />
-    <button type="button" onClick={() => upload()} disabled={disabled || busy || !branchId} className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy ? "Memproses dokumen…" : "Unggah dan baca"}</button>
-    {retryId && <button type="button" onClick={() => upload(true)} disabled={disabled || busy || !branchId} className="ml-3 rounded-lg border border-line px-4 py-2 text-sm font-semibold disabled:opacity-50">Baca ulang tanpa unggah</button>}
-    {retryId && <a href={`/api/invoice-documents/${retryId}`} target="_blank" rel="noopener noreferrer" className="inline-block rounded-lg px-3 py-2 text-sm font-semibold text-brand">Lihat dokumen di tab baru ↗</a>}
-    {message && <p role="status" className="text-sm leading-6">{message}</p>}
-    {recognizedText && <details><summary className="cursor-pointer text-sm font-medium">Lihat teks hasil OCR</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-white p-3 text-xs">{recognizedText}</pre></details>}
+    <div className="flex flex-wrap gap-2">
+      <button type="button" onClick={() => upload(false)} disabled={disabled || busy || !branchId} className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{busy ? "Membaca dokumen…" : `Unggah & baca ${mode === "spk" ? "SPK" : "dokumen"}`}</button>
+      {retryId && <button type="button" onClick={() => upload(true)} disabled={disabled || busy || !branchId} className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold disabled:opacity-50">Baca ulang lampiran tersimpan</button>}
+    </div>
+    {message && <p role="status" className="rounded-lg bg-white p-3 text-xs leading-5 shadow-sm">{message}</p>}
+    {recognizedText && <details className="rounded-lg bg-white p-3 text-xs"><summary className="cursor-pointer font-medium text-brand">Lihat teks hasil pembacaan</summary><pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-muted">{recognizedText}</pre></details>}
   </div>
 }
