@@ -53,15 +53,46 @@ export const requireWorkspace = cache(async function requireWorkspace() {
   const navigationRoles = navigationForJobs(actorRole, profile.data?.relationship_status ?? null,
     assignments.data ?? [], viewAs.role)
 
+  const activeJobs = assignments.data ?? []
+  let displayRoleLabel: string | undefined = undefined
+
+  if (viewAs.isActive && viewAs.role) {
+    displayRoleLabel = undefined // will fall back to roleLabels[role] (e.g. "Direksi", "Manager")
+  } else if (!navigationRoles.length) {
+    displayRoleLabel = ({ client: "Klien", consultant: "Konsultan / tenaga ahli", vendor: "Vendor" } as Record<string, string>)[profile.data?.relationship_status ?? ""]
+  } else {
+    const directorJob = activeJobs.find(a => ["president", "technical_director", "finance_director"].includes(a.job_role))
+    if (directorJob?.job_role === "president") {
+      displayRoleLabel = "Direktur Utama"
+    } else if (directorJob?.job_role === "technical_director") {
+      displayRoleLabel = "Direktur Teknis"
+    } else if (directorJob?.job_role === "finance_director") {
+      displayRoleLabel = "Direktur Keuangan"
+    } else if (actorRole === "owner") {
+      displayRoleLabel = "Super Admin"
+    } else if (activeJobs.length > 0) {
+      const primary = activeJobs[0]
+      const titles: Record<string, string> = {
+        branch_manager: "Manager Cabang",
+        accounting_tax: "Accounting & Tax",
+        finance: "Finance",
+        hr: "SDM",
+        project_manager: "Project Manager",
+        admin: "Admin",
+        marketing: "Marketing",
+        support: "Support",
+      }
+      if (titles[primary.job_role]) displayRoleLabel = titles[primary.job_role]
+    }
+  }
+
   return {
     supabase,
     user,
     actorRole,
     role: navigationRoles[0] ?? "staff" as OrganizationRole,
     navigationRoles,
-    roleLabel: !navigationRoles.length
-      ? ({ client: "Klien", consultant: "Konsultan / tenaga ahli", vendor: "Vendor" } as Record<string, string>)[profile.data?.relationship_status ?? ""]
-      : undefined,
+    roleLabel: displayRoleLabel,
     relationshipStatus: profile.data?.relationship_status as string | undefined,
     workAssignments: assignments.data ?? [],
     isReadOnlyPreview: viewAs.isActive,
