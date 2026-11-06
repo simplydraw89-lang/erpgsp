@@ -122,7 +122,7 @@ export async function reviewPurchase(data: FormData) {
     withholding_code: value(data, "withholding_code"), withholding_rate: Number(value(data, "withholding_rate") || 0), withholding_timing: value(data, "withholding_timing") || "invoice",
     withholding_base: Number(value(data, "withholding_base") || 0),
   } : null
-  await call(destination(data), "review_purchase_request", {
+  await call("/pengajuan/pembelian", "review_purchase_request", {
     p_id: value(data, "id"), p_version: Number(value(data, "version")), p_approve: value(data, "decision") === "approve", p_note: value(data, "note"), p_accounting: accounting,
   }, "Keputusan pemeriksaan tersimpan.")
 }
