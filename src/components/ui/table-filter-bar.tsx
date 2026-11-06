@@ -2,6 +2,7 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { Search, Filter, RotateCcw } from "lucide-react"
+import { DatePicker } from "@/components/ui/date-picker"
 
 export type FilterField = {
   key: string
@@ -108,11 +109,10 @@ export function TableFilterBar({
                 ))}
               </select>
             ) : f.type === "date" ? (
-              <input
-                type="date"
+              <DatePicker
                 name={f.key}
                 defaultValue={searchParams.get(f.key) || ""}
-                className="h-9 w-full rounded-lg border border-line bg-white px-2.5 text-xs text-ink outline-none focus:border-brand"
+                className="h-9 min-h-0 w-full rounded-lg border border-line bg-white px-2.5 text-xs text-ink outline-none focus:border-brand"
               />
             ) : (
               <div className="relative">

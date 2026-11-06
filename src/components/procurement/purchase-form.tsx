@@ -3,6 +3,7 @@
 import { formatAmount } from "@/lib/money"
 import { MoneyInput } from "@/components/ui/money-input"
 import { CoaCombobox } from "@/components/ui/coa-combobox"
+import { DatePicker } from "@/components/ui/date-picker"
 
 import { useState, useTransition, type MouseEvent } from "react"
 import { useRouter } from "next/navigation"
@@ -133,10 +134,10 @@ export function PurchaseForm({ branches, vendors, accounts, purchase, disabled =
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className={label}>Cabang<select name="branch_id" value={branch} onChange={e => { setBranch(e.target.value); setVendorId(""); setAttachments([]) }} required disabled={Boolean(purchase)} className={input}><option value="">Pilih cabang</option>{branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>{purchase && <input type="hidden" name="branch_id" value={branch} />}</label>
           <label className={label}>Nomor invoice<input name="invoice_number" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} required maxLength={160} className={input} /></label>
-          <label className={label}>Tanggal invoice<input name="invoice_date" type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} required className={input} /></label>
+          <label className={label}>Tanggal invoice<DatePicker name="invoice_date" value={invoiceDate} onValueChange={setInvoiceDate} required className={input} /></label>
           <label className={label}>Nomor faktur pajak<input name="tax_invoice_number" value={taxInvoiceNumber} onChange={e => setTaxInvoiceNumber(e.target.value)} className={input} /></label>
-          <label className={label}>Tanggal faktur pajak<input name="tax_invoice_date" type="date" value={taxInvoiceDate} onChange={e => setTaxInvoiceDate(e.target.value)} className={input} /></label>
-          <label className={label}>Rencana tanggal pembayaran<input name="requested_payment_date" type="date" defaultValue={purchase?.requested_payment_date ?? ""} className={input} /></label>
+          <label className={label}>Tanggal faktur pajak<DatePicker name="tax_invoice_date" value={taxInvoiceDate} onValueChange={setTaxInvoiceDate} className={input} /></label>
+          <label className={label}>Rencana tanggal pembayaran<DatePicker name="requested_payment_date" defaultValue={purchase?.requested_payment_date ?? ""} className={input} /></label>
         </div>
       </Card>
       <Card className="space-y-5 p-5 md:p-6">
