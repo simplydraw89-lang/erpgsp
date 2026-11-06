@@ -18,7 +18,7 @@ export function BusinessSummary({ summary, queueOnly = false }: {
         <h3 className="font-semibold">Butuh verifikasi saya</h3>
         {summary.queueError ? <p role="status" className="mt-3 text-sm text-amber-800">Antrean bisnis belum tersedia. Periksa penerapan database di Pengajuan.</p>
           : summary.queue.length ? <ul className="mt-3 divide-y divide-line">{summary.queue.map(item => <li key={`${item.kind}-${item.id}`}>
-            <Link href={item.kind === "sph" ? `/pengajuan/penjualan/sph/${item.id}` : item.kind === "purchase" ? "/pengajuan/pembelian" : "/vendor"} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 py-3 text-sm">
+            <Link href={item.kind === "sph" ? `/pengajuan/penjualan/sph/${item.id}` : item.kind === "purchase" ? `/pengajuan/${item.id}` : "/vendor"} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 py-3 text-sm">
               <span><span className="block font-medium">{item.title}</span><span className="mt-1 block text-xs text-muted">{item.kind === "sph" ? "Pemeriksaan SPH" : item.kind === "vendor" ? "Validasi vendor" : "Pemeriksaan pembelian"}</span></span>
               <span className="shrink-0 text-brand">Periksa →</span>
             </Link>
