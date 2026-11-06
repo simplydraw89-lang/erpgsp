@@ -141,7 +141,7 @@ export default async function MySubmissionsPage({
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 font-medium text-brand hover:underline"
                     >
-                      Buka &rarr;
+                      {["draft", "rejected"].includes(row.status) ? "Edit ✎" : "Buka →"}
                     </Link>
                   </td>
                 </tr>
