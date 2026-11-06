@@ -2,6 +2,8 @@
 -- Removes rigid bottleneck where invoice_date had to fall within the period date range.
 -- The posting journal date is automatically set to the invoice date if within period,
 -- or to the period start date / current valid date within the open period.
+-- Also relaxes tax_invoice_number & tax_invoice_date check during accounting review,
+-- allowing accounting/tax to set, update, or approve without strict upfront lockout.
 
 create or replace function gsp_private.api_review_purchase_request(
   p_id uuid,
@@ -108,8 +110,11 @@ begin
       raise exception 'Akun utang usaha harus akun liabilitas aktif.';
     end if;
 
+    -- Update purchase request with accounting/tax corrections, including optional tax invoice details
     update public.purchase_requests set
       lines = coalesce(p_accounting->'lines', lines),
+      tax_invoice_number = coalesce(nullif(p_accounting->>'tax_invoice_number', ''), tax_invoice_number),
+      tax_invoice_date = coalesce(nullif(p_accounting->>'tax_invoice_date', '')::date, tax_invoice_date),
       vat_mode = coalesce(p_accounting->>'vat_mode', vat_mode),
       vat_creditable = coalesce((p_accounting->>'vat_creditable')::boolean, vat_creditable),
       withholding_code = coalesce(p_accounting->>'withholding_code', withholding_code),
@@ -126,10 +131,6 @@ begin
       where id = vat and organization_id = d.organization_id and is_active and is_postable and account_type = 'asset'
     ) then
       raise exception 'Akun PPN masukan belum sesuai pajak yang dikoreksi.';
-    end if;
-
-    if d.vat_creditable and d.vat_amount > 0 and (nullif(btrim(d.tax_invoice_number), '') is null or d.tax_invoice_date is null) then
-      raise exception 'Nomor dan tanggal faktur pajak wajib diisi sebelum pengkreditan PPN masukan.';
     end if;
 
     if d.withholding_amount > 0 and not exists(
@@ -216,7 +217,7 @@ begin
   );
 end $$;
 
--- Also ensure public proxy points to the updated function
+-- Ensure public proxy passes the call to gsp_private
 create or replace function public.review_purchase_request(
   p_id uuid,
   p_version integer,

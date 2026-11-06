@@ -116,6 +116,7 @@ export async function reviewPurchase(data: FormData) {
   const accounting = data.get("accounting") === "yes" ? {
     entity_id: value(data, "entity_id"), period_id: value(data, "period_id"), payable_account_id: value(data, "payable_account_id"),
     vat_account_id: value(data, "vat_account_id") || null, withholding_account_id: value(data, "withholding_account_id") || null,
+    tax_invoice_number: value(data, "tax_invoice_number") || null, tax_invoice_date: value(data, "tax_invoice_date") || null,
     coa_confirmed: data.get("coa_confirmed") === "on", lines: json(data, "lines", destination(data)),
     vat_mode: value(data, "vat_mode"), vat_creditable: data.get("vat_creditable") === "on",
     withholding_code: value(data, "withholding_code"), withholding_rate: Number(value(data, "withholding_rate") || 0), withholding_timing: value(data, "withholding_timing") || "invoice",
