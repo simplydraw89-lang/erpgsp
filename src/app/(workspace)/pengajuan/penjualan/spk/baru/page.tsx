@@ -1,14 +1,60 @@
 import { requireWorkspace } from "@/lib/auth/context"
-import { Card } from "@/components/ui/card"
 import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import { SalesMenu } from "@/components/sales/sales-menu"
+import { SpkForm } from "@/components/sales/spk-form"
+import type { BusinessUnit, SalesDocument } from "@/lib/procurement-ui"
 
-export default async function NewSpkPage({ searchParams }: { searchParams: Promise<{sph?:string}> }) {
+export default async function NewSpkPage({ searchParams }: { searchParams: Promise<{ sph?: string }> }) {
   const { sph } = await searchParams
   const w = await requireWorkspace()
-  if (!sph || !/^[0-9a-f-]{36}$/i.test(sph)) return <div className="space-y-4"><h1 className="text-3xl font-bold">Buat SPK</h1><p>Pilih Buat SPK dari SPH yang telah disetujui.</p><Link href="/pengajuan/penjualan/sph" className="text-brand">Buka daftar SPH →</Link></div>
-  const result = await w.supabase.rpc("sph_spk_context",{p_org:w.organizationId,p_id:sph})
-  if (result.error) return <div className="space-y-4"><h1 className="text-3xl font-bold">Buat SPK</h1><p role="alert">{result.error.message}</p><Link href="/pengajuan/penjualan/sph" className="text-brand">Kembali ke daftar SPH</Link></div>
-  const context = result.data
-  return <div className="space-y-6"><Link href="/pengajuan/penjualan/spk" className="text-sm text-brand">← Daftar SPK</Link><h1 className="text-3xl font-bold">Buat SPK</h1><SalesMenu active="spk" /><Card className="space-y-3 p-5"><h2 className="font-semibold">Berdasarkan SPH No. {context.sph_number}</h2><p>{context.title}</p><p className="text-sm text-muted">Klien: {context.client_name}</p><p className="text-sm text-muted">Referensi SPH telah diverifikasi. Rincian form SPK akan ditambahkan setelah arahan berikutnya.</p></Card></div>
+
+  const [units, sphResult] = await Promise.all([
+    w.supabase
+      .from("business_units")
+      .select("id,code,name,kind")
+      .eq("organization_id", w.organizationId)
+      .eq("kind", "branch")
+      .order("code"),
+    w.supabase
+      .from("sales_documents")
+      .select("*")
+      .eq("organization_id", w.organizationId)
+      .eq("kind", "sph")
+      .in("status", ["ready", "accepted"])
+      .order("sph_number", { ascending: false })
+      .limit(200),
+  ])
+
+  const branches = (units.data ?? []) as BusinessUnit[]
+  const centralDirector = w.workAssignments.some(
+    job => !job.branch_id && ["president", "finance_director", "technical_director"].includes(job.job_role)
+  )
+  const writableBranches =
+    w.actorRole === "owner" || centralDirector
+      ? branches
+      : branches.filter(branch => w.workAssignments.some(job => job.branch_id === branch.id))
+
+  const documents = (sphResult.data ?? []) as SalesDocument[]
+
+  return (
+    <div className="space-y-6">
+      <Link href="/pengajuan/penjualan/spk" className="text-sm text-brand">
+        ← Kembali ke Daftar SPK
+      </Link>
+      <header>
+        <p className="text-sm font-medium text-brand">Penjualan</p>
+        <h1 className="mt-2 text-3xl font-bold">Buat SPK</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
+          Penerbitan Surat Perintah Kerja (SPK) berdasarkan SPH yang telah disetujui internal oleh Direktur Keuangan.
+        </p>
+      </header>
+      <SalesMenu active="spk" />
+      <SpkForm
+        branches={writableBranches}
+        documents={documents}
+        disabled={w.isReadOnlyPreview}
+        initialSphId={sph}
+      />
+    </div>
+  )
 }

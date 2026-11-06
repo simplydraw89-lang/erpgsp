@@ -6,8 +6,9 @@ import { ClientDirectory } from "./client-directory"
 import { sphStatusLabels } from "@/lib/sales"
 import type { SphRegisterRow } from "@/lib/sales"
 import type { BusinessUnit, SalesDocument } from "@/lib/procurement-ui"
+import { FolderCheck, ArrowRight } from "lucide-react"
 
-export function SalesForms({ view, documents, disabled, canRegisterClient, canReadClients, canCreateDocuments, register = [], offset = 0 }: {
+export function SalesForms({ view, documents, disabled, canCreateDocuments, register = [], offset = 0, canRegisterClient, canReadClients }: {
   view: "klien" | "sph" | "spk"; branches: BusinessUnit[]; allBranches: BusinessUnit[]; documents: SalesDocument[]; disabled: boolean;
   canRegisterClient: boolean; canReadClients: boolean; canCreateDocuments: boolean; draftId: string
   register?: SphRegisterRow[]; offset?: number
@@ -25,22 +26,82 @@ export function SalesForms({ view, documents, disabled, canRegisterClient, canRe
   </section>
   const rows = documents.filter(document => document.kind === "spk")
   return <div className="space-y-6">
-    <section aria-label={`Daftar ${view.toUpperCase()}`} className="space-y-4"><h2 className="text-lg font-semibold">Daftar {view.toUpperCase()}</h2>
-      {rows.map((document, index) => <Card key={document.id} className="space-y-3 p-5">
-        <div className="flex items-center justify-between">
-          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-muted">No. {index + 1}</span>
-          <span className="text-xs font-medium uppercase tracking-wide text-brand">SPK</span>
+    <section aria-label={`Daftar ${view.toUpperCase()}`} className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Daftar {view.toUpperCase()}</h2>
+          <p className="text-xs text-muted">Surat Perintah Kerja resmi berdasarkan SPH yang disetujui internal.</p>
         </div>
-        <p className="text-xs font-medium uppercase tracking-wide text-brand">SPK</p>
-        <h3 className="font-semibold">{document.title}</h3>
-        <p className="text-sm text-muted">{document.client_snapshot?.name ?? "Klien terdaftar"}</p>
-        <p className="text-sm font-medium text-muted">{sphStatusLabels[document.status] ?? document.status}</p>
-        <>
-          <p className="text-sm text-muted">SPH rujukan: {documents.find(item => item.id === document.accepted_sph_id)?.sph_number ?? "Lihat daftar SPH"} · {document.source === "client" ? "Dokumen klien" : "Dokumen perusahaan"}</p>
-          <p className="whitespace-pre-wrap text-sm">{document.notes}</p>
-          {(document.attachment_ids ?? []).map((id, index) => <a key={id} href={`/api/invoice-documents/${id}`} target="_blank" rel="noopener noreferrer" className="block text-sm text-brand">Buka dokumen {index + 1}</a>)}
-        </>
-      </Card>)}
+        {canCreateDocuments && !disabled && (
+          <Link href="/pengajuan/penjualan/spk/baru" className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white">
+            + Buat SPK
+          </Link>
+        )}
+      </div>
+
+      {rows.map((document, index) => (
+        <Card key={document.id} className="space-y-3 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-muted">
+                No. {index + 1}
+              </span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-brand">
+                {document.document_number || "SPK"}
+              </span>
+            </div>
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+              document.status === "ready"
+                ? "bg-emerald-100 text-emerald-800"
+                : document.status === "director_review"
+                ? "bg-amber-100 text-amber-800"
+                : "bg-slate-100 text-slate-700"
+            }`}>
+              {document.status === "director_review"
+                ? "Menunggu Persetujuan Direktur Utama"
+                : sphStatusLabels[document.status] ?? document.status}
+            </span>
+          </div>
+
+          <h3 className="text-base font-bold text-ink">{document.title}</h3>
+          <p className="text-sm text-muted">{document.client_snapshot?.name ?? "Klien terdaftar"}</p>
+
+          <p className="text-xs text-muted">
+            SPH Rujukan: {documents.find(item => item.id === document.accepted_sph_id)?.sph_number ? `SPH No. ${documents.find(item => item.id === document.accepted_sph_id)?.sph_number}` : "Lihat SPH"} · Diterbitkan oleh {document.source === "client" ? "Klien" : "Perusahaan"}
+          </p>
+
+          {document.notes && (
+            <p className="whitespace-pre-wrap rounded-lg bg-canvas p-2.5 text-xs text-muted border border-line">
+              {document.notes}
+            </p>
+          )}
+
+          {document.project_id && (
+            <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-xs text-emerald-900">
+              <span className="flex items-center gap-1.5 font-medium">
+                <FolderCheck size={16} className="text-emerald-700" /> Proyek resmi telah aktif dibuat otomatis
+              </span>
+              <Link href={`/portal-proyek?project=${document.project_id}`} className="flex items-center gap-1 font-semibold text-emerald-800 hover:underline">
+                Portal Proyek <ArrowRight size={13} />
+              </Link>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+            <div className="flex flex-wrap gap-2 text-xs text-brand">
+              {(document.attachment_ids ?? []).map((id, attIdx) => (
+                <a key={id} href={`/api/invoice-documents/${id}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                  Lampiran {attIdx + 1}
+                </a>
+              ))}
+            </div>
+            <Link href={`/pengajuan/penjualan/spk/${document.id}`} className="font-semibold text-brand text-sm hover:underline">
+              Buka Detail / Periksa SPK →
+            </Link>
+          </div>
+        </Card>
+      ))}
+
       {!rows.length && <Card className="p-6 text-center text-sm text-muted">Belum ada {view.toUpperCase()} dalam cakupan akses Anda.</Card>}
     </section>
   </div>

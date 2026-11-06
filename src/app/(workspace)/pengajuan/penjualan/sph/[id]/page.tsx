@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card"
 import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import { SalesMenu } from "@/components/sales/sales-menu"
 import { SphReviewForm } from "@/components/sales/sph-review-form"
+import { AttachmentList, type AttachmentItem } from "@/components/sales/attachment-list"
 import { SphForm } from "@/components/sales/sph-form"
 import { SubmitButton } from "@/components/procurement/submit-button"
 import { ProcurementMessage } from "@/components/procurement/section-nav"
@@ -20,13 +21,25 @@ export default async function SphPage({ params, searchParams }: { params: Promis
   if (result.error) throw new Error("SPH gagal dimuat. Periksa koneksi dan izin akses.")
   if (!result.data) notFound()
   const document = result.data as SalesDocument
-  const [units, reader, reviewer, acceptor, events] = await Promise.all([
+  const [units, reader, reviewer, acceptor, events, attachmentsRes] = await Promise.all([
     supabase.from("business_units").select("id,code,name,kind").eq("organization_id", organizationId).eq("kind", "branch").order("code"),
     supabase.rpc("can_read_sales_clients", { p_org: organizationId }),
     supabase.rpc("sph_review_allowed", { p_id: id }),
     supabase.rpc("has_business_job", { p_org: organizationId, p_branch: document.branch_id, p_roles: ["president", "finance_director", "technical_director", "branch_manager"] }),
     supabase.from("procurement_events").select("id,action,note,actor_id,details,created_at").eq("organization_id", organizationId).eq("entity_id", id).order("created_at"),
+    document.attachment_ids?.length
+      ? supabase
+          .from("procurement_attachments")
+          .select("id,file_name,content_type,byte_size")
+          .in("id", document.attachment_ids)
+      : Promise.resolve({ data: [], error: null }),
   ])
+  const attachmentItems: AttachmentItem[] = (attachmentsRes.data ?? []).map((a) => ({
+    id: a.id,
+    file_name: a.file_name,
+    content_type: a.content_type,
+    byte_size: Number(a.byte_size),
+  }))
   if ([units.error, reader.error, reviewer.error, acceptor.error, events.error].some(Boolean)) throw new Error("Detail pemeriksaan atau riwayat SPH gagal dimuat.")
   const canEdit = Boolean(reader.data) && ["draft", "revision_requested"].includes(document.status) && (document.created_by === user.id || actorRole === "owner")
   const fields = <><input type="hidden" name="document_id" value={id} /><input type="hidden" name="version" value={document.version} /></>
@@ -34,7 +47,7 @@ export default async function SphPage({ params, searchParams }: { params: Promis
     <Link href="/pengajuan/penjualan/sph" className="text-sm font-medium text-brand">← Daftar SPH</Link>
     <header><p className="text-sm text-brand">Penjualan</p><h1 className="mt-2 text-3xl font-bold">SPH No. {document.sph_number}</h1><p className="mt-2 text-sm text-muted">{sphStatusLabels[document.status] ?? document.status}</p></header>
     <SalesMenu active="sph" /><ProcurementMessage {...await searchParams} />
-    <Card className="space-y-3 p-5"><h2 className="text-lg font-semibold">{document.title}</h2><p className="text-sm">Klien: {document.client_snapshot?.name ?? "Klien terdaftar"}</p><p className="text-sm">Cabang: {units.data?.find(branch => branch.id === document.branch_id)?.name}</p><dl className="grid gap-3 text-sm sm:grid-cols-2"><div>Daerah pengerjaan: {document.work_area || "Belum diisi"}</div><div>Bidang usaha: {document.client_snapshot?.industry || "Belum diisi"}</div><div>Lingkup: {document.work_scopes?.join(", ") || "Belum diisi"}</div><div>Deal Project: {document.deal_status === "sudah_deal" ? "Sudah deal" : document.deal_status === "belum_deal" ? "Belum deal" : "Belum diisi"}</div><div>Nilai SPH: {document.amount == null ? "Belum diisi" : formatCurrency(document.amount)}</div><div>Masa berlaku sampai: {document.valid_until || "Belum diisi"}</div></dl><p className="whitespace-pre-wrap text-sm text-muted">{document.notes}</p>{document.attachment_ids.map((attachment, index) => <a key={attachment} href={`/api/invoice-documents/${attachment}`} target="_blank" rel="noopener noreferrer" className="block text-sm font-medium text-brand">Buka dokumen kelengkapan {index + 1} ↗</a>)}</Card>
+    <Card className="space-y-3 p-5"><h2 className="text-lg font-semibold">{document.title}</h2><p className="text-sm">Klien: {document.client_snapshot?.name ?? "Klien terdaftar"}</p><p className="text-sm">Cabang: {units.data?.find(branch => branch.id === document.branch_id)?.name}</p><dl className="grid gap-3 text-sm sm:grid-cols-2"><div>Daerah pengerjaan: {document.work_area || "Belum diisi"}</div><div>Bidang usaha: {document.client_snapshot?.industry || "Belum diisi"}</div><div>Lingkup: {document.work_scopes?.join(", ") || "Belum diisi"}</div><div>Deal Project: {document.deal_status === "sudah_deal" ? "Sudah deal" : document.deal_status === "belum_deal" ? "Belum deal" : "Belum diisi"}</div><div>Nilai SPH: {document.amount == null ? "Belum diisi" : formatCurrency(document.amount)}</div><div>Masa berlaku sampai: {document.valid_until || "Belum diisi"}</div></dl><p className="whitespace-pre-wrap text-sm text-muted">{document.notes}</p><div className="pt-2"><AttachmentList attachments={attachmentItems} title="Dokumen Lampiran SPH (Surat Penawaran, RAB, Lingkup Kerja)" /></div></Card>
     {document.review_note && <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">Catatan pemeriksa: {document.review_note}</p>}
     {canEdit && <SphForm key={`${id}-${document.version}`} document={document} branches={(units.data ?? []).filter(branch => branch.id === document.branch_id) as BusinessUnit[]} draftId={id} disabled={isReadOnlyPreview} />}
     {Boolean(reviewer.data) && <Card className="p-5"><h2 className="font-semibold">{sphStatusLabels[document.status]}</h2><SphReviewForm id={id} version={document.version} disabled={isReadOnlyPreview} /></Card>}
