@@ -5,7 +5,7 @@ import { TableFilterBar } from "@/components/ui/table-filter-bar"
 import { requireWorkspace } from "@/lib/auth/context"
 import { loadMySubmissions } from "@/lib/my-submissions"
 import { labels } from "@/lib/workflow"
-import { purchaseStatusLabels } from "@/lib/procurement-ui"
+import { purchaseStatusLabels, formatDateID } from "@/lib/procurement-ui"
 import { sphStatusLabels } from "@/lib/sales"
 
 export default async function MySubmissionsPage({
@@ -119,7 +119,7 @@ export default async function MySubmissionsPage({
                   <td className="px-4 py-4 font-medium">
                     {row.title}
                     <span className="mt-1 block text-xs text-muted">
-                      Dibuat: {new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeZone: "Asia/Bangkok" }).format(new Date(row.createdAt))}
+                      Dibuat: {formatDateID(row.createdAt)}
                     </span>
                   </td>
                   <td className="px-4 py-4 text-muted">{row.branchName || "-"}</td>

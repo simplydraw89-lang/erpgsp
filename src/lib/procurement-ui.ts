@@ -31,3 +31,24 @@ export const rupiah = formatCurrency
 export function isProcurementMissing(error: { code?: string; message?: string } | null) { return Boolean(error && (["42P01", "PGRST205", "PGRST202"].includes(error.code ?? "") || /schema cache.*(purchase_requests|business_units|procurement_vendors)/i.test(error.message ?? ""))) }
 export const procurementInput = "mt-1 block min-h-10 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/15 disabled:bg-canvas"
 export const procurementLabel = "block text-sm font-medium text-ink"
+
+export function formatDateID(val: string | null | undefined): string {
+  if (!val) return "-"
+  // Support YYYY-MM-DD or ISO strings
+  const clean = val.slice(0, 10)
+  const parts = clean.split("-")
+  if (parts.length === 3 && parts[0].length === 4) {
+    const [y, m, d] = parts
+    return `${d}/${m}/${y}`
+  }
+  try {
+    const d = new Date(val)
+    if (isNaN(d.getTime())) return val
+    const day = String(d.getDate()).padStart(2, "0")
+    const month = String(d.getMonth() + 1).padStart(2, "0")
+    const year = d.getFullYear()
+    return `${day}/${month}/${year}`
+  } catch {
+    return val
+  }
+}
