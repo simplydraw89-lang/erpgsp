@@ -13,7 +13,7 @@ export type PurchaseRequest = {
   subtotal: number | string; vat_amount: number | string; withholding_amount: number | string;
   total: number | string; payable_amount: number | string; review_note: string | null;
   journal_id: string | null; payment_journal_id: string | null; payment_reference: string | null;
-  paid_on: string | null; created_at: string; notes: string; attachment_ids: string[];
+  paid_on: string | null; created_at: string; notes: string; attachment_ids: string[]; payment_attachment_ids?: string[];
 }
 export type SalesClient = { id: string; branch_id?: string | null; name: string; address: string; npwp: string; contact: string; phone: string; email: string; industry: string; additional_information?: string | null }
 export type SalesDocument = { amount?: number | string | null; created_at: string; id: string; branch_id: string; client_id: string; created_by: string; kind: string; title: string; source: string; sph_number: number | null; accepted_sph_id: string | null; status: string; notes: string; attachment_ids: string[]; version: number; work_area: string | null; work_scopes: string[]; deal_status: string | null; valid_until: string | null; client_snapshot: Partial<SalesClient>; review_note?: string | null }

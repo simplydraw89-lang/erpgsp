@@ -127,9 +127,15 @@ export async function reviewPurchase(data: FormData) {
   }, "Keputusan pemeriksaan tersimpan.")
 }
 export async function payPurchase(data: FormData) {
+  let paymentAttachments: string[] = []
+  try {
+    const raw = value(data, "payment_attachments")
+    if (raw) paymentAttachments = JSON.parse(raw)
+  } catch {}
   await call(destination(data), "pay_purchase_request", {
     p_id: value(data, "id"), p_version: Number(value(data, "version")), p_payment_date: value(data, "payment_date"),
     p_reference: value(data, "payment_reference"), p_bank_account_id: value(data, "bank_account_id"), p_period_id: value(data, "period_id"),
+    p_attachments: paymentAttachments,
   }, "Pembayaran dan jurnal pelunasan tercatat.")
 }
 export async function requestVendor(data: FormData) {
