@@ -17,6 +17,7 @@ security definer
 set search_path = ''
 as $$
   select d.kind = 'sph'
+  and d.status in ('branch_review', 'director_review', 'accounting_review', 'finance_review')
   and (
     gsp_private.is_superadmin(d.organization_id)
     or (
