@@ -19,11 +19,12 @@ export async function PurchaseWorkspace({ view, query }: { view: "pembelian" | "
   const errors = [units.error, assignments.error, purchases.error, vendors.error]
   const missing = errors.some(isProcurementMissing)
   if (!missing && errors.some(Boolean)) throw new Error("Data pengajuan gagal dimuat. Periksa koneksi dan izin akses database.")
-  const branches = (units.data ?? []).filter(b => b.kind === "branch") as BusinessUnit[]
+  const branches = (units.data ?? []).filter(b => b.kind === "branch" || b.kind === "center") as BusinessUnit[]
   const jobs = (assignments.data ?? []) as WorkAssignment[]
   const owner = actorRole === "owner"
   const canReviewVendors = owner || jobs.some(j => !j.branch_id && ["finance", "accounting_tax"].includes(j.job_role))
-  const writableBranches = owner ? branches : branches.filter(b => jobs.some(j => j.branch_id === b.id))
+  const isCentralUser = owner || jobs.some(j => !j.branch_id && ["president", "finance_director", "technical_director", "accounting_tax", "finance"].includes(j.job_role));
+  const writableBranches = isCentralUser ? branches : branches.filter(b => jobs.some(j => j.branch_id === b.id))
     const allPurchases = (purchases.data ?? []) as PurchaseRequest[]
   const vendorRows = (vendors.data ?? []) as ProcurementVendor[]
 
@@ -40,8 +41,7 @@ export async function PurchaseWorkspace({ view, query }: { view: "pembelian" | "
     return true;
   });
 
-  const isCentralUser = owner || jobs.some(j => !j.branch_id && ["president", "finance_director", "accounting_tax", "finance"].includes(j.job_role));
-  const userBranchId = jobs.find(j => j.branch_id)?.branch_id ?? null;
+    const userBranchId = jobs.find(j => j.branch_id)?.branch_id ?? null;
   const pending = rows.filter(r => ["branch_review", "director_review", "accounting_review", "payment_ready"].includes(r.status))
   const pendingValue = rows.filter(r => !["draft", "rejected", "paid"].includes(r.status)).reduce((sum, r) => sum + Number(r.payable_amount), 0)
   return <div className="space-y-6">
@@ -191,3 +191,4 @@ export async function PurchaseWorkspace({ view, query }: { view: "pembelian" | "
     </>}
   </div>
 }
+

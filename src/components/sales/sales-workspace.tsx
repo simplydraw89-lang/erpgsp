@@ -13,7 +13,7 @@ export async function SalesWorkspace({ view, query }: { view: "klien" | "sph" | 
   const [register, read, units, documents, summaries] = await Promise.all([
     supabase.rpc("can_register_sales_client", { p_org: organizationId }),
     supabase.rpc("can_read_sales_clients", { p_org: organizationId }),
-    view === "klien" ? Promise.resolve({ data: [], error: null }) : supabase.from("business_units").select("id,code,name,kind").eq("organization_id", organizationId).eq("kind", "branch").order("code"),
+    view === "klien" ? Promise.resolve({ data: [], error: null }) : supabase.from("business_units").select("id,code,name,kind").eq("organization_id", organizationId).in("kind", ["branch", "center"]).order("code"),
     view !== "spk" ? Promise.resolve({ data: [], error: null }) : supabase.from("sales_documents").select("*").eq("organization_id", organizationId).eq("kind","spk").order("created_at", { ascending: false }).limit(200),
     view === "sph" ? supabase.rpc("sph_register",{p_org:organizationId,p_branch:branch,p_offset:(page-1)*50}) : Promise.resolve({data:{rows:[],total:0},error:null}),
   ])

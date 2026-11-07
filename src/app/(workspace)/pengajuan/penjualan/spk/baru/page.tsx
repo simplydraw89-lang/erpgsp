@@ -13,7 +13,7 @@ export default async function NewSpkPage({ searchParams }: { searchParams: Promi
       .from("business_units")
       .select("id,code,name,kind")
       .eq("organization_id", w.organizationId)
-      .eq("kind", "branch")
+      .in("kind", ["branch", "center"])
       .order("code"),
     w.supabase
       .from("sales_documents")

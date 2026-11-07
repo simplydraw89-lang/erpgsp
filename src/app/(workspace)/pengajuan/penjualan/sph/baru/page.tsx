@@ -9,7 +9,7 @@ export default async function NewSphPage() {
   const w = await requireWorkspace()
   const [permission,units] = await Promise.all([
     w.supabase.rpc("can_read_sales_clients",{p_org:w.organizationId}),
-    w.supabase.from("business_units").select("id,code,name,kind").eq("organization_id",w.organizationId).eq("kind","branch").order("code"),
+    w.supabase.from("business_units").select("id,code,name,kind").eq("organization_id",w.organizationId).in("kind", ["branch", "center"]).order("code"),
   ])
   if (permission.error || units.error) throw new Error("Form SPH gagal dimuat. Periksa koneksi dan izin akses.")
   const central = w.actorRole === "owner" || w.workAssignments.some(job => !job.branch_id && ["president","finance_director","technical_director"].includes(job.job_role))

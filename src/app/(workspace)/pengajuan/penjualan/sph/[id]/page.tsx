@@ -22,7 +22,7 @@ export default async function SphPage({ params, searchParams }: { params: Promis
   if (!result.data) notFound()
   const document = result.data as SalesDocument
   const [units, reader, reviewer, acceptor, events, attachmentsRes] = await Promise.all([
-    supabase.from("business_units").select("id,code,name,kind").eq("organization_id", organizationId).eq("kind", "branch").order("code"),
+    supabase.from("business_units").select("id,code,name,kind").eq("organization_id", organizationId).in("kind", ["branch", "center"]).order("code"),
     supabase.rpc("can_read_sales_clients", { p_org: organizationId }),
     supabase.rpc("sph_review_allowed", { p_id: id }),
     supabase.rpc("has_business_job", { p_org: organizationId, p_branch: document.branch_id, p_roles: ["president", "finance_director", "technical_director", "branch_manager"] }),

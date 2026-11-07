@@ -29,7 +29,7 @@ export default async function PurchaseDetailPage({ params, searchParams }: { par
     supabase.from("procurement_events").select("id,action,actor_id,note,created_at").eq("organization_id", organizationId).eq("entity_id", id).order("created_at", { ascending: false }).limit(50),
   ])
   if ([units.error, vendors.error, accounts.error, jobs.error, periods.error, events.error].some(Boolean)) throw new Error("Kelengkapan pengajuan gagal dimuat.")
-  const branches = (units.data ?? []).filter(u => u.kind === "branch") as BusinessUnit[]
+  const branches = (units.data ?? []).filter(u => u.kind === "branch" || u.kind === "center") as BusinessUnit[]
   const branch = units.data?.find(b => b.id === purchase.branch_id)
   const liveVendor = (vendors.data as ProcurementVendor[] | null)?.find(v => v.id === purchase.vendor_id)
   const vendor = ["draft", "rejected"].includes(purchase.status) ? liveVendor : Object.keys(purchase.vendor_snapshot ?? {}).length ? purchase.vendor_snapshot : liveVendor

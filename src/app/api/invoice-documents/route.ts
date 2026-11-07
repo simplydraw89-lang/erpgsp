@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const domain = manual || body.get("mode") === "spk" ? "sales" : "procurement"
   const file = body.get("file")
   if (!uuid.test(branchId) || !(file instanceof File) || !file.size || file.size > MAX_BYTES) return Response.json({ error: "Cabang dan dokumen maksimal 10 MB wajib diisi." }, { status: 400 })
-  const { data: branch } = await supabase.from("business_units").select("id,organization_id,kind").eq("id", branchId).eq("kind", "branch").maybeSingle()
+  const { data: branch } = await supabase.from("business_units").select("id,organization_id,kind").eq("id", branchId).in("kind", ["branch", "center"]).maybeSingle()
   if (!branch) return Response.json({ error: "Cabang tidak ditemukan atau tidak dapat diakses." }, { status: 403 })
   const permission = await supabase.rpc("can_access_business", { p_org: branch.organization_id, p_branch: branch.id, p_domain: domain })
   if (permission.error || !permission.data) return Response.json({ error: "Akses dokumen tidak diizinkan." }, { status: 403 })

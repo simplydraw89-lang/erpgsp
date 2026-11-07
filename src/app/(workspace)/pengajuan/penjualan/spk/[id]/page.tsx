@@ -39,7 +39,7 @@ export default async function SpkDetailPage({
       .from("business_units")
       .select("id,code,name,kind")
       .eq("organization_id", organizationId)
-      .eq("kind", "branch")
+      .in("kind", ["branch", "center"])
       .order("code"),
     supabase.rpc("spk_review_allowed", { p_id: id }),
     supabase.rpc("spk_edit_allowed", { p_id: id }),

@@ -13,7 +13,7 @@ export default async function ProjectPortalPage({ searchParams }: { searchParams
   const owner = w.actorRole === "owner"
   const [projectResult, branches, profiles, members, setupProjects] = await Promise.all([
     w.supabase.rpc("list_portal_projects", { p_org: w.organizationId }),
-    w.supabase.from("business_units").select("id,name").eq("organization_id", w.organizationId).eq("kind", "branch"),
+    w.supabase.from("business_units").select("id,name").eq("organization_id", w.organizationId).in("kind", ["branch", "center"]),
     w.supabase.from("person_profiles").select("user_id,relationship_status").eq("organization_id", w.organizationId).in("relationship_status", ["client", "consultant", "vendor"]),
     w.supabase.from("project_memberships").select("project_id,user_id,member_type,can_submit,is_active").eq("organization_id", w.organizationId),
     owner ? w.supabase.from("crm_projects").select("id,code,name,status").eq("organization_id", w.organizationId).order("code") : Promise.resolve({ data: [], error: null }),

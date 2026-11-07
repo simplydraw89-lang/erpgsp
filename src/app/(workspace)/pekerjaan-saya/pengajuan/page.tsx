@@ -17,7 +17,7 @@ export default async function MySubmissionsPage({
   const { supabase, organizationId, user, actorRole, workAssignments } = await requireWorkspace()
   
   // Dapatkan daftar cabang
-  const { data: units } = await supabase.from("business_units").select("id,name").eq("organization_id", organizationId).eq("kind", "branch").order("name")
+  const { data: units } = await supabase.from("business_units").select("id,name").eq("organization_id", organizationId).in("kind", ["branch", "center"]).order("name")
   const branches = units ?? []
   
   const isCentralUser = actorRole === "owner" || workAssignments.some(j => !j.branch_id && ["president", "finance_director", "accounting_tax", "finance"].includes(j.job_role))

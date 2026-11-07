@@ -9,9 +9,9 @@ import { initializePurchasing } from "../../actions"
 import { calendarDate } from "@/lib/dashboard"
 export default async function NewPurchasePage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
   const q = await searchParams
-  const { supabase, organizationId, user, actorRole, isReadOnlyPreview } = await requireWorkspace()
+  const { supabase, organizationId, user, actorRole, isReadOnlyPreview, workAssignments } = await requireWorkspace()
   const [units, jobs, vendors, accounts, periods] = await Promise.all([
-    supabase.from("business_units").select("id,code,name,kind,entity_id").eq("organization_id", organizationId).eq("kind", "branch"),
+    supabase.from("business_units").select("id,code,name,kind,entity_id").eq("organization_id", organizationId).in("kind", ["branch", "center"]),
     supabase.from("work_assignments").select("branch_id").eq("organization_id", organizationId).eq("user_id", user.id),
     supabase.from("procurement_vendors").select("*").eq("organization_id", organizationId).eq("status", "approved"),
     supabase.from("finance_accounts").select("id,code,name,account_type,posting_category,is_postable").eq("organization_id", organizationId).eq("is_active", true).eq("is_postable", true).order("code"),
@@ -23,7 +23,8 @@ export default async function NewPurchasePage({ searchParams }: { searchParams: 
     console.error("purchase_form_reference_query_failed", errors.map((error,index) => error ? { source:["branches","assignments","vendors","accounts","periods"][index],code:error.code } : null).filter(Boolean))
     throw new Error("Formulir pengajuan gagal dimuat.")
   }
-  const branches = ((units.data ?? []) as BusinessUnit[]).filter(b => actorRole === "owner" || jobs.data?.some(j => j.branch_id === b.id))
+  const central = actorRole === "owner" || (workAssignments ?? []).some(job => !job.branch_id && ["president", "finance_director", "technical_director", "finance", "accounting_tax"].includes(job.job_role))
+  const branches = ((units.data ?? []) as BusinessUnit[]).filter(b => central || (workAssignments ?? []).some(j => j.branch_id === b.id))
   const firstRun = !missing && (!accounts.data?.length || units.data?.some(b => !b.entity_id || !periods.data?.some(p => p.entity_id === b.entity_id))) && actorRole === "owner" ? <Card className="space-y-4 border-brand/20 p-5">
     <h2 className="font-semibold">Siapkan data awal pengajuan pembelian</h2>
     <p className="text-sm leading-6 text-muted">Siapkan pemetaan pusat pelaporan, tiga cabang dan satu bulan pembukuan. Rekomendasi COA berjenjang meliputi aset, liabilitas, ekuitas, penghasilan, beban, penghasilan lain dan penghasilan komprehensif lain. Data yang sudah ada tidak ditimpa; tidak membuat saldo awal atau transaksi.</p>
