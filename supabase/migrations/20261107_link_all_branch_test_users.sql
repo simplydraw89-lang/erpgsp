@@ -33,10 +33,9 @@ begin
   select id into v_jog_id from public.business_units where organization_id = v_org_id and code = 'JOG' limit 1;
   select id into v_jkt_id from public.business_units where organization_id = v_org_id and code = 'JKT' limit 1;
 
-  -- Auto-confirm email user di auth.users agar dapat langsung login
+  -- Auto-confirm email user di auth.users (hanya update email_confirmed_at)
   update auth.users
-  set email_confirmed_at = coalesce(email_confirmed_at, now()),
-      confirmed_at = coalesce(confirmed_at, now())
+  set email_confirmed_at = coalesce(email_confirmed_at, now())
   where email in (
     'adm@sby.test', 'manager@sby.test',
     'dir@keuangan.test', 'adm@fin.test',
