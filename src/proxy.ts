@@ -61,7 +61,14 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  if (!user && request.nextUrl.pathname !== "/login") {
+  const isPublicAuthRoute =
+    request.nextUrl.pathname === "/login" ||
+    request.nextUrl.pathname.startsWith("/forgot-password") ||
+    request.nextUrl.pathname.startsWith("/reset-password") ||
+    request.nextUrl.pathname.startsWith("/auth/callback") ||
+    request.nextUrl.pathname === "/setup"
+
+  if (!user && !isPublicAuthRoute) {
     return redirectWithSession(new URL("/login", request.url))
   }
   if (user && request.nextUrl.pathname === "/login") {
