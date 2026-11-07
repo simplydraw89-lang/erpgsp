@@ -132,10 +132,10 @@ export default async function SpkDetailPage({
             </div>
           </div>
           <Link
-            href={`/portal-proyek?project=${createdProject.id}`}
+            href={`/proyek/${createdProject.id}`}
             className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-800"
           >
-            Buka Portal Proyek <ArrowRight size={16} />
+            Buka Manajemen Proyek <ArrowRight size={16} />
           </Link>
         </div>
       )}

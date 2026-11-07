@@ -200,10 +200,10 @@ export const applicationGroups = [
       },
       {
         name: "Proyek",
-        href: "/modul/crm?type=project",
+        href: "/proyek",
         icon: BriefcaseBusiness,
         roles: everyone,
-        description: "Daftar proyek dan klien terkait",
+        description: "Manajemen perencanaan proyek, SDM, timesheet, RAB, dan eksekusi lapangan",
       },
       {
         name: "Kontak",

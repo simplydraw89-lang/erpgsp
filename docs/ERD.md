@@ -254,7 +254,16 @@ erDiagram
 
 `sales_clients` dan `sales_documents` adalah model baru; bukan alias otomatis tabel CRM legacy. SPK merujuk SPH ready/accepted untuk klien/cabang yang sama, dengan pemeriksaan kepemilikan pengaju atau override Super Admin. SPH mendapat `sph_number` melalui trigger dan counter transaksional privat `gsp_private.sph_counters`, satu urutan per perusahaan lintas cabang tanpa reset periode. Increment ikut rollback, nomor immutable dan SPH bernomor tidak dapat dihapus. Berkas manual memakai `procurement_attachments` domain `sales`, tanpa OCR otomatis; RPC `attach_sales_document` hanya menambahkan lampiran pada draft milik pengaju atau Super Admin, dengan validasi organisasi/cabang/domain dan audit.
 
-Kebutuhan sambungan berikutnya: proyek berasal dari SPK, draft wajib menyertakan manpower nyata dan ditampilkan pada Pekerjaan saya para anggota. Dokumen RAB, teknis pekerjaan dan timesheet dibuat manual lalu diunggah. Saat ini belum ada FK SPK→CRM project, tabel manpower proyek internal atau pengaitan berkas RAB/timesheet; kebutuhan tersebut tidak dinyatakan terimplementasi oleh migration penomoran. Akses portal proyek eksternal memerlukan proyek aktif, membership aktif dan profil hubungan yang sesuai. Informasi internal tidak ikut terbuka karena seorang klien memperoleh akses proyek.
+### Pembaruan Manajemen Proyek (7 November 2026):
+Relasi dan siklus hidup proyek telah diimplementasikan penuh:
+1. SPK yang disetujui oleh Direktur Utama / Direktur Teknis memicu pembuatan entitas di `crm_projects` dengan kode otomatis dan status persetujuan `draft`.
+2. Admin Cabang dan Manager Cabang melengkapi:
+   - `manpower` (JSONB): Nama, role, sertifikasi, dan durasi kerja.
+   - `work_details` (TEXT): Rincian teknis dan kebutuhan pengerjaan.
+   - `timesheet_schedule` (JSONB): Tahapan milestone pekerjaan, rentang tanggal, dan PIC.
+   - `rab_breakdown` (JSONB) & `rab_total` (NUMERIC): Pos anggaran biaya langsung/tidak langsung beserta perhitungan margin.
+   - `attachment_ids` (UUID[]): Dokumen KAK/TOR dan lampiran berkas RAB privat.
+3. Status pengajuan `director_review` diverifikasi oleh Direksi dan disahkan (ACC) oleh Direktur Utama menjadi status `active`, mengunci pagu anggaran sebagai acuan pengeluaran operasional/pembelian proyek.
 
 ## Kontrak transaksi aplikasi
 

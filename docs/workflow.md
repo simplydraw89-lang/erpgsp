@@ -29,7 +29,7 @@ Klik modul dari dashboard untuk membukanya di tab baru; dashboard tetap tersedia
 - **Cuti** dan **Perjalanan dinas** tersedia pada kelompok Pengajuan sebagai menu awal; formulir, penyimpanan dan persetujuan belum aktif sampai aturan lanjutannya ditentukan.
 - **Pengajuan Penjualan** (`/pengajuan/penjualan`) membuka popup **Klien**, **SPH**, dan **SPK**. Masing-masing mempunyai halaman tersendiri; SPH dan SPK membuka daftar. Pilih **Buat SPH** untuk formulir baru. Setelah simpan/submit, kembali ke daftar SPH cabang. Sesudah Direktur Keuangan menyetujui, pengaju/Super Admin dapat memilih **Buat SPK** pada daftar untuk membuka persiapan form dengan referensi SPH. Rincian form SPK menunggu arahan. Surat dibuat manual dan diunggah sebagai PDF/PNG/JPEG maksimal 10 MB per berkas, privat tanpa OCR otomatis.
 - Nomor SPH berurutan satu perusahaan lintas cabang mulai 1 tanpa reset periode. Kegagalan transaksi tidak menghabiskan nomor. Nomor tidak dapat diedit dan dokumen bernomor tidak dapat dihapus; akses cabang tetap membatasi nomor/dokumen yang terlihat bagi tiap pengguna.
-- Tahap berikutnya: setelah dokumen penjualan lengkap, buat proyek berdasarkan SPK dengan manpower pada draft; proyek masuk Pekerjaan saya anggota yang ditugaskan. Dokumen RAB, teknis pekerjaan dan timesheet sementara dibuat manual lalu diunggah. Sambungan proyek/unggahan tersebut belum tersedia pada revisi pemisahan menu penjualan.
+- Proyek dibuat otomatis berstatus draft setelah SPK disetujui, dilengkapi tim SDM, rincian teknis, timesheet, dan RAB oleh cabang, lalu diverifikasi oleh Direktur Utama (lihat bagian Alur Manajemen Proyek di bawah).
 - Halaman, pengambilan data, formulir dan server actions penjualan dipisahkan dari pembelian. Infrastruktur identitas, pembatasan cabang dan lampiran privat dapat dipakai bersama. Penyesuaian penjualan tidak menambah formulir atau prasyarat ke pembelian.
 - Tautan lama `/pengajuan?view=...` diarahkan ke halaman domain yang sesuai, dengan pesan berhasil/gagal dipertahankan. Pintasan pembelian dan penjualan tersedia terpisah pada navigasi aplikasi.
 
@@ -105,3 +105,33 @@ Jika record resmi telah berubah sejak formulir atau usulan dibuat, sistem menola
 `node scripts/verify-workflow-ui.cjs` memerlukan Playwright pada module search path dan Chrome terpasang. Harness memakai database lokal dan endpoint Supabase-compatible pada port 54329, lalu Next.js terisolasi pada port 3100. Browser dan server memakai fixture tersebut; tidak ada akun/data produksi yang digunakan. Tes mencakup pembuatan aset, penyimpanan edit sebelum pengajuan, pemeriksa berbeda, eksekusi, serta penolakan–revisi–pengajuan ulang–eksekusi perubahan aset. Port 3000 tetap dipakai aplikasi utama.
 
 PGlite memiliki satu koneksi eksekusi; tes ini tidak menggantikan pengujian kontensi multi-koneksi pada PostgreSQL deployment. Row lock, unique constraints dan transaksi tersedia di migration; pengujian deployment/advisor tetap perlu dilakukan setelah akses project aktif tersedia.
+
+
+### Alur Manajemen Proyek: SPK Disetujui → Mobilisasi Cabang → Verifikasi Direksi
+
+1. **Pembentukan Otomatis Proyek Draft:**
+   - Setelah SPK disetujui oleh Direktur Utama atau Direktur Teknis, sistem mengeksekusi `api_decide_spk`, secara otomatis membentuk proyek di `crm_projects` dengan kode unik `PRJ/{CLIENT}/{CABANG}/{MMYY}.{SEQ}`.
+   - Proyek baru diberi status awal `draft` (`approval_status = 'draft'`), menautkan `spk_id`, `client_id`, `branch_id`, dan nilai kontrak SPK.
+
+2. **Perencanaan & Mobilisasi di Tingkat Cabang (`/proyek/[id]`):**
+   - Admin Cabang dan Manager Cabang membuka detail proyek dan mengisi 5 tab kelengkapan:
+     - **Tab 1 (Man Power / SDM):** Alokasi Project Manager, Tenaga Ahli (KTPA, ATPA, Sipil, K3, dsb.), surveyor lapangan, dan drafter.
+     - **Tab 2 (Teknis & Deliverables):** Deskripsi detail teknis pelaksanaan, metodologi kerja, kebutuhan peralatan/logistik lapangan, dan laporan akhir.
+     - **Tab 3 (Jadwal & Timesheet):** Pembagian tahapan (milestones: persiapan, sampling lapangan, uji laboratorium, sidang dinas) beserta rentang tanggal dan PIC.
+     - **Tab 4 (Rencana Anggaran Biaya - RAB):** Pengisian pos biaya personil, non-personil, laboratorium, dan operasional. Sistem otomatis mengkalkulasi total RAB dan estimasi persentase *Gross Profit Margin* terhadap nilai SPK.
+     - **Tab 5 (Lampiran Pendukung):** Mengunggah file KAK/TOR, penawaran lab, dan berkas RAB detail (maksimal 10 MB per berkas PDF/PNG/JPEG).
+   - Pengaju dapat memilih **Simpan Draft Perencanaan** sewaktu-waktu.
+   - Setelah data lengkap, Manager Cabang menekan **Ajukan ke Direktur Utama (Submit)**, mengubah status menjadi `director_review`.
+
+3. **Verifikasi & Keputusan Jajaran Direksi:**
+   - Proyek yang diajukan masuk ke antrean Review Direksi (`/proyek?tab=review`).
+   - **Direktur Teknis:** Meninjau metodologi teknis, sertifikasi tenaga ahli, dan kecukupan jadwal tahapan.
+   - **Direktur Keuangan:** Meninjau kelayakan margin laba kotor proyek dan efisiensi pos anggaran biaya.
+   - **Direktur Utama (President):** Mengambil putusan resmi:
+     - **Setujui & Aktifkan Proyek (ACC):** Status berubah menjadi `active`. Seluruh pos RAB terkunci sebagai Pagu Anggaran (Budget Baseline).
+     - **Minta Revisi:** Status menjadi `revision_requested` disertai catatan arahan wajib; proyek dikembalikan ke cabang untuk diperbaiki.
+     - **Tolak Proyek:** Status menjadi `rejected` (`status = 'cancelled'`).
+
+4. **Eksekusi Lapangan & Kontrol Pagu Anggaran:**
+   - Proyek aktif dapat diakses melalui Portal Proyek (`/portal-proyek`) untuk komunikasi berkala dan Minutes of Meeting (MoM).
+   - Pengajuan pembelian barang/jasa atau kasbon lapangan yang memilih proyek tersebut akan diverifikasi terhadap pagu pos RAB yang telah disetujui Direktur Utama untuk mencegah *cost overrun*.

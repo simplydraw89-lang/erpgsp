@@ -132,8 +132,31 @@ Pencatatan pembayaran membutuhkan tanggal aktual, referensi bukti, akun kas/bank
 - SAL-02b: Daftar SPH meliputi seluruh pengaju dalam cakupan cabang, tanpa filter pembuat: nomor urut tabel, nomor SPH, tanggal dibuat, judul singkat, lingkup, nilai, status/posisi pemeriksa dan tindakan Buat SPK. Ringkasan rekan tidak membuka detail, catatan, audit atau lampiran. Detail hanya pengaju dengan akses cabang yang masih aktif, pemeriksa tahap aktif atau Super Admin. Batas ini berlaku pada RLS, RPC, Storage dan jalur legacy. Daftar dipaginasi 50 baris dengan filter cabang dan jumlah total. Pengajuan saya tetap memakai filter pembuat.
 - SAL-02c: Notifikasi di dalam aplikasi menampilkan Butuh persetujuan saya untuk pemeriksa tahap aktif. Sesudah Direktur menyetujui, Revisi atau Tolak, pengaju menerima SPH perlu tindak lanjut beserta status/catatan. Sumber notifikasi adalah status dokumen dan penugasan terkini, bukan daftar penerima yang menjadi usang ketika akses dicabut. Lonceng diperbarui saat dibuka, tab kembali fokus atau tiap 30 detik selama tab terlihat; kegagalan terlihat. Antrean dashboard/Persetujuan tetap tersedia. Tidak ada email/WhatsApp/push eksternal pada tahap ini.
 - SAL-03: Setelah Direktur Keuangan menyetujui, status ready/Disetujui memungkinkan pengaju atau Super Admin memilih Buat SPK. Ini menggantikan syarat approval Accounting–Tax/Finance dan syarat penerimaan bilateral sebelum persiapan SPK. Bukti kesepakatan klien tetap informasi tersendiri, tidak dianggap terjadi karena status deal atau approval internal. Buat SPK menuju `/pengajuan/penjualan/spk/baru?sph=...` dengan referensi SPH terverifikasi; menu SPK menuju daftar SPK. Rincian form SPK menunggu arahan berikutnya; halaman baru baru menyiapkan konteks SPH, belum membuat kontrak. Dokumen manual memakai unggah privat PDF/PNG/JPEG maksimal 10 MB per berkas, tanpa OCR otomatis.
-- SAL-05: setelah penjualan lengkap, proyek dibuat berdasarkan SPK. Form/draft proyek wajib memilih manpower/SDM nyata. Proyek muncul pada Pekerjaan saya setiap pengguna yang ditugaskan, dengan pembatasan cabang/proyek pada database. RAB, teknis pekerjaan dan timesheet sementara memakai dokumen manual yang diunggah; menu tambahan berkembang bertahap. Ini kebutuhan tahap sambungan proyek, belum dianggap tersedia hanya karena halaman penjualan terpisah.
+- SAL-05: Penjualan SPK yang disetujui memicu pembuatan proyek otomatis berstatus draft yang kemudian dikelola melalui modul Manajemen Proyek (lihat bagian PRJ di bawah).
 - SAL-04: portal proyek memuat permintaan data/tanggapan, status proses, MoM, dokumentasi, surat-menyurat dan informasi tagihan yang dibagikan. Akses per proyek aktif dan penerima internal/eksternal. Unggah berkas portal, percakapan berutas, notifikasi dan otomatisasi invoice adalah pengembangan berikutnya.
+
+
+## PRJ — Manajemen Proyek dan Perencanaan Lapangan (RAB, Manpower, Timesheet, Verifikasi Direksi)
+
+- **PRJ-01 (Pembentukan Otomatis dari SPK):** Saat SPK disetujui (ACC) oleh Direktur Utama atau Direktur Teknis, entitas proyek baru di `crm_projects` otomatis dibentuk dengan kode resmi `PRJ/{CLIENT}/{CABANG}/{MMYY}.{SEQ}`. Status awal proyek adalah `draft` (bukan langsung `active`). Proyek menautkan `spk_id`, `client_id`, `branch_id`, dan `contract_amount` dari SPK.
+- **PRJ-02 (Perencanaan & Mobilisasi Cabang):** Proyek berstatus draft masuk ke antrean kerja Admin Cabang dan Manager Cabang untuk dilengkapi melalui formulir terpadu (`/proyek/[id]`):
+  1. **Tim SDM / Man Power:** Daftar personil nyata meliputi Project Manager (PM) / Team Leader, Tenaga Ahli (KTPA/ATPA/Sipil/dll.), serta surveyor/drafter, termasuk sertifikasi dan estimasi durasi kerja.
+  2. **Rincian Teknis & Deliverables:** Uraian metodologi teknis, kebutuhan alat/logistik lapangan, dan produk dokumen akhir (Amdal, UKL-UPL, Pertek, Andalalin, dll.).
+  3. **Jadwal & Timesheet Milestones:** Tahapan pengerjaan (sampling, pengujian lab, draf laporan, sidang dinas) beserta tanggal mulai, target selesai, dan PIC.
+  4. **Rencana Anggaran Biaya (RAB Proyek):** Rincian pos belanja (biaya personil, non-personil, uji lab, sidang perizinan, operasional) dengan volume, satuan, dan harga satuan. Sistem menghitung total RAB dan estimasi *Gross Profit Margin* terhadap nilai SPK secara real-time.
+  5. **Lampiran Dokumen Teknis & RAB:** Unggahan dokumen pendukung (KAK/TOR, penawaran lab rekanan, draft RAB detail format Excel) berkapasitas maksimal 10 MB per berkas.
+- **PRJ-03 (Verifikasi Direksi & Pengesahan Direktur Utama):**
+  - Setelah data lengkap, Manager Cabang melakukan pengajuan (Submit) proyek ke jajaran Direksi (`approval_status = 'director_review'`).
+  - Direktur Teknis memverifikasi kesiapan tim ahli dan jadwal metodologi kerja.
+  - Direktur Keuangan mengevaluasi kelayakan margin laba kotor RAB vs Kontrak SPK.
+  - **Direktur Utama (President)** memiliki wewenang eksekusi akhir:
+    - **Setujui Proyek (ACC):** Mengubah status proyek menjadi `active`.
+    - **Minta Revisi:** Mengembalikan draf ke cabang (`approval_status = 'revision_requested'`) dengan catatan arahan wajib.
+    - **Tolak Proyek:** Membatalkan proyek (`approval_status = 'rejected'`).
+- **PRJ-04 (Pagu Anggaran RAB Terkunci / Budget Baseline):**
+  - Saat Direktur Utama menyetujui proyek, seluruh pos rincian RAB terkunci sebagai Pagu Anggaran (Budget Baseline).
+  - Pengajuan Pembelian (`purchase_requests`) dan Kasbon operasional yang ditautkan ke proyek wajib mengacu pada pagu pos anggaran terkait guna mencegah pembengkakan biaya (*cost overrun*).
+- **PRJ-05 (Portal Proyek Kolaboratif):** Proyek yang telah aktif terintegrasi dengan Portal Proyek (`/portal-proyek`) untuk surat-menyurat, Minutes of Meeting (MoM), dan pertukaran informasi teknis dengan pihak eksternal (Klien/Konsultan/Vendor).
 
 ## Kriteria penerimaan dan status
 

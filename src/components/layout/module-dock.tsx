@@ -12,6 +12,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   BriefcaseBusiness,
+  FolderKanban,
   ContactRound,
   Home,
   LayoutGrid,
@@ -41,6 +42,7 @@ export function ModuleDock({ role, navigationRoles = [role] }: { role: Organizat
     ...(navigationRoles.length ? [
       { href: "/pengajuan/pembelian", label: "Pembelian", icon: ClipboardCheck },
       { href: "/pengajuan/penjualan", label: "Penjualan", icon: BriefcaseBusiness },
+      { href: "/proyek", label: "Proyek", icon: FolderKanban },
       { href: "/vendor", label: "Vendor", icon: ContactRound },
       { href: "/pekerjaan-saya", label: "Pekerjaan saya", icon: ClipboardList },
       { href: "/approvals", label: "Persetujuan", icon: ClipboardCheck },
