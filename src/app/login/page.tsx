@@ -1,6 +1,4 @@
-import { NavigationLink as Link } from "@/components/ui/navigation-link"
-import { Activity } from "lucide-react"
-import { Card } from "@/components/ui/card"
+import Image from "next/image"
 import { LoginForm } from "./login-form"
 
 export default async function LoginPage({
@@ -15,24 +13,32 @@ export default async function LoginPage({
       : undefined
 
   return (
-    <main className="grid min-h-screen place-items-center px-5 py-12">
-      <Card className="w-full max-w-md p-7 md:p-9">
-        <Link href="/" className="mb-8 inline-flex items-center gap-3">
-          <span className="flex size-11 items-center justify-center rounded-xl bg-brand text-white">
-            <Activity size={21} />
-          </span>
-          <span>
-            <span className="block text-sm font-bold text-ink">GSP Group</span>
-            <span className="block text-xs text-muted">Enterprise workspace</span>
-          </span>
-        </Link>
-        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-brand">Selamat datang</p>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight">Masuk ke workspace</h1>
-        <p className="mt-2 text-sm leading-6 text-muted">
-          Gunakan akun perusahaan Anda. Hak akses dan organisasi diverifikasi dari Supabase.
-        </p>
+    <main className="portal-background flex h-dvh w-full items-center justify-center overflow-hidden p-4">
+      <div className="w-full max-w-[390px] rounded-[28px] border border-slate-200/80 bg-white/95 px-6 py-6 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.08)] backdrop-blur-md sm:px-8 sm:py-7">
+        <div className="flex flex-col items-center text-center">
+          {/* Top Logo Badge - circular with shadow */}
+          <div className="mb-2.5 flex size-16 items-center justify-center rounded-full border border-slate-100 bg-white p-2 shadow-[0_6px_20px_rgba(0,0,0,0.06)]">
+            <Image
+              src="/gsp-brand-logo.jpg"
+              alt="PT. Global Solusi Prima"
+              width={80}
+              height={80}
+              priority
+              unoptimized
+              className="h-full w-full object-contain select-none"
+            />
+          </div>
+
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+            Welcome Back
+          </h1>
+          <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+            Sign In to Continue
+          </p>
+        </div>
+
         <LoginForm initialError={initialError} />
-      </Card>
+      </div>
     </main>
   )
 }

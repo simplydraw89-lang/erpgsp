@@ -50,6 +50,8 @@ export function PurchaseForm({ branches, vendors, accounts, purchase, disabled =
   const [invoiceDate, setInvoiceDate] = useState(purchase?.invoice_date ?? "")
   const [vendorName, setVendorName] = useState(purchase?.vendor_snapshot?.name ?? "")
   const [vendorAddress, setVendorAddress] = useState(purchase?.vendor_snapshot?.address ?? "")
+  const [newVendorName, setNewVendorName] = useState(purchase?.vendor_snapshot?.name ?? "")
+  const [newVendorAddress, setNewVendorAddress] = useState(purchase?.vendor_snapshot?.address ?? "")
   const [vendorNpwp, setVendorNpwp] = useState("")
   const [vendorBankOwner, setVendorBankOwner] = useState("")
   const [vendorBankAccount, setVendorBankAccount] = useState("")
@@ -99,6 +101,7 @@ export function PurchaseForm({ branches, vendors, accounts, purchase, disabled =
 
     if (data.vendor_name) {
       setVendorName(data.vendor_name)
+      setNewVendorName(data.vendor_name)
       // Auto-match vendor in current branch
       const extractedNorm = cleanOrgName(data.vendor_name)
       if (extractedNorm) {
@@ -110,13 +113,13 @@ export function PurchaseForm({ branches, vendors, accounts, purchase, disabled =
         if (match) {
           setVendorId(match.id)
           setShowProposeVendor(false)
-          if (!data.vendor_address && match.address) setVendorAddress(match.address)
+          if (!data.vendor_address && match.address) { setVendorAddress(match.address); setNewVendorAddress(match.address); }
         } else {
           setShowProposeVendor(true)
         }
       }
     }
-    if (data.vendor_address) setVendorAddress(data.vendor_address)
+    if (data.vendor_address) { setVendorAddress(data.vendor_address); setNewVendorAddress(data.vendor_address); }
     if (data.vendor_npwp) setVendorNpwp(data.vendor_npwp)
     if (data.bank_owner) setVendorBankOwner(data.bank_owner)
     if (data.bank_account) setVendorBankAccount(data.bank_account)
@@ -151,7 +154,8 @@ export function PurchaseForm({ branches, vendors, accounts, purchase, disabled =
             }
             if (picked) {
               setVendorName(picked.name)
-              if (picked.address) setVendorAddress(picked.address)
+              setNewVendorName(picked.name)
+              if (picked.address) { setVendorAddress(picked.address); setNewVendorAddress(picked.address); }
               if (picked.npwp) setVendorNpwp(picked.npwp)
               if (picked.bank_owner) setVendorBankOwner(picked.bank_owner)
               if (picked.bank_account) setVendorBankAccount(picked.bank_account)
@@ -171,8 +175,8 @@ export function PurchaseForm({ branches, vendors, accounts, purchase, disabled =
             </summary>
           <p className="mt-3 text-sm leading-6 text-muted">Lengkapi identitas dan rekening vendor. Data dari OCR invoice otomatis disalin ke bawah ini. Klik Ajukan vendor ke Finance jika vendor belum pernah didaftarkan sebelumnya.</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label className={label}>Nama vendor<input name="new_vendor_name" value={vendorName} onChange={e => setVendorName(e.target.value)} maxLength={200} className={input} /></label>
-            <label className={label}>Alamat vendor<input name="new_vendor_address" value={vendorAddress} onChange={e => setVendorAddress(e.target.value)} maxLength={1000} className={input} /></label>
+            <label className={label}>Nama vendor<input name="new_vendor_name" value={newVendorName} onChange={e => setNewVendorName(e.target.value)} maxLength={200} className={input} /></label>
+            <label className={label}>Alamat vendor<input name="new_vendor_address" value={newVendorAddress} onChange={e => setNewVendorAddress(e.target.value)} maxLength={1000} className={input} /></label>
             <label className={label}>NPWP / identitas perpajakan<input name="new_vendor_npwp" value={vendorNpwp} onChange={e => setVendorNpwp(e.target.value)} maxLength={200} className={input} /></label>
             <label className={label}>Nama pemilik rekening<input name="new_vendor_bank_owner" value={vendorBankOwner} onChange={e => setVendorBankOwner(e.target.value)} maxLength={200} className={input} /></label>
             <label className={label}>Nomor rekening<input name="new_vendor_bank_account" value={vendorBankAccount} onChange={e => setVendorBankAccount(e.target.value)} maxLength={200} className={input} /></label>

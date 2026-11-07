@@ -1,4 +1,4 @@
-﻿import { execFile } from "node:child_process"
+import { execFile } from "node:child_process"
 import { mkdtemp, writeFile, rm, readFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
@@ -311,7 +311,8 @@ Ekstrak bidang-bidang berikut jika ditemukan:
 
 Hanya berikan JSON valid tanpa pembungkus markdown apapun.`
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+    const modelName = process.env.GEMINI_MODEL?.trim() || "gemini-1.5-flash"
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -344,9 +345,10 @@ Hanya berikan JSON valid tanpa pembungkus markdown apapun.`
     const content = data?.candidates?.[0]?.content?.parts?.[0]?.text
     if (!content) return null
 
-    const parsed = JSON.parse(content)
+    const cleaned = content.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim()
+    const parsed = JSON.parse(cleaned)
     return {
-      text: parsed.text || "Ekstraksi AI Gemini 1.5 Flash",
+      text: parsed.text || "Ekstraksi AI Gemini Vision",
       warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
       invoice_number: parsed.invoice_number || undefined,
       invoice_date: parsed.invoice_date || undefined,
@@ -373,6 +375,27 @@ Hanya berikan JSON valid tanpa pembungkus markdown apapun.`
 }
 
 export async function extractDocument(bytes: Buffer, extension: string) {
+  const mimeMap: Record<string, string> = {
+    pdf: "application/pdf",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+  }
+
+  // 1. Prioritize Gemini AI Vision when configured
+  if (process.env.GEMINI_API_KEY?.trim() && mimeMap[extension]) {
+    try {
+      const geminiResult = await extractWithGemini(bytes, mimeMap[extension])
+      if (geminiResult) {
+        return { extracted: geminiResult, method: "gemini_vision" }
+      }
+    } catch (e) {
+      console.warn("Gemini Vision processing error, falling back:", e)
+    }
+  }
+
+  // 2. Native PDF Text Extraction
   if (extension === "pdf") {
     try {
       const result = await extractPdfText(bytes)
@@ -383,6 +406,8 @@ export async function extractDocument(bytes: Buffer, extension: string) {
       }
     } catch { /* Scanned or unsupported PDFs use the local raster OCR below. */ }
   }
+
+  // 3. Fallback Local Windows OCR
   if (process.platform !== "win32") return { warning: "Dokumen tersimpan privat. OCR lokal memerlukan Windows dengan bahasa OCR terpasang; isi data manual." }
   if (ocrRunning) return { warning: "Dokumen tersimpan privat. OCR lokal sedang membaca dokumen lain; gunakan Baca ulang setelah proses selesai." }
   ocrRunning = true

@@ -98,6 +98,6 @@ export const requireWorkspace = cache(async function requireWorkspace() {
     isReadOnlyPreview: viewAs.isActive,
     isPreviewInvalid: viewAs.isInvalid,
     organizationId: membership.organization_id as string,
-    organizationName: organization.name as string,
+    organizationName: (organization.name === "Gema Sinergi Peradaban" || organization.name === "PT Gema Sinergi Peradaban" || !organization.name) ? "PT. Global Solusi Prima" : (organization.name as string),
   }
 })
