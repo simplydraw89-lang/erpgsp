@@ -9,6 +9,7 @@ import { BusinessSummary } from "@/components/dashboard/business-summary"
 import { loadBusinessSummary } from "@/lib/business-summary"
 import { PersonalNav } from "@/components/workflow/personal-nav"
 import { loadDirectorDashboard } from "@/lib/director-dashboard"
+import { SphConversionChart } from "@/components/dashboard/sph-conversion-chart"
 import { BranchReportView } from "@/components/director/branch-report-view"
 import { HistoricalFinancialChart } from "@/components/director/historical-financial-chart"
 import { ActiveProjectsSection } from "@/components/director/active-projects-section"
@@ -232,6 +233,7 @@ export default async function MyWorkPage({
 
           {/* 3 & 4. Penjualan Butuh Verifikasi & Ringkasan Kinerja Penjualan */}
           <div className="pt-6 border-t border-line space-y-6">
+            {directorData.sphConversion && <SphConversionChart summary={directorData.sphConversion} />}
             <SalesKpiCards kpi={directorData.salesKpi} />
 
             {/* Pemisahan Menu/Tab Penjualan: SPH Sendiri & SPK Sendiri */}

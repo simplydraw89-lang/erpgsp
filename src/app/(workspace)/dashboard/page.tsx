@@ -5,9 +5,19 @@ import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import { ApplicationGrid } from "@/components/dashboard/application-grid"
 import { BusinessSummary } from "@/components/dashboard/business-summary"
 import { loadBusinessSummary } from "@/lib/business-summary"
+import { SphConversionChart } from "@/components/dashboard/sph-conversion-chart"
+import { loadSphConversionSummary } from "@/lib/director-dashboard"
 
 export default async function DashboardPage() {
-  const { supabase, organizationId, user, role, navigationRoles, relationshipStatus } = await requireWorkspace()
+  const { supabase, organizationId, user, role, navigationRoles, relationshipStatus, actorRole, workAssignments } = await requireWorkspace()
+  const isExecutive =
+    role === "owner" ||
+    role === "director" ||
+    actorRole === "owner" ||
+    actorRole === "director" ||
+    workAssignments?.some((j: any) =>
+      ["president", "finance_director", "technical_director"].includes(j.job_role)
+    )
   if (!navigationRoles.length) return <div className="space-y-6">
     <section className="portal-summary"><h1 className="text-xl font-semibold">Ruang pribadi & proyek Anda</h1>
       <p className="mt-2 text-sm text-slate-600">Hubungan dengan perusahaan: {relationshipStatus === "client" ? "Klien" : relationshipStatus === "vendor" ? "Vendor" : "Konsultan / tenaga ahli"}.</p>
@@ -16,6 +26,7 @@ export default async function DashboardPage() {
     </section><ApplicationGrid role={role} navigationRoles={navigationRoles} />
   </div>
   const businessSummaryPromise = loadBusinessSummary(supabase, organizationId)
+  const sphConversionPromise = isExecutive ? loadSphConversionSummary(supabase, organizationId) : Promise.resolve(null)
   const today = calendarDate()
   const canReadTaxes = recordSpecs.tax_record.readers.includes(role)
   const canReadPayments = recordSpecs.payment.readers.includes(role)
@@ -102,9 +113,10 @@ export default async function DashboardPage() {
     || isWorkflowMissing(nextPayment.error)
     || isWorkflowMissing(latePayments.error)
   const rejectedCount = rejected.count ?? 0
-  const businessSummary = await businessSummaryPromise
+  const [businessSummary, sphConversion] = await Promise.all([businessSummaryPromise, sphConversionPromise])
   return (
     <div className="space-y-6">
+      {sphConversion && <SphConversionChart summary={sphConversion} />}
       <BusinessSummary summary={businessSummary} />
       <section
         aria-label="Ringkasan pribadi"

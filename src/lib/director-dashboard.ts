@@ -35,7 +35,38 @@ export type SalesKpiSummary = {
   conversionRate: number // percentage
 }
 
+export type SphConversionYearly = {
+  year: number
+  penawaranNominal: number
+  dealNominal: number
+  percentageDeal: number
+  penawaranCount: number
+  dealCount: number
+  percentageCount: number
+}
+
+export type SphConversionSummary = {
+  yearlyData: SphConversionYearly[]
+  currentYearConversion: {
+    penawaranNominal: number
+    dealNominal: number
+    percentageDeal: number
+    penawaranCount: number
+    dealCount: number
+    percentageCount: number
+  }
+  allTimeConversion: {
+    penawaranNominal: number
+    dealNominal: number
+    percentageDeal: number
+    penawaranCount: number
+    dealCount: number
+    percentageCount: number
+  }
+}
+
 export type DirectorDashboardData = {
+  sphConversion?: SphConversionSummary
   financialSummary: {
     consolidated: BranchFinancialSummary
     byBranch: BranchFinancialSummary[]
@@ -297,6 +328,7 @@ export async function loadDirectorDashboard(
   const sphSent = sphList.filter((s) => s.status !== "draft").length
   const totalSpk = spkList.length
   const conversionRate = sphSent > 0 ? Math.round((totalSpk / sphSent) * 100) : 0
+  const sphConversion = await loadSphConversionSummary(supabase, organizationId)
 
   return {
     financialSummary: {
@@ -314,6 +346,102 @@ export async function loadDirectorDashboard(
       sphSent,
       totalSpk,
       conversionRate,
+    },
+  }
+}
+
+export async function loadSphConversionSummary(
+  supabase: Supabase,
+  organizationId: string
+): Promise<SphConversionSummary> {
+  const currentYear = new Date().getFullYear()
+
+  // Baseline data historis 3 tahun dari laporan eksekutif (2022, 2023, 2024)
+  const baselineYears: Record<number, { penawaran: number; deal: number; penawaranCount: number; dealCount: number }> = {
+    2022: { penawaran: 4760000000, deal: 3400000000, penawaranCount: 14, dealCount: 10 },
+    2023: { penawaran: 41032650000, deal: 6823000000, penawaranCount: 48, dealCount: 8 },
+    2024: { penawaran: 71878103000, deal: 16157800000, penawaranCount: 89, dealCount: 20 },
+  }
+
+  const { data: salesDocs } = await supabase
+    .from("sales_documents")
+    .select("id, kind, status, amount, created_at, accepted_sph_id, project_id")
+    .eq("organization_id", organizationId)
+    .not("status", "eq", "rejected")
+
+  const docs = salesDocs ?? []
+
+  const targetYears = [2022, 2023, 2024]
+  if (!targetYears.includes(currentYear)) {
+    targetYears.push(currentYear)
+  }
+
+  const yearlyData: SphConversionYearly[] = targetYears.map((yr) => {
+    const yrSph = docs.filter((s) => {
+      const d = new Date(s.created_at).getFullYear()
+      return d === yr && s.kind === "sph"
+    })
+    const yrSpk = docs.filter((s) => {
+      const d = new Date(s.created_at).getFullYear()
+      return d === yr && s.kind === "spk"
+    })
+    const yrAcceptedSph = docs.filter((s) => {
+      const d = new Date(s.created_at).getFullYear()
+      return d === yr && s.kind === "sph" && s.status === "accepted"
+    })
+
+    const dbPenawaran = yrSph.reduce((sum, s) => sum + (Number(s.amount) || 0), 0)
+    const dbDeal = Math.max(
+      yrSpk.reduce((sum, s) => sum + (Number(s.amount) || 0), 0),
+      yrAcceptedSph.reduce((sum, s) => sum + (Number(s.amount) || 0), 0)
+    )
+
+    const base = baselineYears[yr]
+    const penawaranNominal = dbPenawaran > 0 ? dbPenawaran : (base ? base.penawaran : 0)
+    const dealNominal = dbDeal > 0 ? dbDeal : (base ? base.deal : 0)
+    const penawaranCount = yrSph.length > 0 ? yrSph.length : (base ? base.penawaranCount : 0)
+    const dealCount = Math.max(yrSpk.length, yrAcceptedSph.length) > 0 
+      ? Math.max(yrSpk.length, yrAcceptedSph.length) 
+      : (base ? base.dealCount : 0)
+
+    const percentageDeal = penawaranNominal > 0 ? (dealNominal / penawaranNominal) * 100 : 0
+    const percentageCount = penawaranCount > 0 ? (dealCount / penawaranCount) * 100 : 0
+
+    return {
+      year: yr,
+      penawaranNominal,
+      dealNominal,
+      percentageDeal: Math.round(percentageDeal * 100) / 100,
+      penawaranCount,
+      dealCount,
+      percentageCount: Math.round(percentageCount * 100) / 100,
+    }
+  })
+
+  const totalPenawaran = yearlyData.reduce((sum, y) => sum + y.penawaranNominal, 0)
+  const totalDeal = yearlyData.reduce((sum, y) => sum + y.dealNominal, 0)
+  const totalPenawaranCount = yearlyData.reduce((sum, y) => sum + y.penawaranCount, 0)
+  const totalDealCount = yearlyData.reduce((sum, y) => sum + y.dealCount, 0)
+
+  const currentYearData = yearlyData.find((y) => y.year === currentYear) ?? yearlyData[yearlyData.length - 1]
+
+  return {
+    yearlyData,
+    currentYearConversion: {
+      penawaranNominal: currentYearData.penawaranNominal,
+      dealNominal: currentYearData.dealNominal,
+      percentageDeal: currentYearData.percentageDeal,
+      penawaranCount: currentYearData.penawaranCount,
+      dealCount: currentYearData.dealCount,
+      percentageCount: currentYearData.percentageCount,
+    },
+    allTimeConversion: {
+      penawaranNominal: totalPenawaran,
+      dealNominal: totalDeal,
+      percentageDeal: totalPenawaran > 0 ? Math.round((totalDeal / totalPenawaran) * 10000) / 100 : 0,
+      penawaranCount: totalPenawaranCount,
+      dealCount: totalDealCount,
+      percentageCount: totalPenawaranCount > 0 ? Math.round((totalDealCount / totalPenawaranCount) * 10000) / 100 : 0,
     },
   }
 }
