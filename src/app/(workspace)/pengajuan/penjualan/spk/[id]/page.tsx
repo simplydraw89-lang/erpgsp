@@ -8,8 +8,9 @@ import { SpkEditForm } from "@/components/sales/spk-edit-form"
 import { AttachmentList, type AttachmentItem } from "@/components/sales/attachment-list"
 import { ProcurementMessage } from "@/components/procurement/section-nav"
 import { sphStatusLabels, spkStatusLabels } from "@/lib/sales"
+import { formatCurrency } from "@/lib/money"
 import { type SalesDocument } from "@/lib/procurement-ui"
-import { FolderCheck, ArrowRight, CheckCircle2, Edit3, ShieldAlert } from "lucide-react"
+import { FolderCheck, ArrowRight, CheckCircle2, Edit3 } from "lucide-react"
 
 export default async function SpkDetailPage({
   params,
@@ -20,7 +21,7 @@ export default async function SpkDetailPage({
 }) {
   const { id } = await params
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound()
-  const { supabase, organizationId, workAssignments, isReadOnlyPreview } = await requireWorkspace()
+  const { supabase, organizationId, isReadOnlyPreview } = await requireWorkspace()
 
   const result = await supabase
     .from("sales_documents")
@@ -82,7 +83,6 @@ export default async function SpkDetailPage({
   const createdProject = projectRes.data
   const referencedSph = sphRes.data
 
-  const isFinanceDirector = workAssignments.some((job) => job.job_role === "finance_director")
   const canReview = Boolean(reviewerRes.data)
   const canEdit = Boolean(editorRes.data) && ["director_review", "revision_requested", "draft"].includes(document.status)
 
@@ -101,7 +101,7 @@ export default async function SpkDetailPage({
           Status:{" "}
           <span className="font-semibold text-ink">
             {document.status === "director_review"
-              ? "Menunggu Validasi Direktur Utama / Direktur Teknis"
+              ? "Menunggu Validasi Direksi"
               : document.status === "draft"
               ? "Draft SPK (Belum diajukan)"
               : spkStatusLabels[document.status] ?? sphStatusLabels[document.status] ?? document.status}
@@ -182,6 +182,12 @@ export default async function SpkDetailPage({
             <p className="font-semibold text-ink">{document.client_snapshot?.name || "Klien terdaftar"}</p>
           </div>
           <div>
+            <span className="text-xs font-medium text-muted">Nilai Kontrak / SPK:</span>
+            <p className="font-semibold text-brand">
+              {formatCurrency(document.amount || referencedSph?.amount || 0)}
+            </p>
+          </div>
+          <div>
             <span className="text-xs font-medium text-muted">Diterbitkan Oleh:</span>
             <p className="font-semibold text-ink">
               {document.source === "client" ? "Klien" : "Perusahaan"}
@@ -214,7 +220,7 @@ export default async function SpkDetailPage({
         </div>
       </Card>
 
-      {/* Review Form khusus Direktur Utama / Direktur Teknis */}
+      {/* Review Form khusus Direksi (Direktur Utama, Direktur Keuangan, Direktur Teknis) */}
       {canReview && document.status === "director_review" && (
         <Card className="border-amber-200 bg-amber-50/40 p-5">
           <div className="flex items-center gap-2">
@@ -222,7 +228,7 @@ export default async function SpkDetailPage({
               !
             </span>
             <h2 className="text-lg font-bold text-amber-950">
-              Validasi & Persetujuan SPK (Direktur Utama / Direktur Teknis)
+              Validasi & Persetujuan SPK (Direksi)
             </h2>
           </div>
           <p className="mt-1 text-sm text-amber-800">
@@ -232,23 +238,13 @@ export default async function SpkDetailPage({
         </Card>
       )}
 
-      {/* Info jika dilihat oleh Direktur Keuangan saat menunggu approval */}
-      {isFinanceDirector && !canReview && document.status === "director_review" && (
-        <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 p-4 text-xs text-blue-900">
-          <ShieldAlert size={18} className="text-blue-700 shrink-0" />
-          <p>
-            <strong>Akses Direktur Keuangan:</strong> Anda berwenang mengubah rincian dan lampiran SPK ini melalui formulir di bawah. Hak validasi & persetujuan untuk menerbitkan proyek berada pada Direktur Utama / Direktur Teknis.
-          </p>
-        </div>
-      )}
-
-      {/* Form Edit Rincian SPK untuk Direktur Keuangan / Pengaju */}
+      {/* Form Edit Rincian SPK untuk Direksi / Pengaju */}
       {canEdit && (
         <Card className="p-5">
           <div className="flex items-center gap-2 border-b border-line pb-3">
             <Edit3 size={18} className="text-brand" />
             <h2 className="font-semibold text-ink">
-              {isFinanceDirector ? "Penyesuaian Data SPK oleh Direktur Keuangan" : "Edit Rincian SPK"}
+              {canReview ? "Penyesuaian Data SPK oleh Direksi" : "Edit Rincian SPK"}
             </h2>
           </div>
           <SpkEditForm
@@ -262,8 +258,8 @@ export default async function SpkDetailPage({
             status={document.status}
             disabled={isReadOnlyPreview}
             roleHint={
-              isFinanceDirector
-                ? "Sebagai Direktur Keuangan, Anda dapat memperbarui judul, catatan, dan lampiran berkas SPK ini sebelum divalidasi oleh Direktur Utama / Direktur Teknis."
+              canReview
+                ? "Sebagai Direksi, Anda dapat memperbarui judul, catatan, dan lampiran berkas SPK ini sebelum memvalidasi persetujuan."
                 : undefined
             }
           />
@@ -285,7 +281,7 @@ export default async function SpkDetailPage({
             <li key={event.id} className="border-l-2 border-line pl-4">
               <p className="text-sm font-medium text-ink">
                 {event.action === "submitted_to_director"
-                  ? "SPK diajukan ke Direktur Utama / Direktur Teknis"
+                  ? "SPK diajukan ke Direksi"
                   : event.action === "approved"
                   ? "SPK divalidasi & disetujui · Proyek resmi dibuat otomatis"
                   : event.action === "revision_requested"

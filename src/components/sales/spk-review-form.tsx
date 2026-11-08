@@ -23,7 +23,7 @@ export function SpkReviewForm({
         <input type="hidden" name="version" value={version} />
 
         <label className={label}>
-          Keputusan Validasi (Direktur Utama / Direktur Teknis)
+          Keputusan Validasi SPK (Direksi)
           <select
             name="decision"
             value={decision}

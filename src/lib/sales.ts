@@ -8,7 +8,7 @@ export const sphStatusLabels: Record<string, string> = {
 
 export const spkStatusLabels: Record<string, string> = {
   draft: "Draft SPK",
-  director_review: "Menunggu Validasi Direktur Utama / Direktur Teknis",
+  director_review: "Menunggu Validasi Direksi",
   ready: "Disetujui (Proyek Resmi Dibuat)",
   revision_requested: "Perlu Revisi",
   rejected: "Ditolak",

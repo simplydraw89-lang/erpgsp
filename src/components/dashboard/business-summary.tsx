@@ -3,7 +3,6 @@ import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import { Card } from "@/components/ui/card"
 import type { loadBusinessSummary } from "@/lib/business-summary"
 
-
 export function BusinessSummary({ summary, queueOnly = false }: {
   summary: Awaited<ReturnType<typeof loadBusinessSummary>>
   queueOnly?: boolean
@@ -18,12 +17,36 @@ export function BusinessSummary({ summary, queueOnly = false }: {
         <h3 className="font-semibold">Butuh verifikasi saya</h3>
         {summary.queueError ? <p role="status" className="mt-3 text-sm text-amber-800">Antrean bisnis belum tersedia. Periksa penerapan database di Pengajuan.</p>
           : summary.queue.length ? <ul className="mt-3 divide-y divide-line">{summary.queue.map(item => <li key={`${item.kind}-${item.id}`}>
-            <Link href={item.kind === "sph" ? `/pengajuan/penjualan/sph/${item.id}` : item.kind === "purchase" ? `/pengajuan/${item.id}` : "/vendor"} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 py-3 text-sm">
-              <span><span className="block font-medium">{item.title}</span><span className="mt-1 block text-xs text-muted">{item.kind === "sph" ? "Pemeriksaan SPH" : item.kind === "vendor" ? "Validasi vendor" : "Pemeriksaan pembelian"}</span></span>
-              <span className="shrink-0 text-brand">Periksa →</span>
+            <Link
+              href={
+                item.kind === "sph"
+                  ? `/pengajuan/penjualan/sph/${item.id}`
+                  : item.kind === "spk"
+                  ? `/pengajuan/penjualan/spk/${item.id}`
+                  : item.kind === "purchase"
+                  ? `/pengajuan/${item.id}`
+                  : "/vendor"
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between gap-3 py-3 text-sm"
+            >
+              <span>
+                <span className="block font-medium">{item.title}</span>
+                <span className="mt-1 block text-xs text-muted">
+                  {item.kind === "sph"
+                    ? "Pemeriksaan SPH"
+                    : item.kind === "spk"
+                    ? "Validasi SPK Direktur"
+                    : item.kind === "vendor"
+                    ? "Validasi vendor"
+                    : "Pemeriksaan pembelian"}
+                </span>
+              </span>
+              <span className="shrink-0 text-brand font-semibold">Periksa →</span>
             </Link>
           </li>)}</ul> : <p className="mt-3 text-sm text-muted">Tidak ada pengajuan bisnis yang menunggu tindakan Anda.</p>}
-        {summary.notificationsError ? <p role="alert" className="mt-4 text-sm text-amber-800">Notifikasi tindak lanjut SPH gagal dimuat.</p> : Boolean(summary.notifications?.items.some(item=>item.category === "follow_up")) && <div className="mt-5 border-t border-line pt-4"><h3 className="font-semibold">SPH perlu tindak lanjut</h3><ul className="mt-2 divide-y divide-line">{summary.notifications!.items.filter(item=>item.category === "follow_up").map(item=><li key={item.id} className="py-3"><Link href={`/pengajuan/penjualan/sph/${item.id}`} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-brand">SPH {item.sph_number} · {item.status === "rejected" ? "Ditolak" : item.status === "revision_requested" ? "Perlu revisi" : "Disetujui Direktur Keuangan"}</Link>{item.review_note && <p className="mt-1 whitespace-pre-wrap text-sm text-muted">{item.review_note}</p>}</li>)}</ul></div>}
+        {summary.notificationsError ? <p role="alert" className="mt-4 text-sm text-amber-800">Notifikasi tindak lanjut SPH/SPK gagal dimuat.</p> : Boolean(summary.notifications?.items.some(item=>item.category === "follow_up")) && <div className="mt-5 border-t border-line pt-4"><h3 className="font-semibold">Dokumen perlu tindak lanjut</h3><ul className="mt-2 divide-y divide-line">{summary.notifications!.items.filter(item=>item.category === "follow_up").map(item=><li key={item.id} className="py-3"><Link href={item.kind === "spk" ? `/pengajuan/penjualan/spk/${item.id}` : `/pengajuan/penjualan/sph/${item.id}`} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-brand">{item.document_number || (item.kind === "spk" ? "SPK" : `SPH ${item.sph_number}`)} · {item.status === "rejected" ? "Ditolak" : item.status === "revision_requested" ? "Perlu revisi" : item.status === "ready" ? "Disetujui" : "Perlu tindak lanjut"}</Link>{item.review_note && <p className="mt-1 whitespace-pre-wrap text-sm text-muted">{item.review_note}</p>}</li>)}</ul></div>}
       </Card>
       {!queueOnly && <Card className="overflow-hidden">
         <div className="p-5"><h3 className="font-semibold">Pembelian per cabang</h3><p className="mt-1 text-xs text-muted">Utang dan pembayaran dari pengajuan yang telah melalui pemeriksaan akuntansi.</p></div>

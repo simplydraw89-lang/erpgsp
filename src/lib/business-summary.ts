@@ -6,7 +6,7 @@ type Supabase = Awaited<ReturnType<typeof requireWorkspace>>["supabase"]
 
 export type BusinessReviewItem = {
   id: string
-  kind: "purchase" | "vendor" | "sph"
+  kind: "purchase" | "vendor" | "sph" | "spk"
   title: string
   status: string
   branch_id: string
