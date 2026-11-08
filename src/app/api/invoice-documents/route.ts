@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { createClient } from "@/lib/supabase/server"
 import { readViewAsState } from "@/lib/auth/view-as"
+import { isSameOrigin } from "@/lib/auth/same-origin"
 import { extractDocument } from "./extract"
 
 export const runtime = "nodejs"
@@ -8,7 +9,7 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const MAX_BYTES = 10 * 1024 * 1024
 
 export async function POST(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin) return Response.json({ error: "Asal permintaan tidak diizinkan." }, { status: 403 })
+  if (!isSameOrigin(request)) return Response.json({ error: "Asal permintaan tidak diizinkan." }, { status: 403 })
   const length = Number(request.headers.get("content-length"))
   if (length > MAX_BYTES + 64 * 1024) return Response.json({ error: "Dokumen maksimal 10 MB." }, { status: 413 })
   const supabase = await createClient()
