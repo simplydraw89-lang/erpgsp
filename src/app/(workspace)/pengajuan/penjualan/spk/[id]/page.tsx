@@ -7,7 +7,7 @@ import { SpkReviewForm } from "@/components/sales/spk-review-form"
 import { SpkEditForm } from "@/components/sales/spk-edit-form"
 import { AttachmentList, type AttachmentItem } from "@/components/sales/attachment-list"
 import { ProcurementMessage } from "@/components/procurement/section-nav"
-import { sphStatusLabels } from "@/lib/sales"
+import { sphStatusLabels, spkStatusLabels } from "@/lib/sales"
 import { type SalesDocument } from "@/lib/procurement-ui"
 import { FolderCheck, ArrowRight, CheckCircle2, Edit3, ShieldAlert } from "lucide-react"
 
@@ -102,13 +102,34 @@ export default async function SpkDetailPage({
           <span className="font-semibold text-ink">
             {document.status === "director_review"
               ? "Menunggu Validasi Direktur Utama / Direktur Teknis"
-              : sphStatusLabels[document.status] ?? document.status}
+              : document.status === "draft"
+              ? "Draft SPK (Belum diajukan)"
+              : spkStatusLabels[document.status] ?? sphStatusLabels[document.status] ?? document.status}
           </span>
         </p>
       </header>
 
       <SalesMenu active="spk" />
       <ProcurementMessage {...(await searchParams)} />
+
+      {/* Banner status draft SPK */}
+      {document.status === "draft" && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-blue-200 bg-blue-50/80 p-5 text-blue-950">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-blue-700">
+                Draft Dokumen SPK
+              </span>
+              <span className="rounded-full bg-blue-200 px-2 py-0.5 text-xs font-medium text-blue-800">
+                Belum Diajukan
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-blue-900">
+              Dokumen ini masih tersimpan sebagai draft dan belum dikirimkan ke Direktur. Silakan periksa rincian atau perbarui dokumen di bawah, lalu klik <strong>Kirim Pengajuan SPK ke Direktur</strong> untuk memulai persetujuan.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Banner jika proyek sudah otomatis terbuat */}
       {createdProject && (
@@ -238,6 +259,7 @@ export default async function SpkDetailPage({
             initialSource={document.source}
             initialNotes={document.notes || ""}
             initialAttachments={document.attachment_ids || []}
+            status={document.status}
             disabled={isReadOnlyPreview}
             roleHint={
               isFinanceDirector

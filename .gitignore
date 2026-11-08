@@ -7,3 +7,5 @@ supabase/.temp/
 AGENTS.md
 *.tsbuildinfo
 .local-backups/
+
+scratch/

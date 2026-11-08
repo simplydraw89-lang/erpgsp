@@ -42,10 +42,32 @@ export async function saveSalesDocument(data: FormData) {
   const path = kind === "spk" ? "/pengajuan/penjualan/spk" : "/pengajuan/penjualan/sph"
   if (!["sph", "spk"].includes(kind)) finish(path, "error", "Jenis dokumen tidak valid.")
   const { organizationId } = await workspace(path)
-  await call(path, "save_sales_document", { p_org: organizationId, p_branch: value(data, "branch_id"), p_payload: {
-    client_id: value(data, "client_id"), kind: value(data, "kind"), title: value(data, "title"), source: value(data, "source"),
-    accepted_sph_id: value(data, "accepted_sph_id") || null, notes: value(data, "notes"), attachment_ids: json(data, "attachment_ids", path),
-  } }, kind === "spk" ? "SPK berhasil diajukan untuk persetujuan Direktur Utama / Direktur Teknis." : "Draft dokumen penjualan tersimpan.")
+  const intent = value(data, "intent") || "draft"
+  const isSubmit = intent === "submit"
+  await call(
+    path,
+    "save_sales_document",
+    {
+      p_org: organizationId,
+      p_branch: value(data, "branch_id"),
+      p_payload: {
+        client_id: value(data, "client_id"),
+        kind: value(data, "kind"),
+        title: value(data, "title"),
+        source: value(data, "source"),
+        accepted_sph_id: value(data, "accepted_sph_id") || null,
+        notes: value(data, "notes"),
+        attachment_ids: json(data, "attachment_ids", path),
+        intent,
+        submit: isSubmit,
+      },
+    },
+    kind === "spk"
+      ? isSubmit
+        ? "SPK berhasil diajukan untuk persetujuan Direktur Utama / Direktur Teknis."
+        : "Draft SPK berhasil disimpan."
+      : "Draft dokumen penjualan tersimpan."
+  )
 }
 export async function acceptSalesSph(data: FormData) {
   const path = `/pengajuan/penjualan/sph/${value(data, "document_id")}`
@@ -126,6 +148,8 @@ export async function reviewSpkRequest(data: FormData) {
 export async function updateSalesSpk(data: FormData) {
   const id = value(data, "document_id")
   const path = `/pengajuan/penjualan/spk/${id}`
+  const intent = value(data, "intent") || "draft"
+  const isSubmit = intent === "submit"
   await call(
     path,
     "update_spk_document",
@@ -137,9 +161,28 @@ export async function updateSalesSpk(data: FormData) {
         source: value(data, "source"),
         notes: value(data, "notes"),
         attachment_ids: json(data, "attachment_ids", path),
+        intent,
+        submit: isSubmit,
       },
     },
-    "Perubahan data SPK berhasil disimpan.",
+    isSubmit
+      ? "SPK berhasil diajukan untuk persetujuan Direktur Utama / Direktur Teknis."
+      : "Perubahan data SPK berhasil disimpan.",
+    path
+  )
+}
+
+export async function submitSalesSpk(data: FormData) {
+  const id = value(data, "document_id")
+  const path = `/pengajuan/penjualan/spk/${id}`
+  await call(
+    path,
+    "submit_sales_spk",
+    {
+      p_id: id,
+      p_version: value(data, "version") ? Number(value(data, "version")) : null,
+    },
+    "SPK berhasil diajukan untuk persetujuan Direktur Utama / Direktur Teknis.",
     path
   )
 }

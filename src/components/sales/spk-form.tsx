@@ -71,9 +71,9 @@ export function SpkForm({
 
   return (
     <Card className="p-5">
-      <h2 className="font-semibold">Buat Draft SPK</h2>
-      <p className="mt-2 text-sm text-muted">
-        SPK merujuk pada SPH yang telah disetujui Direktur Keuangan. Pilih cabang dan SPH rujukan untuk mengisi data klien secara otomatis.
+      <h2 className="text-xl font-bold text-ink">Buat Pengajuan SPK</h2>
+      <p className="mt-2 text-sm leading-6 text-muted">
+        SPK diterbitkan merujuk pada SPH yang telah disetujui Direktur Keuangan. Pilih cabang dan SPH rujukan untuk mengisi data klien secara otomatis. Anda dapat memilih <strong>Simpan Draft SPK</strong> untuk menyimpan tanpa diajukan, atau <strong>Kirim Pengajuan SPK ke Direktur</strong> untuk memulai proses persetujuan.
       </p>
       <form action={saveSalesDocument} className="mt-5">
         <fieldset disabled={disabled || uploading || !branches.length} className="space-y-4">
@@ -158,9 +158,23 @@ export function SpkForm({
           />
           <input type="hidden" name="attachment_ids" value={JSON.stringify(attachments)} />
 
-          <SubmitButton disabled={uploading || !client || !selectedSphId}>
-            Simpan Draft SPK
-          </SubmitButton>
+          <div className="flex flex-col-reverse gap-3 pt-4 border-t border-line sm:flex-row sm:items-center">
+            <SubmitButton
+              name="intent"
+              value="draft"
+              secondary
+              disabled={uploading || !client || !selectedSphId}
+            >
+              Simpan Draft SPK
+            </SubmitButton>
+            <SubmitButton
+              name="intent"
+              value="submit"
+              disabled={uploading || !client || !selectedSphId}
+            >
+              Kirim Pengajuan SPK ke Direktur
+            </SubmitButton>
+          </div>
         </fieldset>
       </form>
     </Card>

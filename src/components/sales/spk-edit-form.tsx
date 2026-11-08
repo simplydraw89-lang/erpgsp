@@ -14,6 +14,7 @@ export function SpkEditForm({
   initialSource,
   initialNotes,
   initialAttachments,
+  status,
   disabled,
   roleHint,
 }: {
@@ -24,11 +25,13 @@ export function SpkEditForm({
   initialSource: string
   initialNotes: string
   initialAttachments: string[]
+  status?: string
   disabled: boolean
   roleHint?: string
 }) {
   const [attachments, setAttachments] = useState<string[]>(initialAttachments)
   const [uploading, setUploading] = useState(false)
+  const isDraftOrRevision = status === "draft" || status === "revision_requested"
 
   return (
     <form action={updateSalesSpk} className="mt-4">
@@ -82,10 +85,24 @@ export function SpkEditForm({
         />
         <input type="hidden" name="attachment_ids" value={JSON.stringify(attachments)} />
 
-        <div className="pt-2">
-          <SubmitButton disabled={uploading}>
-            Simpan Perubahan SPK
+        <div className="flex flex-col-reverse gap-3 pt-3 border-t border-line sm:flex-row sm:items-center">
+          <SubmitButton
+            name="intent"
+            value="draft"
+            secondary
+            disabled={uploading}
+          >
+            {isDraftOrRevision ? "Simpan Perubahan Draft" : "Simpan Perubahan SPK"}
           </SubmitButton>
+          {isDraftOrRevision && (
+            <SubmitButton
+              name="intent"
+              value="submit"
+              disabled={uploading}
+            >
+              Kirim Pengajuan SPK ke Direktur
+            </SubmitButton>
+          )}
         </div>
       </fieldset>
     </form>
