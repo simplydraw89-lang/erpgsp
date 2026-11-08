@@ -1,13 +1,14 @@
 "use client"
 
 import { useEffect, useId, useRef, type ReactNode } from "react"
-import { ContactRound, FileCheck2, FileText, X } from "lucide-react"
+import { ContactRound, FileCheck2, FileText, Receipt, X } from "lucide-react"
 import { NavigationLink as Link } from "@/components/ui/navigation-link"
 
 const sections = [
   { key: "klien", name: "Klien", description: "Calon mitra dan identitas perusahaan untuk dasar penawaran.", icon: ContactRound },
   { key: "sph", name: "SPH", description: "Surat penawaran berdasarkan klien terdaftar.", icon: FileText },
   { key: "spk", name: "SPK", description: "Perintah kerja dari perusahaan atau klien berdasarkan SPH.", icon: FileCheck2 },
+  { key: "penagihan", name: "Penagihan", description: "Jadwal termin, penerbitan invoice, dan kuitansi pembayaran proyek.", icon: Receipt },
 ] as const
 
 export function SalesMenu({ active, autoOpen = false, openInNewTab = false, children, triggerClassName, triggerLabel = "Menu Penjualan" }: {
@@ -32,7 +33,7 @@ export function SalesMenu({ active, autoOpen = false, openInNewTab = false, chil
     <button type="button" onClick={() => dialog.current?.showModal()} aria-label={triggerLabel} aria-haspopup="dialog" className={triggerClassName ?? "rounded-lg border border-line bg-white px-4 py-2 text-sm font-medium"}>{children ?? triggerLabel}</button>
     <dialog ref={dialog} aria-labelledby={titleId} onClick={event => { if (event.target === dialog.current) dialog.current?.close() }} className="w-[calc(100%-2rem)] max-w-[620px] overflow-visible border-0 bg-transparent p-0 outline-none backdrop:bg-black/60 backdrop:backdrop-blur-[4px]">
       <div className="relative mb-8 flex items-center justify-center px-12 text-white"><h2 id={titleId} className="text-lg font-semibold">Penjualan</h2><button type="button" aria-label="Tutup pilihan Penjualan" onClick={() => dialog.current?.close()} className="absolute right-0 rounded-full p-2 hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"><X size={20} /></button></div>
-      <div className="min-h-[min(476px,65vh)] rounded-[30px] border border-slate-200 bg-white px-5 py-8 shadow-2xl sm:px-8 sm:py-9"><div className="grid grid-cols-3 gap-2 sm:gap-5">{options}</div></div>
+      <div className="min-h-[min(476px,65vh)] rounded-[30px] border border-slate-200 bg-white px-5 py-8 shadow-2xl sm:px-8 sm:py-9"><div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">{options}</div></div>
     </dialog>
   </>
 }

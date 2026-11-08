@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { BriefcaseBusiness, CheckCircle2, Clock, AlertTriangle, FileText, ArrowLeft, Users, Calendar, Calculator, ShieldCheck } from "lucide-react"
+import { BriefcaseBusiness, CheckCircle2, Clock, AlertTriangle, FileText, ArrowLeft, Users, Calendar, Calculator, ShieldCheck, Receipt } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { requireWorkspace } from "@/lib/auth/context"
 import { rupiah, formatDateID } from "@/lib/procurement-ui"
@@ -333,6 +333,71 @@ export default async function ProjectDetailPage({
                     <td className="px-3 py-3 text-right text-brand">{rupiah(rabVal)}</td>
                   </tr>
                 </tfoot>
+              </table>
+            </div>
+          </Card>
+
+          {/* Readonly: Termin Pembayaran & Penagihan */}
+          <Card className="p-5 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+              <h3 className="font-semibold text-ink flex items-center gap-2">
+                <Receipt className="size-4 text-brand" /> 5. Rencana Termin Pembayaran & Penagihan
+              </h3>
+              <Link
+                href="/pengajuan/penjualan/penagihan"
+                className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-brand hover:bg-slate-50 transition"
+              >
+                Buka Meja Kerja Penagihan & Invoice →
+              </Link>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-canvas text-muted">
+                  <tr>
+                    <th className="px-3 py-2">Tahap</th>
+                    <th className="px-3 py-2">Keterangan Termin</th>
+                    <th className="px-3 py-2 text-right">Bobot (%)</th>
+                    <th className="px-3 py-2 text-right">Nominal (Rp)</th>
+                    <th className="px-3 py-2">Pemicu Tagihan (Deliverables)</th>
+                    <th className="px-3 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {(project.payment_terms || []).map((t: any, idx: number) => (
+                    <tr key={idx}>
+                      <td className="px-3 py-2 text-muted">Termin {idx + 1}</td>
+                      <td className="px-3 py-2 font-medium text-ink">{t.name}</td>
+                      <td className="px-3 py-2 text-right">{t.percentage}%</td>
+                      <td className="px-3 py-2 text-right font-bold text-ink">{rupiah(t.amount)}</td>
+                      <td className="px-3 py-2 text-muted italic">{t.trigger || "-"}</td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            t.status === "paid"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : t.status === "invoiced"
+                              ? "bg-blue-100 text-blue-800"
+                              : "bg-slate-100 text-slate-700"
+                          }`}
+                        >
+                          {t.status === "paid"
+                            ? "✓ Lunas"
+                            : t.status === "invoiced"
+                            ? "⚡ Invoice Terbit"
+                            : "Rencana"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {(!project.payment_terms || project.payment_terms.length === 0) && (
+                    <tr>
+                      <td colSpan={6} className="px-3 py-4 text-center text-muted">
+                        Jadwal termin pembayaran belum diatur pada proyek ini.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
               </table>
             </div>
           </Card>

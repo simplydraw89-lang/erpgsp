@@ -16,6 +16,7 @@ import {
   Loader2,
   AlertCircle,
   FileSpreadsheet,
+  Receipt,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -49,6 +50,17 @@ export type RabItem = {
   total: number
 }
 
+export type PaymentTermItem = {
+  id: string
+  index: number
+  name: string
+  percentage: number
+  amount: number
+  trigger: string
+  estimated_date: string
+  status?: string
+}
+
 const rabCategories = [
   { value: "personil", label: "Biaya Personil (Tenaga Ahli & Surveyor)" },
   { value: "non_personil", label: "Biaya Non-Personil / Akomodasi & Transportasi" },
@@ -77,13 +89,14 @@ export function ProjectPlanningForm({
     timesheet_schedule: ScheduleItem[]
     rab_breakdown: RabItem[]
     rab_total: number
+    payment_terms?: PaymentTermItem[]
     attachment_ids: string[]
     approval_status: string
   }
   disabled?: boolean
 }) {
   const [state, formAction, isPending] = useActionState(saveProjectPlanningAction, undefined)
-  const [activeTab, setActiveTab] = useState<"sdm" | "teknis" | "jadwal" | "rab" | "lampiran">("sdm")
+  const [activeTab, setActiveTab] = useState<"sdm" | "teknis" | "jadwal" | "rab" | "lampiran" | "termin">("sdm")
   const [uploadBusy, setUploadBusy] = useState(false)
 
   // Targeted OCR State & Ref
@@ -117,6 +130,93 @@ export function ProjectPlanningForm({
   const contractAmount = Number(project.contract_amount) || 0
   const rabTotal = rab.reduce((sum, item) => sum + (Number(item.total) || 0), 0)
   const projectedMargin = contractAmount > 0 ? ((contractAmount - rabTotal) / contractAmount) * 100 : 0
+
+  // Payment terms (Termin Pembayaran)
+  const [paymentTerms, setPaymentTerms] = useState<PaymentTermItem[]>(
+    project.payment_terms && project.payment_terms.length > 0
+      ? project.payment_terms
+      : [
+          {
+            id: "term-1",
+            index: 1,
+            name: "Termin 1 (Uang Muka / DP)",
+            percentage: 30,
+            amount: Math.round(contractAmount * 0.3),
+            trigger: "Setelah Penandatanganan SPK & Kick-off Meeting",
+            estimated_date: "",
+            status: "planned",
+          },
+          {
+            id: "term-2",
+            index: 2,
+            name: "Termin 2 (Progress Lapangan & Draft)",
+            percentage: 40,
+            amount: Math.round(contractAmount * 0.4),
+            trigger: "Setelah Survey Lapangan, Pengujian Lab & Draft Laporan",
+            estimated_date: "",
+            status: "planned",
+          },
+          {
+            id: "term-3",
+            index: 3,
+            name: "Termin 3 (Pelunasan & BAST Final)",
+            percentage: 30,
+            amount: Math.round(contractAmount * 0.3),
+            trigger: "Setelah Terbit SK Persetujuan Teknis & BAST Final",
+            estimated_date: "",
+            status: "planned",
+          },
+        ]
+  )
+
+  const totalTermPercentage = paymentTerms.reduce((sum, t) => sum + (Number(t.percentage) || 0), 0)
+  const totalTermAmount = paymentTerms.reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
+  const remainingTermAmount = contractAmount - totalTermAmount
+
+  function addPaymentTerm() {
+    const nextIdx = paymentTerms.length + 1
+    const currentTotalPercent = paymentTerms.reduce((sum, t) => sum + (Number(t.percentage) || 0), 0)
+    const remainingPercent = Math.max(0, 100 - currentTotalPercent)
+    const remainingAmt = Math.round((remainingPercent / 100) * contractAmount)
+
+    setPaymentTerms([
+      ...paymentTerms,
+      {
+        id: `term-${Date.now()}`,
+        index: nextIdx,
+        name: `Termin ${nextIdx}`,
+        percentage: remainingPercent,
+        amount: remainingAmt,
+        trigger: "Capaian tahapan pengerjaan proyek",
+        estimated_date: "",
+        status: "planned",
+      },
+    ])
+  }
+
+  function removePaymentTerm(id: string) {
+    if (paymentTerms.length <= 1) return
+    setPaymentTerms(paymentTerms.filter((t) => t.id !== id))
+  }
+
+  function updatePaymentTerm(id: string, field: keyof PaymentTermItem, val: any) {
+    setPaymentTerms(
+      paymentTerms.map((t) => {
+        if (t.id !== id) return t
+        if (field === "percentage") {
+          const pct = Number(val) || 0
+          const amt = Math.round((pct / 100) * contractAmount)
+          return { ...t, percentage: pct, amount: amt }
+        }
+        if (field === "amount") {
+          const amt = Number(val) || 0
+          const pct = contractAmount > 0 ? Number(((amt / contractAmount) * 100).toFixed(2)) : 0
+          return { ...t, amount: amt, percentage: pct }
+        }
+        return { ...t, [field]: val }
+      })
+    )
+  }
 
   // Trigger targeted OCR upload from each tab
   function triggerTargetedOcr(target: TargetedTab) {
@@ -460,6 +560,16 @@ export function ProjectPlanningForm({
           <FileText className="size-4" />
           5. Lampiran Dokumen ({attachments.length})
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("termin")}
+          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition whitespace-nowrap ${
+            activeTab === "termin" ? "border-brand text-brand" : "border-transparent text-muted hover:text-ink"
+          }`}
+        >
+          <Receipt className="size-4" />
+          6. Termin Pembayaran ({paymentTerms.length})
+        </button>
       </div>
 
       {/* Form Content */}
@@ -472,6 +582,7 @@ export function ProjectPlanningForm({
         <input type="hidden" name="manpower" value={JSON.stringify(manpower)} />
         <input type="hidden" name="timesheet_schedule" value={JSON.stringify(schedule)} />
         <input type="hidden" name="rab_breakdown" value={JSON.stringify(rab)} />
+        <input type="hidden" name="payment_terms" value={JSON.stringify(paymentTerms)} />
         <input type="hidden" name="attachment_ids" value={JSON.stringify(attachments)} />
 
         {/* TAB 1: SDM / MANPOWER */}
@@ -981,6 +1092,165 @@ export function ProjectPlanningForm({
               onBusyChange={setUploadBusy}
               disabled={busy}
             />
+          </Card>
+        )}
+
+        {/* TAB 6: TERMIN PEMBAYARAN */}
+        {activeTab === "termin" && (
+          <Card className="p-5 space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+              <div>
+                <h3 className="font-semibold text-ink">6. Rencana Termin Pembayaran & Penagihan Proyek</h3>
+                <p className="text-xs text-muted mt-1">
+                  Bagi nilai kontrak SPK ({rupiah(contractAmount)}) ke dalam beberapa tahapan termin pembayaran berdasarkan
+                  capaian pengerjaan di lapangan.
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                size="sm"
+                onClick={addPaymentTerm}
+                disabled={busy}
+                className="gap-1.5 bg-brand text-white hover:bg-brand/90 text-xs"
+              >
+                <Plus className="size-3.5" /> Tambah Tahap Termin
+              </Button>
+            </div>
+
+            {/* Status Balance Banner */}
+            {totalTermPercentage === 100 ? (
+              <div className="rounded-xl border border-emerald-300 bg-emerald-50/70 p-3.5 text-xs text-emerald-950 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
+                  <span>
+                    <strong>Alokasi Termin Sempurna (100%)</strong>: Total termin telah sesuai dengan nilai kontrak SPK ({rupiah(contractAmount)}).
+                  </span>
+                </div>
+                <span className="font-bold text-emerald-800">Seimbang</span>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-amber-300 bg-amber-50/70 p-3.5 text-xs text-amber-950 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="size-4 text-amber-600 shrink-0" />
+                  <span>
+                    <strong>Alokasi Belum Seimbang ({totalTermPercentage}%)</strong>: Sisa belum dialokasikan sebesar{" "}
+                    <strong>{rupiah(remainingTermAmount)}</strong> ({100 - totalTermPercentage}%).
+                  </span>
+                </div>
+                <span className="font-bold text-amber-800">{100 - totalTermPercentage}% Sisa</span>
+              </div>
+            )}
+
+            {/* List Termin Items */}
+            <div className="space-y-3">
+              {paymentTerms.map((term, idx) => (
+                <div
+                  key={term.id}
+                  className="rounded-xl border border-line bg-slate-50/60 p-4 space-y-3 text-xs transition hover:border-brand/40"
+                >
+                  <div className="flex items-center justify-between border-b border-line pb-2">
+                    <span className="font-bold text-ink">Tahap {idx + 1}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="font-extrabold text-brand text-sm">{rupiah(term.amount)}</span>
+                      {paymentTerms.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removePaymentTerm(term.id)}
+                          disabled={busy}
+                          className="text-muted hover:text-red-600"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <label className="block text-slate-700 font-medium">
+                      Nama / Keterangan Termin
+                      <input
+                        type="text"
+                        value={term.name}
+                        disabled={busy}
+                        onChange={(e) => updatePaymentTerm(term.id, "name", e.target.value)}
+                        placeholder="Contoh: Termin 1 (Uang Muka / DP)"
+                        className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs"
+                      />
+                    </label>
+
+                    <label className="block text-slate-700 font-medium">
+                      Bobot Persentase (%)
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        step="0.01"
+                        value={term.percentage}
+                        disabled={busy}
+                        onChange={(e) => updatePaymentTerm(term.id, "percentage", e.target.value)}
+                        className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs font-bold"
+                      />
+                    </label>
+
+                    <label className="block text-slate-700 font-medium">
+                      Nominal Tagihan (Rp)
+                      <input
+                        type="number"
+                        min={0}
+                        value={term.amount}
+                        disabled={busy}
+                        onChange={(e) => updatePaymentTerm(term.id, "amount", e.target.value)}
+                        className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs font-bold"
+                      />
+                    </label>
+
+                    <label className="block text-slate-700 font-medium">
+                      Estimasi Tanggal Penagihan
+                      <input
+                        type="date"
+                        value={term.estimated_date || ""}
+                        disabled={busy}
+                        onChange={(e) => updatePaymentTerm(term.id, "estimated_date", e.target.value)}
+                        className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="block text-slate-700 font-medium">
+                    Syarat / Pemicu Tagihan (Deliverable Trigger)
+                    <input
+                      type="text"
+                      value={term.trigger}
+                      disabled={busy}
+                      onChange={(e) => updatePaymentTerm(term.id, "trigger", e.target.value)}
+                      placeholder="Contoh: Setelah Laporan Draft Disetujui atau setelah BAST Tahap I ditandatangani"
+                      className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs"
+                    />
+                  </label>
+                </div>
+              ))}
+            </div>
+
+            {/* Summary Footer */}
+            <div className="rounded-xl border border-line bg-white p-4 space-y-2 text-xs">
+              <div className="flex justify-between font-medium">
+                <span className="text-muted">Nilai Kontrak SPK:</span>
+                <span className="font-bold text-ink">{rupiah(contractAmount)}</span>
+              </div>
+              <div className="flex justify-between font-medium text-brand">
+                <span>Total Rencana Termin:</span>
+                <span className="font-bold">
+                  {rupiah(totalTermAmount)} ({totalTermPercentage}%)
+                </span>
+              </div>
+              {remainingTermAmount !== 0 && (
+                <div className="flex justify-between font-semibold text-amber-700 border-t border-line pt-2">
+                  <span>Selisih Belum Dialokasikan:</span>
+                  <span>{rupiah(remainingTermAmount)}</span>
+                </div>
+              )}
+            </div>
           </Card>
         )}
 

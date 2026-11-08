@@ -260,3 +260,191 @@ export async function submitSalesSpk(data: FormData) {
     path
   )
 }
+
+export async function createSalesInvoiceAction(data: FormData) {
+  const path = "/pengajuan/penjualan/penagihan"
+  const context = await workspace(path)
+  const projectId = value(data, "project_id")
+  const termIndex = Number(value(data, "term_index") || "1")
+  const termName = value(data, "term_name") || `Termin ${termIndex}`
+  const percentage = Number(value(data, "percentage") || "0")
+  const amount = Number(value(data, "amount") || "0")
+  const invoiceDate = value(data, "invoice_date") || new Date().toISOString().slice(0, 10)
+  const dueDate = value(data, "due_date") || new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
+  const notes = value(data, "notes")
+
+  const { data: project } = await context.supabase
+    .from("crm_projects")
+    .select("id, code, name, branch_id, client_id, spk_id, payment_terms")
+    .eq("id", projectId)
+    .single()
+
+  if (!project) finish(path, "error", "Proyek tidak ditemukan.")
+
+  const { data: rpcInvId, error: rpcErr } = await context.supabase.rpc("create_sales_invoice", {
+    p_org: context.organizationId,
+    p_project_id: projectId,
+    p_term_index: termIndex,
+    p_term_name: termName,
+    p_percentage: percentage,
+    p_amount: amount,
+    p_due_date: dueDate,
+    p_notes: notes,
+  })
+
+  if (rpcErr) {
+    const { data: client } = await context.supabase
+      .from("sales_clients")
+      .select("name")
+      .eq("id", project.client_id)
+      .single()
+
+    const { data: branch } = await context.supabase
+      .from("business_units")
+      .select("code")
+      .eq("id", project.branch_id)
+      .single()
+
+    const clientSlug = (client?.name || "CLIENT").replace(/[^a-zA-Z0-9]/g, "-").toUpperCase().slice(0, 15)
+    const branchCode = (branch?.code || "JKT").toUpperCase()
+    const now = new Date()
+    const mmyy = `${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getFullYear()).slice(2)}`
+    const fallbackInvNum = `INV/${clientSlug}/${branchCode}/${mmyy}.${String(Date.now()).slice(-4)}`
+
+    const vat = Math.round(amount * 0.11)
+    const wht = Math.round(amount * 0.02)
+    const total = amount + vat
+    const net = total - wht
+
+    await context.supabase.from("sales_invoices").insert({
+      organization_id: context.organizationId,
+      branch_id: project.branch_id,
+      project_id: project.id,
+      spk_id: project.spk_id,
+      client_id: project.client_id,
+      invoice_number: fallbackInvNum,
+      term_name: termName,
+      term_index: termIndex,
+      percentage: percentage,
+      invoice_date: invoiceDate,
+      due_date: dueDate,
+      amount: amount,
+      vat_rate: 11.0,
+      vat_amount: vat,
+      wht_rate: 2.0,
+      wht_amount: wht,
+      total_amount: total,
+      net_receivable: net,
+      status: "unpaid",
+      notes: notes,
+      created_by: context.user.id,
+    })
+
+    const existingTerms = Array.isArray(project.payment_terms) ? project.payment_terms : []
+    const updatedTerms = existingTerms.map((t: any) => {
+      if (t.index === termIndex || t.name === termName) {
+        return {
+          ...t,
+          status: "invoiced",
+          invoice_number: fallbackInvNum,
+          invoice_date: invoiceDate,
+          due_date: dueDate,
+          vat_amount: vat,
+          wht_amount: wht,
+          total_amount: total,
+        }
+      }
+      return t
+    })
+
+    await context.supabase
+      .from("crm_projects")
+      .update({ payment_terms: updatedTerms })
+      .eq("id", projectId)
+  }
+
+  revalidatePath(path)
+  revalidatePath(`/proyek/${projectId}`)
+  revalidatePath("/portal-proyek")
+  finish(path, "notice", `Invoice resmi untuk ${termName} berhasil diterbitkan.`)
+}
+
+export async function recordInvoicePaymentAction(data: FormData) {
+  const path = "/pengajuan/penjualan/penagihan"
+  const context = await workspace(path)
+  const invoiceId = value(data, "invoice_id")
+  const projectId = value(data, "project_id")
+  const paidAmount = Number(value(data, "paid_amount") || "0")
+  const paidAt = value(data, "paid_at") || new Date().toISOString()
+  const paymentMethod = value(data, "payment_method") || "bank_transfer"
+  const bankName = value(data, "bank_name") || "Bank Mandiri"
+  const bankReference = value(data, "bank_reference")
+  const whtProofNumber = value(data, "wht_proof_number")
+  const notes = value(data, "notes")
+
+  const { data: kwtNum, error: rpcErr } = await context.supabase.rpc("record_sales_payment", {
+    p_org: context.organizationId,
+    p_invoice_id: invoiceId,
+    p_paid_amount: paidAmount,
+    p_paid_at: paidAt,
+    p_payment_method: paymentMethod,
+    p_bank_name: bankName,
+    p_bank_reference: bankReference,
+    p_wht_proof_number: whtProofNumber || null,
+    p_notes: notes || null,
+  })
+
+  if (rpcErr) {
+    const now = new Date()
+    const mmyy = `${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getFullYear()).slice(2)}`
+    const fallbackKwtNum = `KWT/GSP-PUSAT/${mmyy}.${String(Date.now()).slice(-4)}`
+
+    await context.supabase
+      .from("sales_invoices")
+      .update({
+        status: "paid",
+        paid_amount: paidAmount,
+        paid_at: paidAt,
+        payment_method: paymentMethod,
+        bank_name: bankName,
+        bank_reference: bankReference,
+        receipt_number: fallbackKwtNum,
+        wht_proof_number: whtProofNumber || null,
+        notes: notes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", invoiceId)
+
+    if (projectId) {
+      const { data: project } = await context.supabase
+        .from("crm_projects")
+        .select("payment_terms")
+        .eq("id", projectId)
+        .single()
+
+      if (project && Array.isArray(project.payment_terms)) {
+        const updatedTerms = project.payment_terms.map((t: any) => {
+          if (t.invoice_id === invoiceId || t.status === "invoiced") {
+            return {
+              ...t,
+              status: "paid",
+              receipt_number: fallbackKwtNum,
+              paid_amount: paidAmount,
+              paid_at: paidAt,
+            }
+          }
+          return t
+        })
+        await context.supabase
+          .from("crm_projects")
+          .update({ payment_terms: updatedTerms })
+          .eq("id", projectId)
+      }
+    }
+  }
+
+  revalidatePath(path)
+  if (projectId) revalidatePath(`/proyek/${projectId}`)
+  revalidatePath("/portal-proyek")
+  finish(path, "notice", "Penerimaan pembayaran berhasil diverifikasi dan kuitansi resmi telah terbit.")
+}

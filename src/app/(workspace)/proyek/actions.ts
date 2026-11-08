@@ -20,12 +20,14 @@ export async function saveProjectPlanningAction(prevState: { error?: string } | 
   let timesheet_schedule = []
   let rab_breakdown = []
   let attachment_ids = []
+  let payment_terms = []
 
   try {
     manpower = JSON.parse(String(formData.get("manpower") || "[]"))
     timesheet_schedule = JSON.parse(String(formData.get("timesheet_schedule") || "[]"))
     rab_breakdown = JSON.parse(String(formData.get("rab_breakdown") || "[]"))
     attachment_ids = JSON.parse(String(formData.get("attachment_ids") || "[]"))
+    payment_terms = JSON.parse(String(formData.get("payment_terms") || "[]"))
   } catch {
     return { error: "Format data perencanaan proyek tidak valid." }
   }
@@ -38,6 +40,7 @@ export async function saveProjectPlanningAction(prevState: { error?: string } | 
     timesheet_schedule,
     rab_breakdown,
     attachment_ids,
+    payment_terms,
   }
 
   const { error } = await supabase.rpc("save_project_planning", {
@@ -51,10 +54,15 @@ export async function saveProjectPlanningAction(prevState: { error?: string } | 
     return { error: error.message || "Gagal menyimpan perencanaan proyek." }
   }
 
+  if (payment_terms.length > 0) {
+    await supabase.from("crm_projects").update({ payment_terms }).eq("id", id)
+  }
+
   revalidatePath("/proyek")
   revalidatePath(`/proyek/${id}`)
   revalidatePath("/portal-proyek")
   revalidatePath("/pekerjaan-saya")
+  revalidatePath("/pengajuan/penjualan/penagihan")
 
   redirect(`/proyek/${id}?notice=${encodeURIComponent(submit ? "Perencanaan proyek berhasil diajukan ke Direktur Utama." : "Draft perencanaan proyek berhasil disimpan.")}`)
 }
