@@ -143,6 +143,10 @@ export async function saveSphRequest(_previous: { error?: string }, data: FormDa
   revalidatePath("/pekerjaan-saya")
   revalidatePath("/approvals")
   revalidatePath("/dashboard")
+  const documentId = value(data, "id")
+  if (documentId) {
+    redirect(`/pengajuan/penjualan/sph/${id}?${new URLSearchParams({ notice: submit ? "SPH berhasil diajukan ke pemeriksa berikutnya." : "Perubahan data SPH berhasil disimpan." })}`)
+  }
   redirect(`/pengajuan/penjualan/sph?${new URLSearchParams({ branch: value(data, "branch_id"), notice: submit ? "SPH berhasil diajukan ke pemeriksa berikutnya." : "Draft SPH tersimpan." })}`)
 }
 

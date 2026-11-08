@@ -39,9 +39,15 @@ export function SphForm({ branches, draftId, document: draft, disabled }: { bran
     form.current?.requestSubmit(yes ? submitButton.current ?? undefined : draftButton.current ?? undefined)
   }
 
+  const isReviewStage = draft && ["branch_review", "director_review"].includes(draft.status)
+
   return <Card className="p-5">
-    <h2 className="font-semibold">{draft ? `Edit draft ${draft.document_number || `SPH No. ${draft.sph_number}`}` : "Buat draft SPH"}</h2>
-    <p className="mt-2 text-sm leading-6 text-muted">Pilih cabang, klien dan judul untuk menyimpan draft. Lengkapi seluruh data sebelum submit. Bidang usaha mengikuti master klien.</p>
+    <h2 className="font-semibold">{draft ? `Edit ${isReviewStage ? "Pemeriksa" : "Draft"} ${draft.document_number || `SPH No. ${draft.sph_number}`}` : "Buat draft SPH"}</h2>
+    <p className="mt-2 text-sm leading-6 text-muted">
+      {isReviewStage
+        ? "Sebagai pemeriksa, Anda dapat langsung mengubah data di bawah ini (misal nilai, tanggal, atau catatan) lalu menyimpannya."
+        : "Pilih cabang, klien dan judul untuk menyimpan draft. Lengkapi seluruh data sebelum submit. Bidang usaha mengikuti master klien."}
+    </p>
     <form ref={form} action={action} onSubmit={beforeSubmit} className="mt-5">
       <input type="hidden" name="id" value={draft?.id ?? draftId} />
       <input type="hidden" name="version" value={draft?.version ?? ""} />
@@ -51,7 +57,7 @@ export function SphForm({ branches, draftId, document: draft, disabled }: { bran
       <fieldset disabled={busy} className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <label className={label}>Cabang<select name={draft ? undefined : "branch_id"} value={branch} disabled={Boolean(draft)} required className={input} onChange={event => { setBranch(event.target.value); if (attachments.length) { setAttachments([]); setBranchNotice("Cabang berubah. Unggah kembali lampiran untuk cabang yang dipilih.") } }}><option value="">Pilih cabang</option>{branches.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-          <div className={label}>Pilih Klien<ClientPicker value={client} onChange={setClient} disabled={busy} /></div>
+          <div className={label}>Pilih Klien<ClientPicker value={client} onChange={setClient} disabled={busy || Boolean(draft)} /></div>
           <label className={label}>Judul penawaran<input name="title" required defaultValue={draft?.title} maxLength={300} className={input} /></label>
           <label className={label}>Daerah pengerjaan<input name="work_area" required defaultValue={draft?.work_area ?? ""} maxLength={1000} className={input} /></label>
         </div>
@@ -68,8 +74,14 @@ export function SphForm({ branches, draftId, document: draft, disabled }: { bran
         {branchNotice && <p role="status" className="text-sm text-amber-800">{branchNotice}</p>}
         {state.error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{state.error}</p>}
         <div className="flex flex-wrap gap-3 border-t border-line pt-4">
-          <button ref={draftButton} type="submit" name="intent" value="draft" formNoValidate className="rounded-lg border border-line bg-white px-4 py-2 text-sm font-semibold disabled:opacity-50">{pending ? "Menyimpan…" : "Simpan ke draft"}</button>
-          <button ref={submitButton} type="submit" name="intent" value="submit" className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Submit SPH</button>
+          <button ref={draftButton} type="submit" name="intent" value="draft" formNoValidate className="rounded-lg border border-line bg-white px-4 py-2 text-sm font-semibold disabled:opacity-50">
+            {pending ? "Menyimpan…" : draft ? "Simpan Perubahan SPH" : "Simpan ke draft"}
+          </button>
+          {(!draft || ["draft", "revision_requested", "rejected"].includes(draft.status)) && (
+            <button ref={submitButton} type="submit" name="intent" value="submit" className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+              Submit SPH
+            </button>
+          )}
         </div>
       </fieldset>
     </form>
