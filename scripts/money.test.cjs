@@ -53,3 +53,24 @@ test('live edits keep trailing decimal zeros and malformed inputs cannot submit 
  listener({preventDefault:()=>prevented=true,stopImmediatePropagation:()=>{}})
  assert.equal(prevented,true)
 })
+
+test('mobile keypad keystrokes and decimal dot typing format correctly without error',()=>{
+ let index=0,refsIndex=0
+ const states=[],refs=[],effects=[]
+ const mockReact={useState:initial=>{const i=index++;if(!(i in states))states[i]=initial;return [states[i],next=>{states[i]=next}]},useRef:initial=>{const i=refsIndex++;return refs[i]??(refs[i]={current:initial})},useId:()=> 'money-error',useEffect:effect=>effects.push(effect)}
+ const {MoneyInput}=load('src/components/ui/money-input.tsx',{'@/lib/money':money,react:mockReact})
+ let validity=''
+ const element={value:'',selectionStart:0,isConnected:true,disabled:false,matches:()=>false,validity:{customError:false},setCustomValidity:text=>{validity=text;element.validity.customError=Boolean(text)},setSelectionRange:()=>{},reportValidity:()=>{},form:{addEventListener:()=>{},removeEventListener:()=>{}}}
+ const render=()=>{index=0;refsIndex=0;return MoneyInput({name:'amount'})}
+ let tree=render();refs[0].current=element;effects.forEach(effect=>effect())
+ 
+ for (const keystroke of ['1','10','100','1000','1.0000','10.000.','10.000,5','10.000,50']) {
+   element.value = keystroke
+   element.selectionStart = keystroke.length
+   tree.props.children[0].props.onChange({currentTarget:element})
+   tree = render()
+   assert.equal(validity, '', `Typing ${keystroke} should not produce validity error`)
+ }
+ assert.equal(tree.props.children[0].props.value, '10.000,50')
+ assert.equal(tree.props.children[1].props.value, '10000.50')
+})
