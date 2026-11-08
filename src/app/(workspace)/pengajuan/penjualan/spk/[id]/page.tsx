@@ -60,7 +60,7 @@ export default async function SpkDetailPage({
     document.project_id
       ? supabase
           .from("crm_projects")
-          .select("id,code,name,status")
+          .select("id,code,name,status,approval_status")
           .eq("id", document.project_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -131,35 +131,93 @@ export default async function SpkDetailPage({
         </div>
       )}
 
-      {/* Banner jika proyek sudah otomatis terbuat */}
-      {createdProject && (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-emerald-300 bg-emerald-50/80 p-5 text-emerald-950">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-600 text-white">
-              <FolderCheck size={24} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
-                  Proyek Resmi Telah Dibuat
-                </span>
-                <span className="flex items-center gap-1 rounded-full bg-emerald-200/80 px-2 py-0.5 text-xs font-medium text-emerald-800">
-                  <CheckCircle2 size={12} /> Aktif
-                </span>
+      {/* Banner status entitas proyek terkait */}
+      {createdProject && (() => {
+        const pStatus = (createdProject as any).approval_status || createdProject.status;
+        const isProjectActive = pStatus === "active";
+        const isProjectReview = pStatus === "director_review";
+        const isProjectRevision = pStatus === "revision_requested";
+
+        return (
+          <div className={`flex flex-wrap items-center justify-between gap-4 rounded-xl p-5 border ${
+            isProjectActive
+              ? "border-emerald-300 bg-emerald-50/90 text-emerald-950"
+              : isProjectReview
+              ? "border-indigo-300 bg-indigo-50/90 text-indigo-950"
+              : isProjectRevision
+              ? "border-orange-300 bg-orange-50/90 text-orange-950"
+              : "border-amber-300 bg-amber-50/90 text-amber-950"
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`flex h-11 w-11 items-center justify-center rounded-xl text-white ${
+                isProjectActive
+                  ? "bg-emerald-600"
+                  : isProjectReview
+                  ? "bg-indigo-600"
+                  : isProjectRevision
+                  ? "bg-orange-600"
+                  : "bg-amber-600"
+              }`}>
+                <FolderCheck size={24} />
               </div>
-              <h2 className="text-base font-bold text-emerald-950">
-                {createdProject.code} · {createdProject.name}
-              </h2>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted">
+                    {isProjectActive ? "Proyek Resmi Telah Aktif" : "Entitas Proyek Baru Dibuat"}
+                  </span>
+                  <span className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    isProjectActive
+                      ? "bg-emerald-200 text-emerald-900 font-semibold"
+                      : isProjectReview
+                      ? "bg-indigo-200 text-indigo-900 font-semibold"
+                      : isProjectRevision
+                      ? "bg-orange-200 text-orange-900 font-semibold"
+                      : "bg-amber-200 text-amber-950 font-semibold border border-amber-300"
+                  }`}>
+                    {isProjectActive ? (
+                      <>
+                        <CheckCircle2 size={12} /> Aktif & Berjalan
+                      </>
+                    ) : isProjectReview ? (
+                      "⚡ Menunggu Persetujuan Direktur Utama"
+                    ) : isProjectRevision ? (
+                      "Perlu Revisi Dokumen"
+                    ) : (
+                      "Draft (Menunggu Dokumen Pendukung & RAB)"
+                    )}
+                  </span>
+                </div>
+                <h2 className="text-base font-bold text-ink">
+                  {createdProject.code} · {createdProject.name}
+                </h2>
+                <p className="text-xs text-muted mt-0.5 max-w-2xl leading-5">
+                  {isProjectActive
+                    ? "Seluruh perencanaan & pagu RAB telah disetujui Direktur Utama. Proyek resmi berjalan dan akses portal klien aktif."
+                    : isProjectReview
+                    ? "Dokumen perencanaan proyek telah diajukan langsung ke Direktur Utama dan menunggu persetujuan (ACC)."
+                    : isProjectRevision
+                    ? "Direktur Utama meminta revisi pada dokumen perencanaan proyek."
+                    : "Status proyek masih Draft. Cabang perlu melengkapi RAB, tim pelaksana, dan berkas pendukung untuk diajukan langsung ke Direktur Utama."}
+                </p>
+              </div>
             </div>
+            <Link
+              href={`/proyek/${createdProject.id}`}
+              className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow transition ${
+                isProjectActive
+                  ? "bg-emerald-700 hover:bg-emerald-800"
+                  : isProjectReview
+                  ? "bg-indigo-700 hover:bg-indigo-800"
+                  : "bg-brand hover:bg-brand/90"
+              }`}
+            >
+              {!isProjectActive && !isProjectReview
+                ? "Lengkapi Dokumen Proyek →"
+                : "Buka Manajemen Proyek →"}
+            </Link>
           </div>
-          <Link
-            href={`/proyek/${createdProject.id}`}
-            className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-800"
-          >
-            Buka Manajemen Proyek <ArrowRight size={16} />
-          </Link>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Rincian SPK */}
       <Card className="space-y-4 p-5">

@@ -153,12 +153,12 @@ export function SalesForms({
             )}
 
             {document.project_id && (
-              <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-xs text-emerald-900">
+              <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/70 p-2.5 text-xs text-amber-950">
                 <span className="flex items-center gap-1.5 font-medium">
-                  <FolderCheck size={16} className="text-emerald-700" /> Proyek resmi telah aktif dibuat otomatis
+                  <FolderCheck size={16} className="text-amber-700" /> Entitas proyek dibuat (Status: Draft kelengkapan dokumen)
                 </span>
-                <Link href={`/portal-proyek?project=${document.project_id}`} className="flex items-center gap-1 font-semibold text-emerald-800 hover:underline">
-                  Portal Proyek <ArrowRight size={13} />
+                <Link href={`/proyek/${document.project_id}`} className="flex items-center gap-1 font-semibold text-brand hover:underline">
+                  Kelola Proyek <ArrowRight size={13} />
                 </Link>
               </div>
             )}
