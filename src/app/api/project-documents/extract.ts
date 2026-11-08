@@ -1,6 +1,8 @@
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 
+export type ProjectOcrTarget = "manpower" | "technical" | "schedule" | "rab" | "all"
+
 export type ExtractedProjectPlanning = {
   work_details?: string
   starts_on?: string
@@ -59,39 +61,65 @@ async function extractPdfText(bytes: Buffer) {
   }
 }
 
-async function extractWithGeminiProject(bytes: Buffer, mimeType: string): Promise<ExtractedProjectPlanning | null> {
-  const apiKey = process.env.GEMINI_API_KEY?.trim()
-  if (!apiKey) return null
-
-  try {
-    const base64Data = bytes.toString("base64")
-    const prompt = `Anda adalah asisten cerdas sistem ERP Manajemen Proyek Konsultasi Lingkungan & Perizinan (PT Global Solusi Prima).
-Tugas Anda adalah menganalisis dokumen perencanaan proyek (seperti Kerangka Acuan Kerja / TOR / KAK, Dokumen Rencana Kerja Teknis, Jadwal Pelaksanaan / Kurva S, atau Rincian Anggaran Biaya / RAB / BoQ / Penawaran Biaya) yang terlampir dengan sangat teliti dan mengekstrak data terstruktur ke dalam format JSON murni tanpa pembungkus markdown apapun.
-
-Format JSON yang wajib dihasilkan:
+function buildTargetedPrompt(target: ProjectOcrTarget): string {
+  if (target === "manpower") {
+    return `Anda adalah asisten cerdas sistem ERP Manajemen Proyek Konsultasi Lingkungan & Perizinan (PT Global Solusi Prima).
+Tugas Anda adalah membaca dokumen daftar personil / tim ahli / CV / susunan tenaga pelaksana proyek yang terlampir dengan teliti.
+FOKUS HANYA PADA EKSTRAKSI TIM SDM / MANPOWER.
+Hasilkan JSON murni tanpa pembungkus markdown apapun:
 {
-  "work_details": "Rincian ruang lingkup pekerjaan, metodologi pengerjaan, standar teknis, dan deliverables/dokumen hasil akhir yang harus disusun",
-  "starts_on": "YYYY-MM-DD atau null jika tidak tertera",
-  "ends_on": "YYYY-MM-DD atau null jika tidak tertera",
   "manpower": [
     {
-      "name": "Nama personil jika ada, atau jabatan (misal: Ir. Budi Santoso, ST)",
-      "role": "Peran di proyek (misal: Team Leader, Tenaga Ahli AMDAL, Ahli K3, Surveyor Lapangan, GIS/Drafter)",
-      "certification": "Sertifikasi atau keahlian jika ada (misal: KTPA, ATPA, SKA Lingkungan)",
-      "duration": "Estimasi durasi penugasan (misal: 1 Bulan, 3 Bulan, 14 Hari)"
+      "name": "Nama lengkap personil jika ada, atau nama posisi (misal: Ir. Ahmad Syahid)",
+      "role": "Peran / jabatan proyek (misal: Team Leader, Tenaga Ahli AMDAL, Ahli K3, Surveyor Lapangan, GIS/Drafter)",
+      "certification": "Sertifikasi atau keahlian jika tertera (misal: KTPA, ATPA, SKA Lingkungan, Ahli K3)",
+      "duration": "Estimasi durasi penugasan jika ada (misal: 1 Bulan, 2 Minggu, 5 Hari)"
     }
   ],
+  "summary": "Ringkasan jumlah personil yang berhasil diekstrak dari dokumen"
+}`
+  }
+
+  if (target === "technical") {
+    return `Anda adalah asisten cerdas sistem ERP Manajemen Proyek Konsultasi Lingkungan & Perizinan (PT Global Solusi Prima).
+Tugas Anda adalah membaca dokumen teknis / Kerangka Acuan Kerja (KAK) / TOR / Spesifikasi Teknis proyek yang terlampir.
+FOKUS HANYA PADA RINCIAN TEKNIS, TANGGAL PELAKSANAAN, DAN DELIVERABLES LAPORAN.
+Hasilkan JSON murni tanpa pembungkus markdown apapun:
+{
+  "starts_on": "Tanggal mulai pelaksanaan jika ada (format YYYY-MM-DD), atau null jika tidak ada",
+  "ends_on": "Target tanggal selesai/penyerahan jika ada (format YYYY-MM-DD), atau null jika tidak ada",
+  "work_details": "Rincian menyeluruh tentang ruang lingkup pekerjaan, metodologi teknis pelaksanaan, standar baku mutu, dan deliverables dokumen akhir yang wajib diserahkan",
+  "summary": "Ringkasan ruang lingkup teknis dan target pengerjaan"
+}`
+  }
+
+  if (target === "schedule") {
+    return `Anda adalah asisten cerdas sistem ERP Manajemen Proyek Konsultasi Lingkungan & Perizinan (PT Global Solusi Prima).
+Tugas Anda adalah membaca dokumen jadwal kerja / Kurva S / tahapan waktu pelaksanaan / timesheet proyek yang terlampir.
+FOKUS HANYA PADA TAHAPAN PELAKSANAAN DAN JADWAL WAKTU.
+Hasilkan JSON murni tanpa pembungkus markdown apapun:
+{
   "timesheet_schedule": [
     {
-      "phase": "Nama tahapan pekerjaan (misal: Mobilisasi & Sosialisasi, Uji Sampling Lingkungan, Penyusunan Dokumen Andal & RKL-RPL, Sidang Komisi Amdal, Penyerahan Dokumen Akhir)",
-      "start_date": "YYYY-MM-DD atau string kosong",
-      "end_date": "YYYY-MM-DD atau string kosong",
-      "pic": "PIC atau penanggung jawab tahapan jika ada"
+      "phase": "Nama tahapan pengerjaan (misal: Mobilisasi Tim, Uji Laboratorium Sampel, Penyusunan Dokumen Andal, Sidang Komisi, Penyerahan Laporan Akhir)",
+      "start_date": "Tanggal mulai tahapan (format YYYY-MM-DD), atau string kosong",
+      "end_date": "Target tanggal selesai tahapan (format YYYY-MM-DD), atau string kosong",
+      "pic": "PIC / penanggung jawab tahapan jika ada"
     }
   ],
+  "summary": "Ringkasan jumlah tahapan jadwal yang berhasil diidentifikasi"
+}`
+  }
+
+  if (target === "rab") {
+    return `Anda adalah asisten cerdas sistem ERP Manajemen Proyek Konsultasi Lingkungan & Perizinan (PT Global Solusi Prima).
+Tugas Anda adalah membaca dokumen Rencana Anggaran Biaya (RAB) / Bill of Quantities (BoQ) / rincian biaya penawaran proyek yang terlampir.
+FOKUS HANYA PADA RINCIAN POS ANGGARAN BIAYA (RAB).
+Hasilkan JSON murni tanpa pembungkus markdown apapun:
+{
   "rab_breakdown": [
     {
-      "category": "PILIH PERSIS SALAH SATU: 'personil' (biaya gaji/honor ahli), 'non_personil' (transportasi & akomodasi), 'lab_sampling' (uji laboratorium sampel air/udara/tanah), 'sidang_perizinan' (biaya sidang komisi amdal/pembahasan dinas), atau 'operasional' (laporan, ATK, perlengkapan lapangan)",
+      "category": "PILIH PERSIS SALAH SATU: 'personil' (biaya honor/gaji ahli & surveyor), 'non_personil' (akomodasi & transportasi), 'lab_sampling' (uji laboratorium sampel air/udara/tanah), 'sidang_perizinan' (biaya sidang dinas/komisi), atau 'operasional' (laporan, ATK, perlengkapan lapangan)",
       "description": "Uraian kebutuhan pos biaya secara jelas",
       "volume": angka_numerik_volume (default 1 jika tidak ada),
       "unit": "Satuan biaya (misal: OB, Titik, Paket, Hari, Kali, Rim)",
@@ -99,39 +127,64 @@ Format JSON yang wajib dihasilkan:
       "total": angka_numerik_total_subtotal (volume * unit_price)
     }
   ],
-  "summary": "Ringkasan singkat data yang berhasil dibaca dan diidentifikasi dari berkas ini"
+  "summary": "Ringkasan jumlah pos anggaran dan total pagu yang terbaca"
+}
+Aturan penting: Volume, unit_price, dan total WAJIB angka numerik murni tanpa simbol 'Rp' atau titik pemisah ribuan.`
+  }
+
+  // Fallback: all fields
+  return `Anda adalah asisten cerdas sistem ERP Manajemen Proyek Konsultasi Lingkungan & Perizinan (PT Global Solusi Prima).
+Tugas Anda adalah membaca dokumen perencanaan proyek yang terlampir dan mengekstrak data terstruktur dalam format JSON murni:
+{
+  "work_details": "Rincian ruang lingkup pekerjaan dan deliverables",
+  "starts_on": "YYYY-MM-DD atau null",
+  "ends_on": "YYYY-MM-DD atau null",
+  "manpower": [{ "name": "...", "role": "...", "certification": "...", "duration": "..." }],
+  "timesheet_schedule": [{ "phase": "...", "start_date": "...", "end_date": "...", "pic": "..." }],
+  "rab_breakdown": [{ "category": "personil|non_personil|lab_sampling|operasional|sidang_perizinan", "description": "...", "volume": 1, "unit": "...", "unit_price": 0, "total": 0 }],
+  "summary": "Ringkasan data"
+}`
 }
 
-Aturan penting:
-1. Volume, unit_price, dan total WAJIB angka numerik bulat/desimal murni (misal: 2500000, BUKAN 'Rp 2.500.000').
-2. Jika dokumen berfokus pada RAB, usahakan mengurai pos-pos anggarannya selengkap mungkin.
-3. Kategori RAB hanya boleh salah satu dari 5 pilihan di atas.
-4. Hanya berikan JSON murni tanpa \`\`\`json atau teks pengantar.`
+async function extractWithGeminiProject(
+  bytes: Buffer,
+  mimeType: string,
+  target: ProjectOcrTarget = "all"
+): Promise<ExtractedProjectPlanning | null> {
+  const apiKey = process.env.GEMINI_API_KEY?.trim()
+  if (!apiKey) return null
+
+  try {
+    const base64Data = bytes.toString("base64")
+    const prompt = buildTargetedPrompt(target)
 
     const modelName = process.env.GEMINI_MODEL?.trim() || "gemini-1.5-flash"
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: base64Data,
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: prompt },
+                {
+                  inline_data: {
+                    mime_type: mimeType,
+                    data: base64Data,
+                  },
                 },
-              },
-            ],
+              ],
+            },
+          ],
+          generationConfig: {
+            response_mime_type: "application/json",
+            temperature: 0.1,
           },
-        ],
-        generationConfig: {
-          response_mime_type: "application/json",
-          temperature: 0.1,
-        },
-      }),
-    })
+        }),
+      }
+    )
 
     if (!response.ok) {
       console.warn("Gemini Project OCR API status:", response.status)
@@ -144,6 +197,7 @@ Aturan penting:
 
     const cleaned = content.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim()
     const parsed = JSON.parse(cleaned)
+
     return {
       work_details: parsed.work_details || undefined,
       starts_on: parsed.starts_on || undefined,
@@ -155,7 +209,7 @@ Aturan penting:
             certification: m.certification ? String(m.certification).trim() : undefined,
             duration: m.duration ? String(m.duration).trim() : undefined,
           }))
-        : [],
+        : undefined,
       timesheet_schedule: Array.isArray(parsed.timesheet_schedule)
         ? parsed.timesheet_schedule.map((s: any) => ({
             phase: String(s.phase || "").trim(),
@@ -163,7 +217,7 @@ Aturan penting:
             end_date: s.end_date ? String(s.end_date).trim() : "",
             pic: s.pic ? String(s.pic).trim() : "",
           }))
-        : [],
+        : undefined,
       rab_breakdown: Array.isArray(parsed.rab_breakdown)
         ? parsed.rab_breakdown.map((r: any) => {
             const vol = Number(r.volume) || 1
@@ -179,8 +233,8 @@ Aturan penting:
               total: Number(r.total) || Math.round(vol * price),
             }
           })
-        : [],
-      summary: parsed.summary || "Dokumen perencanaan berhasil dianalisis dengan AI Gemini Vision.",
+        : undefined,
+      summary: parsed.summary || "Dokumen berhasil dianalisis dengan AI Gemini Vision.",
     }
   } catch (err) {
     console.warn("Gemini Project OCR failed:", err)
@@ -188,7 +242,11 @@ Aturan penting:
   }
 }
 
-export async function extractProjectPlanningDocument(bytes: Buffer, extension: string): Promise<ExtractedProjectPlanning> {
+export async function extractProjectPlanningDocument(
+  bytes: Buffer,
+  extension: string,
+  target: ProjectOcrTarget = "all"
+): Promise<ExtractedProjectPlanning> {
   const mimeMap: Record<string, string> = {
     pdf: "application/pdf",
     jpg: "image/jpeg",
@@ -197,10 +255,10 @@ export async function extractProjectPlanningDocument(bytes: Buffer, extension: s
     webp: "image/webp",
   }
 
-  // 1. Prioritize Gemini AI Vision when configured
+  // 1. Prioritize Gemini AI Vision with targeted prompt
   if (process.env.GEMINI_API_KEY?.trim() && mimeMap[extension]) {
     try {
-      const geminiResult = await extractWithGeminiProject(bytes, mimeMap[extension])
+      const geminiResult = await extractWithGeminiProject(bytes, mimeMap[extension], target)
       if (geminiResult) {
         return geminiResult
       }
@@ -215,10 +273,9 @@ export async function extractProjectPlanningDocument(bytes: Buffer, extension: s
       const pdfText = await extractPdfText(bytes)
       const text = pdfText.text.trim()
       if (text) {
-        // Simple heuristic fallback on text
         const dates = text.match(/\b\d{4}-\d{2}-\d{2}\b/g)
         return {
-          work_details: text.slice(0, 1500),
+          work_details: target === "technical" || target === "all" ? text.slice(0, 1500) : undefined,
           starts_on: dates?.[0],
           ends_on: dates?.[1],
           summary: "Teks PDF terbaca secara lokal. Periksa dan lengkapi rincian form.",
@@ -231,6 +288,6 @@ export async function extractProjectPlanningDocument(bytes: Buffer, extension: s
   }
 
   return {
-    summary: "Dokumen berhasil disimpan sebagai lampiran. Lengkapi isian form secara manual jika diperlukan.",
+    summary: "Dokumen berhasil disimpan sebagai lampiran resmi proyek.",
   }
 }

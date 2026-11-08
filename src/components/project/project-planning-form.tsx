@@ -15,14 +15,13 @@ import {
   UploadCloud,
   Loader2,
   AlertCircle,
-  ExternalLink,
-  ScanLine,
+  FileSpreadsheet,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { saveProjectPlanningAction } from "@/app/(workspace)/proyek/actions"
 import { DocumentUpload } from "@/components/sales/document-upload"
-import { rupiah, formatDateID } from "@/lib/procurement-ui"
+import { rupiah } from "@/lib/procurement-ui"
 
 export type ManpowerItem = {
   id: string
@@ -58,6 +57,8 @@ const rabCategories = [
   { value: "operasional", label: "Perlengkapan Lapangan & Laporan Teknis" },
 ]
 
+type TargetedTab = "manpower" | "technical" | "schedule" | "rab"
+
 export function ProjectPlanningForm({
   project,
   disabled,
@@ -85,20 +86,11 @@ export function ProjectPlanningForm({
   const [activeTab, setActiveTab] = useState<"sdm" | "teknis" | "jadwal" | "rab" | "lampiran">("sdm")
   const [uploadBusy, setUploadBusy] = useState(false)
 
-  // Smart OCR State & Ref
-  const ocrInputRef = useRef<HTMLInputElement>(null)
-  const [ocrLoading, setOcrLoading] = useState(false)
-  const [ocrNotice, setOcrNotice] = useState<{
-    type: "success" | "error"
-    message: string
-    details?: {
-      manpowerCount?: number
-      scheduleCount?: number
-      rabCount?: number
-      fileName?: string
-      summary?: string
-    }
-  } | null>(null)
+  // Targeted OCR State & Ref
+  const targetFileInputRef = useRef<HTMLInputElement>(null)
+  const [selectedTarget, setSelectedTarget] = useState<TargetedTab>("manpower")
+  const [activeOcrLoading, setActiveOcrLoading] = useState<TargetedTab | null>(null)
+  const [tabNotices, setTabNotices] = useState<Record<string, { type: "success" | "error"; message: string }>>({})
 
   // Form states
   const [workDetails, setWorkDetails] = useState(project.work_details || "")
@@ -126,28 +118,46 @@ export function ProjectPlanningForm({
   const rabTotal = rab.reduce((sum, item) => sum + (Number(item.total) || 0), 0)
   const projectedMargin = contractAmount > 0 ? ((contractAmount - rabTotal) / contractAmount) * 100 : 0
 
-  // Smart OCR Upload & Auto-fill Handler
-  async function handleOcrUpload(event: React.ChangeEvent<HTMLInputElement>) {
+  // Trigger targeted OCR upload from each tab
+  function triggerTargetedOcr(target: TargetedTab) {
+    if (busy) return
+    setSelectedTarget(target)
+    if (targetFileInputRef.current) {
+      targetFileInputRef.current.value = ""
+      targetFileInputRef.current.click()
+    }
+  }
+
+  // Handle targeted file upload and extraction
+  async function handleTargetedUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     if (!file) return
 
     if (file.size > 10 * 1024 * 1024) {
-      setOcrNotice({
-        type: "error",
-        message: "Ukuran berkas maksimal 10 MB. Silakan unggah dokumen yang lebih kecil.",
-      })
-      if (ocrInputRef.current) ocrInputRef.current.value = ""
+      setTabNotices((prev) => ({
+        ...prev,
+        [selectedTarget]: {
+          type: "error",
+          message: "Ukuran berkas maksimal 10 MB. Silakan unggah dokumen yang lebih ringkas.",
+        },
+      }))
       return
     }
 
-    setOcrLoading(true)
-    setOcrNotice(null)
+    const currentTarget = selectedTarget
+    setActiveOcrLoading(currentTarget)
+    setTabNotices((prev) => {
+      const next = { ...prev }
+      delete next[currentTarget]
+      return next
+    })
 
     try {
       const body = new FormData()
       body.set("file", file)
       body.set("branch_id", project.branch_id)
       body.set("project_id", project.id)
+      body.set("target", currentTarget)
 
       const response = await fetch("/api/project-documents", {
         method: "POST",
@@ -163,108 +173,140 @@ export function ProjectPlanningForm({
         throw new Error(result.error || "Gagal memproses dokumen.")
       }
 
-      // 1. Otomatis tambahkan file ke lampiran dokumen kelengkapan proyek
+      // 1. Berkas otomatis terdaftar sebagai lampiran dokumen kelengkapan proyek
       if (result.id) {
         setAttachments((prev) => (prev.includes(result.id) ? prev : [...prev, result.id]))
       }
 
       const extracted = result.extracted || {}
-      let mpAdded = 0
-      let schAdded = 0
-      let rabAdded = 0
 
-      // 2. Isi rincian teknis pekerjaan jika terdeteksi
-      if (extracted.work_details) {
-        setWorkDetails((prev) =>
-          prev.trim()
-            ? `${prev}\n\n[Hasil Analisis Dokumen - ${result.fileName}]:\n${extracted.work_details}`
-            : extracted.work_details
-        )
-      }
-
-      // 3. Isi tanggal mulai & selesai jika terdeteksi
-      if (extracted.starts_on) setStartsOn(extracted.starts_on)
-      if (extracted.ends_on) setEndsOn(extracted.ends_on)
-
-      // 4. Isi alokasi tim SDM
-      if (Array.isArray(extracted.manpower) && extracted.manpower.length > 0) {
-        const newMp: ManpowerItem[] = extracted.manpower.map((m: any, idx: number) => ({
-          id: `mp-${Date.now()}-${idx}`,
-          name: m.name || "",
-          role: m.role || "Tenaga Ahli",
-          certification: m.certification || "",
-          duration: m.duration || "1 Bulan",
+      // 2. Isi HANYA pada bagian yang ditargetkan (tidak menyentuh form lain)
+      if (currentTarget === "manpower") {
+        if (Array.isArray(extracted.manpower) && extracted.manpower.length > 0) {
+          const newMp: ManpowerItem[] = extracted.manpower.map((m: any, idx: number) => ({
+            id: `mp-${Date.now()}-${idx}`,
+            name: m.name || "",
+            role: m.role || "Tenaga Ahli",
+            certification: m.certification || "",
+            duration: m.duration || "1 Bulan",
+          }))
+          setManpower((prev) => {
+            const isInitial = prev.length === 1 && !prev[0].name && !prev[0].certification
+            return isInitial ? newMp : [...prev, ...newMp]
+          })
+          setTabNotices((prev) => ({
+            ...prev,
+            manpower: {
+              type: "success",
+              message: `Berhasil mengekstrak ${newMp.length} personil SDM dari "${file.name}". Berkas otomatis tersimpan di Lampiran Dokumen. Silakan periksa atau sesuaikan jika diperlukan.`,
+            },
+          }))
+        } else {
+          setTabNotices((prev) => ({
+            ...prev,
+            manpower: {
+              type: "success",
+              message: `Berkas "${file.name}" tersimpan di Lampiran. Teks personil tidak terbaca spesifik, silakan lengkapi tabel personil.`,
+            },
+          }))
+        }
+      } else if (currentTarget === "technical") {
+        let updatedFields = 0
+        if (extracted.work_details) {
+          setWorkDetails(extracted.work_details)
+          updatedFields++
+        }
+        if (extracted.starts_on) {
+          setStartsOn(extracted.starts_on)
+          updatedFields++
+        }
+        if (extracted.ends_on) {
+          setEndsOn(extracted.ends_on)
+          updatedFields++
+        }
+        setTabNotices((prev) => ({
+          ...prev,
+          technical: {
+            type: "success",
+            message: `Rincian teknis & lingkup kerja berhasil diekstrak dari "${file.name}". Berkas otomatis tersimpan di Lampiran Dokumen. Silakan periksa atau sesuaikan isian di bawah.`,
+          },
         }))
-        setManpower((prev) => {
-          const isInitial = prev.length === 1 && !prev[0].name && !prev[0].certification
-          return isInitial ? newMp : [...prev, ...newMp]
-        })
-        mpAdded = newMp.length
+      } else if (currentTarget === "schedule") {
+        if (Array.isArray(extracted.timesheet_schedule) && extracted.timesheet_schedule.length > 0) {
+          const newSch: ScheduleItem[] = extracted.timesheet_schedule.map((s: any, idx: number) => ({
+            id: `sch-${Date.now()}-${idx}`,
+            phase: s.phase || "Tahapan Proyek",
+            start_date: s.start_date || "",
+            end_date: s.end_date || "",
+            pic: s.pic || "",
+          }))
+          setSchedule((prev) => {
+            const isInitial = prev.length === 1 && !prev[0].phase && !prev[0].pic
+            return isInitial ? newSch : [...prev, ...newSch]
+          })
+          setTabNotices((prev) => ({
+            ...prev,
+            schedule: {
+              type: "success",
+              message: `Berhasil mengekstrak ${newSch.length} tahapan jadwal dari "${file.name}". Berkas otomatis tersimpan di Lampiran Dokumen. Silakan periksa atau sesuaikan tanggal pelaksanaan.`,
+            },
+          }))
+        } else {
+          setTabNotices((prev) => ({
+            ...prev,
+            schedule: {
+              type: "success",
+              message: `Berkas "${file.name}" tersimpan di Lampiran. Tahapan jadwal tidak terbaca otomatis, silakan lengkapi secara manual.`,
+            },
+          }))
+        }
+      } else if (currentTarget === "rab") {
+        if (Array.isArray(extracted.rab_breakdown) && extracted.rab_breakdown.length > 0) {
+          const newRab: RabItem[] = extracted.rab_breakdown.map((r: any, idx: number) => {
+            const vol = Number(r.volume) || 1
+            const price = Number(r.unit_price) || 0
+            return {
+              id: `rab-${Date.now()}-${idx}`,
+              category: r.category || "operasional",
+              description: r.description || "Pos Biaya Proyek",
+              volume: vol,
+              unit: r.unit || "Paket",
+              unit_price: price,
+              total: Number(r.total) || Math.round(vol * price),
+            }
+          })
+          setRab((prev) => {
+            const isInitial = prev.length === 1 && !prev[0].description && prev[0].unit_price === 0
+            return isInitial ? newRab : [...prev, ...newRab]
+          })
+          setTabNotices((prev) => ({
+            ...prev,
+            rab: {
+              type: "success",
+              message: `Berhasil membaca ${newRab.length} pos anggaran RAB dari "${file.name}". Berkas otomatis tersimpan di Lampiran Dokumen. Silakan periksa volume dan harga satuan.`,
+            },
+          }))
+        } else {
+          setTabNotices((prev) => ({
+            ...prev,
+            rab: {
+              type: "success",
+              message: `Berkas "${file.name}" tersimpan di Lampiran. Pos biaya tidak terbaca terstruktur, silakan lengkapi tabel RAB.`,
+            },
+          }))
+        }
       }
-
-      // 5. Isi jadwal & timesheet
-      if (Array.isArray(extracted.timesheet_schedule) && extracted.timesheet_schedule.length > 0) {
-        const newSch: ScheduleItem[] = extracted.timesheet_schedule.map((s: any, idx: number) => ({
-          id: `sch-${Date.now()}-${idx}`,
-          phase: s.phase || "Tahapan Proyek",
-          start_date: s.start_date || "",
-          end_date: s.end_date || "",
-          pic: s.pic || "",
-        }))
-        setSchedule((prev) => {
-          const isInitial = prev.length === 1 && !prev[0].phase && !prev[0].pic
-          return isInitial ? newSch : [...prev, ...newSch]
-        })
-        schAdded = newSch.length
-      }
-
-      // 6. Isi pos Rencana Anggaran Biaya (RAB)
-      if (Array.isArray(extracted.rab_breakdown) && extracted.rab_breakdown.length > 0) {
-        const newRab: RabItem[] = extracted.rab_breakdown.map((r: any, idx: number) => {
-          const vol = Number(r.volume) || 1
-          const price = Number(r.unit_price) || 0
-          return {
-            id: `rab-${Date.now()}-${idx}`,
-            category: r.category || "operasional",
-            description: r.description || "Pos Biaya Proyek",
-            volume: vol,
-            unit: r.unit || "Paket",
-            unit_price: price,
-            total: Number(r.total) || Math.round(vol * price),
-          }
-        })
-        setRab((prev) => {
-          const isInitial = prev.length === 1 && !prev[0].description && prev[0].unit_price === 0
-          return isInitial ? newRab : [...prev, ...newRab]
-        })
-        rabAdded = newRab.length
-      }
-
-      setOcrNotice({
-        type: "success",
-        message: `Dokumen "${result.fileName}" berhasil dianalisis dengan Smart OCR dan otomatis terdaftar sebagai Lampiran Dokumen Kelengkapan Proyek.`,
-        details: {
-          fileName: result.fileName,
-          manpowerCount: mpAdded,
-          scheduleCount: schAdded,
-          rabCount: rabAdded,
-          summary: extracted.summary,
-        },
-      })
-
-      // Otomatis pindah tab ke bagian yang paling signifikan diperbarui
-      if (rabAdded > 0) setActiveTab("rab")
-      else if (mpAdded > 0) setActiveTab("sdm")
-      else if (schAdded > 0) setActiveTab("jadwal")
-      else if (extracted.work_details) setActiveTab("teknis")
     } catch (err) {
-      setOcrNotice({
-        type: "error",
-        message: err instanceof Error ? err.message : "Terjadi kesalahan saat memproses OCR dokumen.",
-      })
+      setTabNotices((prev) => ({
+        ...prev,
+        [currentTarget]: {
+          type: "error",
+          message: err instanceof Error ? err.message : "Terjadi kesalahan saat memproses OCR dokumen.",
+        },
+      }))
     } finally {
-      setOcrLoading(false)
-      if (ocrInputRef.current) ocrInputRef.current.value = ""
+      setActiveOcrLoading(null)
+      if (targetFileInputRef.current) targetFileInputRef.current.value = ""
     }
   }
 
@@ -321,7 +363,7 @@ export function ProjectPlanningForm({
     )
   }
 
-  const busy = disabled || isPending || uploadBusy || ocrLoading
+  const busy = disabled || isPending || uploadBusy || activeOcrLoading !== null
 
   return (
     <div className="space-y-6">
@@ -331,121 +373,15 @@ export function ProjectPlanningForm({
         </div>
       )}
 
-      {/* SMART OCR CARD & UPLOAD DOKUMEN PERENCANAAN */}
-      <Card className="border-indigo-200 bg-gradient-to-br from-indigo-50/90 via-purple-50/50 to-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-start gap-3.5">
-            <div className="flex size-11 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm shrink-0 mt-0.5">
-              <Sparkles className="size-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-indigo-950">
-                  Smart OCR & Unggah Dokumen Perencanaan
-                </h3>
-                <span className="rounded-full bg-indigo-200/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-900">
-                  AI Gemini Vision
-                </span>
-              </div>
-              <p className="text-xs text-indigo-900/80 mt-1 max-w-2xl leading-relaxed">
-                Unggah dokumen pendukung perencanaan seperti <strong>KAK / TOR, Dokumen Teknis, Kurva S Jadwal, atau Rincian RAB</strong> (PDF, JPG, PNG). Sistem otomatis membaca isi berkas, mengisi formulir proyek, dan langsung menjadikannya lampiran resmi.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              ref={ocrInputRef}
-              type="file"
-              accept=".pdf,image/png,image/jpeg,image/webp"
-              onChange={handleOcrUpload}
-              className="hidden"
-              disabled={busy}
-            />
-            <Button
-              type="button"
-              onClick={() => ocrInputRef.current?.click()}
-              disabled={busy}
-              className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm font-semibold text-xs px-4 py-2.5"
-            >
-              {ocrLoading ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" /> Sedang Menganalisis Dokumen...
-                </>
-              ) : (
-                <>
-                  <UploadCloud className="size-4" /> Unggah & Baca Dokumen (OCR)
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {/* Notifikasi Hasil Ekstraksi OCR */}
-        {ocrNotice && (
-          <div
-            className={`mt-4 rounded-xl border p-4 text-xs ${
-              ocrNotice.type === "success"
-                ? "border-emerald-300 bg-emerald-50/90 text-emerald-950"
-                : "border-red-300 bg-red-50/90 text-red-950"
-            }`}
-          >
-            <div className="flex items-start gap-2.5">
-              {ocrNotice.type === "success" ? (
-                <CheckCircle2 className="size-4 shrink-0 mt-0.5 text-emerald-600" />
-              ) : (
-                <AlertCircle className="size-4 text-red-600 shrink-0 mt-0.5" />
-              )}
-              <div className="flex-1 space-y-2">
-                <p className="font-semibold">{ocrNotice.message}</p>
-                {ocrNotice.details && (
-                  <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px]">
-                    {ocrNotice.details.manpowerCount !== undefined && ocrNotice.details.manpowerCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("sdm")}
-                        className="rounded-lg bg-emerald-200/80 px-2.5 py-1 font-medium text-emerald-900 hover:bg-emerald-300 transition"
-                      >
-                        👥 {ocrNotice.details.manpowerCount} Personil SDM Ditambahkan →
-                      </button>
-                    )}
-                    {ocrNotice.details.scheduleCount !== undefined && ocrNotice.details.scheduleCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("jadwal")}
-                        className="rounded-lg bg-emerald-200/80 px-2.5 py-1 font-medium text-emerald-900 hover:bg-emerald-300 transition"
-                      >
-                        📅 {ocrNotice.details.scheduleCount} Tahapan Jadwal Ditambahkan →
-                      </button>
-                    )}
-                    {ocrNotice.details.rabCount !== undefined && ocrNotice.details.rabCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab("rab")}
-                        className="rounded-lg bg-emerald-200/80 px-2.5 py-1 font-medium text-emerald-900 hover:bg-emerald-300 transition"
-                      >
-                        💰 {ocrNotice.details.rabCount} Pos Biaya RAB Terisi →
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab("lampiran")}
-                      className="rounded-lg bg-indigo-100 px-2.5 py-1 font-medium text-indigo-900 hover:bg-indigo-200 transition"
-                    >
-                      📎 Lihat Lampiran ({attachments.length}) →
-                    </button>
-                  </div>
-                )}
-                {ocrNotice.details?.summary && (
-                  <p className="text-[11px] text-muted italic mt-1 leading-relaxed">
-                    {ocrNotice.details.summary}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </Card>
+      {/* Hidden File Input for Targeted OCR */}
+      <input
+        ref={targetFileInputRef}
+        type="file"
+        accept=".pdf,image/png,image/jpeg,image/webp"
+        onChange={handleTargetedUpload}
+        className="hidden"
+        disabled={busy}
+      />
 
       {/* Metric Cards Summary */}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -541,17 +477,54 @@ export function ProjectPlanningForm({
         {/* TAB 1: SDM / MANPOWER */}
         {activeTab === "sdm" && (
           <Card className="p-5 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="font-semibold text-ink">Alokasi Tim SDM / Man Power Proyek</h3>
                 <p className="text-xs text-muted mt-1">
                   Daftarkan Project Manager, Tenaga Ahli, dan tim pendukung lapangan.
                 </p>
               </div>
-              <Button type="button" onClick={addManpower} disabled={busy} variant="secondary" className="gap-1 text-xs">
-                <Plus className="size-3.5" /> Tambah Personil
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => triggerTargetedOcr("manpower")}
+                  disabled={busy}
+                  className="gap-2 border-indigo-200 bg-indigo-50/80 text-indigo-900 hover:bg-indigo-100 text-xs font-semibold"
+                >
+                  {activeOcrLoading === "manpower" ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin text-indigo-600" /> Membaca Dokumen SDM...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="size-3.5 text-indigo-600" /> Upload Berkas Tim SDM (OCR)
+                    </>
+                  )}
+                </Button>
+                <Button type="button" onClick={addManpower} disabled={busy} variant="secondary" className="gap-1 text-xs">
+                  <Plus className="size-3.5" /> Tambah Personil
+                </Button>
+              </div>
             </div>
+
+            {/* Tab Notice */}
+            {tabNotices.manpower && (
+              <div
+                className={`rounded-xl border p-3 text-xs flex items-start gap-2 ${
+                  tabNotices.manpower.type === "success"
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+                    : "border-red-300 bg-red-50 text-red-950"
+                }`}
+              >
+                {tabNotices.manpower.type === "success" ? (
+                  <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
+                ) : (
+                  <AlertCircle className="size-4 shrink-0 text-red-600 mt-0.5" />
+                )}
+                <p className="leading-relaxed">{tabNotices.manpower.message}</p>
+              </div>
+            )}
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -630,12 +603,49 @@ export function ProjectPlanningForm({
         {/* TAB 2: TEKNIS & DELIVERABLES */}
         {activeTab === "teknis" && (
           <Card className="p-5 space-y-4">
-            <div>
-              <h3 className="font-semibold text-ink">Rincian Teknis & Deliverables Pekerjaan</h3>
-              <p className="text-xs text-muted mt-1">
-                Jelaskan lingkup detail pengerjaan, metode teknis, logistik/alat yang diperlukan, dan dokumen hasil akhir proyek.
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-ink">Rincian Teknis & Deliverables Pekerjaan</h3>
+                <p className="text-xs text-muted mt-1">
+                  Jelaskan lingkup detail pengerjaan, metode teknis, logistik/alat yang diperlukan, dan dokumen hasil akhir proyek.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => triggerTargetedOcr("technical")}
+                disabled={busy}
+                className="gap-2 border-indigo-200 bg-indigo-50/80 text-indigo-900 hover:bg-indigo-100 text-xs font-semibold"
+              >
+                {activeOcrLoading === "technical" ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin text-indigo-600" /> Membaca Dokumen KAK...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="size-3.5 text-indigo-600" /> Upload Dokumen Teknis / KAK (OCR)
+                  </>
+                )}
+              </Button>
             </div>
+
+            {/* Tab Notice */}
+            {tabNotices.technical && (
+              <div
+                className={`rounded-xl border p-3 text-xs flex items-start gap-2 ${
+                  tabNotices.technical.type === "success"
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+                    : "border-red-300 bg-red-50 text-red-950"
+                }`}
+              >
+                {tabNotices.technical.type === "success" ? (
+                  <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
+                ) : (
+                  <AlertCircle className="size-4 shrink-0 text-red-600 mt-0.5" />
+                )}
+                <p className="leading-relaxed">{tabNotices.technical.message}</p>
+              </div>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block text-sm">
@@ -678,17 +688,54 @@ export function ProjectPlanningForm({
         {/* TAB 3: JADWAL & TIMESHEET */}
         {activeTab === "jadwal" && (
           <Card className="p-5 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="font-semibold text-ink">Jadwal & Timesheet Pelaksanaan</h3>
                 <p className="text-xs text-muted mt-1">
                   Uraikan tahapan pengerjaan proyek dari kick-off hingga penyerahan laporan akhir.
                 </p>
               </div>
-              <Button type="button" onClick={addSchedule} disabled={busy} variant="secondary" className="gap-1 text-xs">
-                <Plus className="size-3.5" /> Tambah Tahapan
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => triggerTargetedOcr("schedule")}
+                  disabled={busy}
+                  className="gap-2 border-indigo-200 bg-indigo-50/80 text-indigo-900 hover:bg-indigo-100 text-xs font-semibold"
+                >
+                  {activeOcrLoading === "schedule" ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin text-indigo-600" /> Membaca Jadwal / Kurva S...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="size-3.5 text-indigo-600" /> Upload Jadwal / Kurva S (OCR)
+                    </>
+                  )}
+                </Button>
+                <Button type="button" onClick={addSchedule} disabled={busy} variant="secondary" className="gap-1 text-xs">
+                  <Plus className="size-3.5" /> Tambah Tahapan
+                </Button>
+              </div>
             </div>
+
+            {/* Tab Notice */}
+            {tabNotices.schedule && (
+              <div
+                className={`rounded-xl border p-3 text-xs flex items-start gap-2 ${
+                  tabNotices.schedule.type === "success"
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+                    : "border-red-300 bg-red-50 text-red-950"
+                }`}
+              >
+                {tabNotices.schedule.type === "success" ? (
+                  <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
+                ) : (
+                  <AlertCircle className="size-4 shrink-0 text-red-600 mt-0.5" />
+                )}
+                <p className="leading-relaxed">{tabNotices.schedule.message}</p>
+              </div>
+            )}
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -764,17 +811,54 @@ export function ProjectPlanningForm({
         {/* TAB 4: RENCANA ANGGARAN BIAYA (RAB) */}
         {activeTab === "rab" && (
           <Card className="p-5 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="font-semibold text-ink">Rencana Anggaran Biaya (RAB) Proyek</h3>
                 <p className="text-xs text-muted mt-1">
                   Rincikan biaya personil, non-personil, laboratorium, dan operasional. Pagu ini akan terkunci setelah di-ACC Direktur Utama.
                 </p>
               </div>
-              <Button type="button" onClick={addRab} disabled={busy} variant="secondary" className="gap-1 text-xs">
-                <Plus className="size-3.5" /> Tambah Pos Biaya
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => triggerTargetedOcr("rab")}
+                  disabled={busy}
+                  className="gap-2 border-indigo-200 bg-indigo-50/80 text-indigo-900 hover:bg-indigo-100 text-xs font-semibold"
+                >
+                  {activeOcrLoading === "rab" ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin text-indigo-600" /> Membaca Berkas RAB / BoQ...
+                    </>
+                  ) : (
+                    <>
+                      <FileSpreadsheet className="size-3.5 text-indigo-600" /> Upload Berkas RAB / BoQ (OCR)
+                    </>
+                  )}
+                </Button>
+                <Button type="button" onClick={addRab} disabled={busy} variant="secondary" className="gap-1 text-xs">
+                  <Plus className="size-3.5" /> Tambah Pos Biaya
+                </Button>
+              </div>
             </div>
+
+            {/* Tab Notice */}
+            {tabNotices.rab && (
+              <div
+                className={`rounded-xl border p-3 text-xs flex items-start gap-2 ${
+                  tabNotices.rab.type === "success"
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+                    : "border-red-300 bg-red-50 text-red-950"
+                }`}
+              >
+                {tabNotices.rab.type === "success" ? (
+                  <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
+                ) : (
+                  <AlertCircle className="size-4 shrink-0 text-red-600 mt-0.5" />
+                )}
+                <p className="leading-relaxed">{tabNotices.rab.message}</p>
+              </div>
+            )}
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -882,22 +966,11 @@ export function ProjectPlanningForm({
         {/* TAB 5: LAMPIRAN PENDUKUNG */}
         {activeTab === "lampiran" && (
           <Card className="p-5 space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="font-semibold text-ink">Lampiran Dokumen Teknis & RAB Pendukung</h3>
-                <p className="text-xs text-muted mt-1">
-                  Seluruh dokumen yang diunggah otomatis tersimpan di sini sebagai berkas pendukung resmi proyek.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => ocrInputRef.current?.click()}
-                disabled={busy}
-                className="gap-2 border-indigo-200 bg-indigo-50/70 text-indigo-900 hover:bg-indigo-100 text-xs"
-              >
-                <Sparkles className="size-3.5 text-indigo-600" /> Unggah & Baca Smart OCR
-              </Button>
+            <div>
+              <h3 className="font-semibold text-ink">Lampiran Dokumen Kelengkapan Proyek</h3>
+              <p className="text-xs text-muted mt-1">
+                Seluruh dokumen yang diunggah dari tab SDM, Teknis, Jadwal, dan RAB otomatis terkumpul di sini sebagai berkas lampiran resmi proyek. Anda juga dapat mengunggah dokumen pendukung lainnya secara manual.
+              </p>
             </div>
 
             <DocumentUpload

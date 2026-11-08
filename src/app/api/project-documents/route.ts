@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import { createClient } from "@/lib/supabase/server"
 import { readViewAsState } from "@/lib/auth/view-as"
 import { isSameOrigin } from "@/lib/auth/same-origin"
-import { extractProjectPlanningDocument } from "./extract"
+import { extractProjectPlanningDocument, type ProjectOcrTarget } from "./extract"
 
 export const runtime = "nodejs"
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -36,6 +36,7 @@ export async function POST(request: Request) {
   }
 
   const branchId = String(body.get("branch_id") || "")
+  const target = (String(body.get("target") || "all")) as ProjectOcrTarget
   const file = body.get("file")
 
   if (!uuidRegex.test(branchId) || !(file instanceof File) || !file.size || file.size > MAX_BYTES) {
@@ -117,8 +118,8 @@ export async function POST(request: Request) {
     )
   }
 
-  // Lakukan ekstraksi OCR AI
-  const extracted = await extractProjectPlanningDocument(bytes, extension)
+  // Lakukan ekstraksi OCR AI dengan target spesifik
+  const extracted = await extractProjectPlanningDocument(bytes, extension, target)
 
   return Response.json(
     {
@@ -126,6 +127,7 @@ export async function POST(request: Request) {
       fileName: file.name,
       fileSize: file.size,
       contentType,
+      target,
       extracted,
     },
     { headers: { "Cache-Control": "private, no-store" } }
