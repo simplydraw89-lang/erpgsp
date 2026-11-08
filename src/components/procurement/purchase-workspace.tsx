@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { requireWorkspace } from "@/lib/auth/context"
 import { ProcurementMessage, ProcurementUnavailable } from "@/components/procurement/section-nav"
 import { SubmitButton } from "@/components/procurement/submit-button"
+import { AutoRefreshOnFocus } from "@/components/ui/auto-refresh-on-focus"
 import { requestVendor, reviewVendor } from "@/app/(workspace)/pengajuan/actions"
 import { type BusinessUnit, type ProcurementVendor, type PurchaseRequest, type WorkAssignment, procurementInput as input, procurementLabel as label, isProcurementMissing, purchaseStatusLabels, rupiah, formatDateID } from "@/lib/procurement-ui"
 
@@ -45,14 +46,35 @@ export async function PurchaseWorkspace({ view, query }: { view: "pembelian" | "
     const userBranchId = jobs.find(j => j.branch_id)?.branch_id ?? null;
   const pending = rows.filter(r => ["branch_review", "director_review", "accounting_review", "payment_ready"].includes(r.status))
   const pendingValue = rows.filter(r => !["draft", "rejected", "paid"].includes(r.status)).reduce((sum, r) => sum + Number(r.payable_amount), 0)
+
+  // Prioritas Posisi: Pengajuan yang urgent/sedang butuh persetujuan & verifikasi selalu berada di paling atas
+  const purchasePriority = (status: string) => {
+    switch (status) {
+      case "director_review": return 1;   // Persetujuan Direktur Keuangan (Prioritas 1)
+      case "branch_review": return 2;     // Verifikasi Manager Cabang (Prioritas 2)
+      case "accounting_review": return 3; // Verifikasi Accounting & Tax (Prioritas 3)
+      case "payment_ready": return 4;     // Siap Dibayar Finance (Prioritas 4)
+      case "rejected": return 5;          // Perlu Revisi
+      case "draft": return 6;             // Draft
+      case "paid": return 7;              // Selesai / Lunas
+      default: return 8;
+    }
+  };
+  const sortedRows = [...rows].sort((a, b) => {
+    const pDiff = purchasePriority(a.status) - purchasePriority(b.status);
+    if (pDiff !== 0) return pDiff;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
   return <div className="space-y-6">
+    <AutoRefreshOnFocus />
     <header className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-sm font-medium text-brand">Operasional perusahaan</p><h1 className="mt-2 text-3xl font-bold">{view === "vendor" ? "Vendor" : "Pembelian"}</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-muted">{view === "vendor" ? "Satu daftar vendor untuk kebutuhan proyek dan nonproyek, termasuk lab dan subkon. Daftar mengikuti cakupan akses cabang Anda." : "Pengadaan barang dan jasa, pemeriksaan dan pembayaran per cabang."}</p></div>{view === "pembelian" && !missing && !isReadOnlyPreview && writableBranches.length > 0 && <Button asChild><Link href="/pengajuan/pembelian/baru">+ Pengajuan pembelian</Link></Button>}</header>
     <ProcurementMessage error={query.error} notice={query.notice} />
     {isReadOnlyPreview && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Mode lihat sebagai aktif. Semua tindakan perubahan dinonaktifkan.</p>}
     {missing ? <ProcurementUnavailable /> : <>
       {view === "pembelian" && <>
         <div className="grid gap-4 sm:grid-cols-3">{[["Pengajuan terlihat", String(rows.length)], ["Dalam pemeriksaan / pembayaran", String(pending.length)], ["Rencana bayar belum lunas", rupiah(pendingValue)]].map(([title, val]) => <Card key={title} className="p-5"><p className="text-sm text-muted">{title}</p><p className="mt-2 text-2xl font-semibold">{val}</p></Card>)}</div>
-        <p className="text-sm leading-6 text-muted">Pengaju → Manager Cabang → Direktur Keuangan → Accounting & Tax → Finance bayar. Pengajuan Manager Cabang / Project Manager langsung ke Direktur Keuangan. Ringkasan mengikuti data yang diizinkan database untuk akun Anda.</p>
+        <p className="text-sm leading-6 text-muted">Daftar diurutkan berdasarkan prioritas status: Pengajuan yang memerlukan tindakan segera (persetujuan Direktur, verifikasi Manager, atau pembayaran) selalu berada di atas.</p>
         <TableFilterBar
           branches={branches}
           isCentralUser={isCentralUser}
@@ -68,7 +90,27 @@ export async function PurchaseWorkspace({ view, query }: { view: "pembelian" | "
             }
           ]}
         />
-        <Card className="overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-canvas text-muted"><tr>{["No.", "No. Dokumen / Invoice", "Cabang", "Vendor", "Status", "Dibayar ke vendor", ""].map(t => <th key={t} className="px-4 py-3 font-medium">{t}</th>)}</tr></thead><tbody>{rows.map((r, idx) => <tr key={r.id} className="border-t border-line"><td className="px-4 py-4 text-xs font-semibold text-muted">{idx + 1}</td><td className="px-4 py-4 font-medium">{r.request_number ? <span className="block font-semibold text-brand text-xs">{r.request_number}</span> : null}<span className="text-sm">{r.invoice_number}</span><span className="mt-1 block text-xs text-muted">{formatDateID(r.invoice_date)}</span></td><td className="px-4 py-4">{branches.find(b => b.id === r.branch_id)?.name ?? "Cabang"}</td><td className="px-4 py-4">{vendorRows.find(v => v.id === r.vendor_id)?.name ?? r.vendor_snapshot?.name ?? "Belum dipilih"}</td><td className="px-4 py-4"><span className="rounded-full bg-canvas px-3 py-1 text-xs">{purchaseStatusLabels[r.status] ?? r.status}</span></td><td className="px-4 py-4">{rupiah(r.payable_amount)}</td><td className="px-4 py-4"><Link href={`/pengajuan/${r.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-brand hover:underline">{["draft", "rejected"].includes(r.status) ? "Edit ✎" : r.status === "payment_ready" ? "Periksa & Bayar →" : "Buka →"}</Link></td></tr>)}</tbody></table></div>{!rows.length && <p className="p-8 text-center text-sm text-muted">Belum ada pengajuan pembelian dalam cakupan akses Anda.</p>}</Card>
+        <Card className="overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-canvas text-muted"><tr>{["No.", "No. Dokumen / Invoice", "Cabang", "Vendor", "Status", "Dibayar ke vendor", ""].map(t => <th key={t} className="px-4 py-3 font-medium">{t}</th>)}</tr></thead><tbody>{sortedRows.map((r, idx) => {
+          const isUrgent = ["director_review", "branch_review", "accounting_review", "payment_ready"].includes(r.status);
+          return <tr key={r.id} className={`border-t border-line ${isUrgent ? "bg-amber-50/40" : ""}`}><td className="px-4 py-4 text-xs font-semibold text-muted">{idx + 1}</td><td className="px-4 py-4 font-medium">{r.request_number ? <span className="block font-semibold text-brand text-xs">{r.request_number}</span> : null}<span className="text-sm">{r.invoice_number}</span><span className="mt-1 block text-xs text-muted">{formatDateID(r.invoice_date)}</span></td><td className="px-4 py-4">{branches.find(b => b.id === r.branch_id)?.name ?? "Cabang"}</td><td className="px-4 py-4">{vendorRows.find(v => v.id === r.vendor_id)?.name ?? r.vendor_snapshot?.name ?? "Belum dipilih"}</td><td className="px-4 py-4">
+            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+              r.status === "director_review"
+                ? "bg-amber-100 text-amber-900 border border-amber-300 font-bold"
+                : r.status === "branch_review"
+                ? "bg-blue-100 text-blue-900 border border-blue-200"
+                : r.status === "accounting_review"
+                ? "bg-purple-100 text-purple-900 border border-purple-200"
+                : r.status === "payment_ready"
+                ? "bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold"
+                : r.status === "rejected"
+                ? "bg-orange-100 text-orange-900 border border-orange-200"
+                : "bg-canvas text-slate-700"
+            }`}>
+              {isUrgent ? "⚡ " : ""}
+              {purchaseStatusLabels[r.status] ?? r.status}
+            </span>
+          </td><td className="px-4 py-4">{rupiah(r.payable_amount)}</td><td className="px-4 py-4"><Link href={`/pengajuan/${r.id}`} className="inline-flex items-center gap-1 font-medium text-brand hover:underline">{["draft", "rejected"].includes(r.status) ? "Edit ✎" : r.status === "payment_ready" ? "Periksa & Bayar →" : isUrgent ? "Periksa & Setujui →" : "Buka →"}</Link></td></tr>;
+        })}</tbody></table></div>{!sortedRows.length && <p className="p-8 text-center text-sm text-muted">Belum ada pengajuan pembelian dalam cakupan akses Anda.</p>}</Card>
       </>}
       {view === "vendor" && <>
         <Card className="p-5"><h2 className="font-semibold">Usulkan vendor baru</h2><p className="mt-1 text-sm text-muted">Pendaftaran vendor tidak membuat akun login. Finance memverifikasi identitas, NPWP dan rekening sebelum vendor dipakai untuk pembayaran.</p><form action={requestVendor} className="mt-5"><fieldset disabled={isReadOnlyPreview || !writableBranches.length} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -3,6 +3,7 @@ import { SalesMenu } from "./sales-menu"
 import { requireWorkspace } from "@/lib/auth/context"
 import { SalesForms } from "./sales-forms"
 import { ProcurementMessage } from "@/components/procurement/section-nav"
+import { AutoRefreshOnFocus } from "@/components/ui/auto-refresh-on-focus"
 import type { BusinessUnit, SalesDocument } from "@/lib/procurement-ui"
 import type { SphRegisterRow } from "@/lib/sales"
 
@@ -25,6 +26,7 @@ export async function SalesWorkspace({ view, query }: { view: "klien" | "sph" | 
   const writableBranches = actorRole === "owner" || centralDirector ? branches : branches.filter(branch => workAssignments.some(job => job.branch_id === branch.id))
   const filterBranches = branches.filter(branch => actorRole === "owner" || workAssignments.some(job => job.branch_id === branch.id || (!job.branch_id && ["president","finance_director","technical_director","accounting_tax","finance"].includes(job.job_role))))
   return <div className="space-y-6">
+    <AutoRefreshOnFocus />
     <header><p className="text-sm font-medium text-brand">Penjualan</p><h1 className="mt-2 text-3xl font-bold">{view === "klien" ? "Klien" : view.toUpperCase()}</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-muted">{view === "klien" ? "Master calon mitra bersama perusahaan; akses daftar mengikuti role pemasaran." : view === "sph" ? "Penawaran berdasarkan klien terdaftar, dengan draft dan pemeriksaan berjenjang." : "Perintah kerja berdasarkan SPH yang sudah disepakati."}</p></header>
     <SalesMenu active={view} />
     <ProcurementMessage error={query.error} notice={query.notice} />
