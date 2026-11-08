@@ -1,10 +1,9 @@
 -- Migration: 20261108_fix_spk_director_approval_and_notifications.sql
--- 1. Mengikutsertakan Direktur Keuangan (finance_director) bersama Direktur Utama dan Direktur Teknis pada validasi SPK
--- 2. Memperbarui antrean pemeriksaan bisnis (api_sph_review_queue) agar SPK berstatus director_review tampil di "Butuh verifikasi saya"
--- 3. Memastikan notifikasi lonceng (api_sales_notifications) terkirim ke seluruh Direksi untuk validasi SPK
--- 4. Memastikan nilai kontrak (amount) tersalin dari SPH ke SPK saat pembuatan, dan mem-backfill SPK yang bernilai null
+-- Pemisahan Tegas Kewenangan Persetujuan Direksi:
+-- 1. Pengajuan SPK: Persetujuannya LANGSUNG ke Direktur Utama (president)
+-- 2. Pengajuan SPH & Pembelian: Persetujuannya ke Direktur Keuangan (finance_director)
 
--- 1. Perbarui can_review_spk agar mencakup seluruh Direksi (president, technical_director, finance_director)
+-- 1. Persetujuan SPK: Eksklusif Direktur Utama (president) dan Super Admin
 create or replace function gsp_private.can_review_spk(d public.sales_documents)
 returns boolean
 language sql
@@ -16,11 +15,11 @@ as $$
   and d.status = 'director_review'
   and (
     gsp_private.is_superadmin(d.organization_id)
-    or gsp_private.has_job(d.organization_id, null, array['president', 'technical_director', 'finance_director'])
+    or gsp_private.has_job(d.organization_id, null, array['president'])
   );
 $$;
 
--- 2. Perbarui can_edit_spk agar seluruh Direksi dan pemeriksa dapat melakukan revisi/penyesuaian data SPK
+-- 2. Hak Edit SPK: Direktur Utama, Pembuat, atau Akses Sales Cabang
 create or replace function gsp_private.can_edit_spk(d public.sales_documents)
 returns boolean
 language sql
@@ -32,13 +31,41 @@ as $$
   and d.status in ('director_review', 'revision_requested', 'draft')
   and (
     gsp_private.is_superadmin(d.organization_id)
-    or gsp_private.has_job(d.organization_id, null, array['president', 'technical_director', 'finance_director'])
+    or gsp_private.has_job(d.organization_id, null, array['president'])
     or d.created_by = auth.uid()
     or gsp_private.can_access_business(d.organization_id, d.branch_id, 'sales')
   );
 $$;
 
--- 3. Perbarui api_sph_review_queue agar memasukkan dokumen SPK ke daftar "Butuh verifikasi saya"
+-- 3. Persetujuan SPH: Tahap Direktur Eksklusif ke Direktur Keuangan (finance_director)
+create or replace function gsp_private.can_review_sph(d public.sales_documents)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select d.kind = 'sph'
+  and d.status in ('branch_review', 'director_review', 'accounting_review', 'finance_review')
+  and (
+    gsp_private.is_superadmin(d.organization_id)
+    or (
+      gsp_private.sales_document_reader(d.organization_id, d.branch_id)
+      and (d.created_by <> auth.uid() or gsp_private.is_superadmin(d.organization_id))
+      and case d.status
+        when 'branch_review' then gsp_private.has_job(d.organization_id, d.branch_id, array['branch_manager', 'admin'])
+        when 'director_review' then gsp_private.has_job(d.organization_id, null, array['finance_director'])
+        when 'accounting_review' then gsp_private.has_job(d.organization_id, null, array['accounting_tax'])
+        when 'finance_review' then gsp_private.has_job(d.organization_id, null, array['finance'])
+        else false
+      end
+    )
+  );
+$$;
+
+-- 4. Antrean Pemeriksaan Bisnis ("Butuh verifikasi saya"):
+--    - SPH (director_review) -> Direktur Keuangan
+--    - SPK (director_review) -> Direktur Utama
 create or replace function gsp_private.api_sph_review_queue(p_org uuid)
 returns jsonb
 language sql
@@ -47,7 +74,7 @@ security definer
 set search_path = ''
 as $$
   select coalesce(jsonb_agg(q order by q.submitted_at),'[]') from (
-    -- Antrean SPH
+    -- Antrean SPH (Manager Cabang & Direktur Keuangan)
     select 
       d.id,
       'sph'::text as kind,
@@ -64,7 +91,7 @@ as $$
 
     union all
 
-    -- Antrean SPK (Khusus Direksi / Super Admin)
+    -- Antrean SPK (Khusus Direktur Utama / Super Admin)
     select
       d.id,
       'spk'::text as kind,
@@ -81,7 +108,9 @@ as $$
   ) q;
 $$;
 
--- 4. Perbarui api_sales_notifications untuk lonceng notifikasi Direksi dan Pengaju
+-- 5. Notifikasi Lonceng Terpisah:
+--    - SPH -> Direktur Keuangan
+--    - SPK -> Direktur Utama
 create or replace function gsp_private.api_sales_notifications(p_org uuid)
 returns jsonb
 language sql
@@ -90,10 +119,10 @@ security definer
 set search_path = ''
 as $$
  with items as (
-  -- SPH
+  -- SPH (Persetujuan ke Direktur Keuangan)
   select d.id, 'sph'::text as kind, d.sph_number, d.document_number, d.status, d.review_note, d.created_at,
    case when gsp_private.can_review_sph(d) then 'approval' else 'follow_up' end category,
-   case when gsp_private.can_review_sph(d) then 'Butuh persetujuan SPH' else 'SPH perlu tindak lanjut' end label
+   case when gsp_private.can_review_sph(d) then 'Persetujuan SPH Direktur Keuangan' else 'SPH perlu tindak lanjut' end label
   from public.sales_documents d
   where d.organization_id = p_org
     and d.kind = 'sph'
@@ -110,12 +139,12 @@ as $$
 
   union all
 
-  -- SPK
+  -- SPK (Persetujuan LANGSUNG ke Direktur Utama)
   select d.id, 'spk'::text as kind, d.sph_number, d.document_number, d.status, d.review_note, d.created_at,
    case when gsp_private.can_review_spk(d) then 'approval' else 'follow_up' end category,
-   case when gsp_private.can_review_spk(d) then 'Validasi SPK Direktur'
+   case when gsp_private.can_review_spk(d) then 'Persetujuan SPK Direktur Utama'
         when d.status = 'revision_requested' then 'SPK perlu revisi'
-        when d.status = 'ready' then 'SPK telah disetujui (Proyek Aktif)'
+        when d.status = 'ready' then 'SPK telah disetujui Direktur Utama (Proyek Aktif)'
         else 'SPK perlu tindak lanjut' end label
   from public.sales_documents d
   where d.organization_id = p_org
@@ -133,7 +162,7 @@ as $$
  from items;
 $$;
 
--- 5. Perbarui api_save_sales_document agar menyalin amount dari SPH ke SPK
+-- 6. Salin otomatis nilai kontrak (amount) dari SPH ke SPK saat pembuatan
 create or replace function gsp_private.api_save_sales_document(p_org uuid, p_branch uuid, p_payload jsonb)
 returns uuid
 language plpgsql
@@ -170,11 +199,9 @@ begin
   perform gsp_private.validate_sales_attachments(p_org, p_branch, attachments);
 
   v_spk_number := gsp_private.generate_document_number(p_org, 'spk', current_date, c.name, null, null);
-
-  -- Salin nilai kontrak dari SPH rujukan atau payload
   v_amount := coalesce(nullif(p_payload->>'amount', '')::numeric, d.amount, 0);
 
-  -- Periksa apakah pengaju memilih simpan draft atau kirim pengajuan langsung ke Direktur
+  -- Simpan draft atau ajukan langsung ke Direktur Utama
   v_is_submit := coalesce((p_payload->>'submit')::boolean, p_payload->>'intent' = 'submit', false);
   v_status := case when v_is_submit then 'director_review' else 'draft' end;
 
@@ -201,7 +228,7 @@ begin
 end;
 $$;
 
--- 6. Backfill amount pada SPK yang masih null dari SPH rujukan
+-- 7. Backfill amount pada SPK yang masih null dari SPH rujukan
 update public.sales_documents s
 set amount = ref.amount
 from public.sales_documents ref

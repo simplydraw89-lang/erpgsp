@@ -35,12 +35,12 @@ export function BusinessSummary({ summary, queueOnly = false }: {
                 <span className="block font-medium">{item.title}</span>
                 <span className="mt-1 block text-xs text-muted">
                   {item.kind === "sph"
-                    ? "Pemeriksaan SPH"
+                    ? "Pemeriksaan SPH (Direktur Keuangan)"
                     : item.kind === "spk"
-                    ? "Validasi SPK Direktur"
+                    ? "Persetujuan SPK (Direktur Utama)"
                     : item.kind === "vendor"
                     ? "Validasi vendor"
-                    : "Pemeriksaan pembelian"}
+                    : "Pemeriksaan Pembelian (Direktur Keuangan)"}
                 </span>
               </span>
               <span className="shrink-0 text-brand font-semibold">Periksa →</span>

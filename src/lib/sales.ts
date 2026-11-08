@@ -8,7 +8,7 @@ export const sphStatusLabels: Record<string, string> = {
 
 export const spkStatusLabels: Record<string, string> = {
   draft: "Draft SPK",
-  director_review: "Menunggu Validasi Direksi",
+  director_review: "Menunggu Persetujuan Direktur Utama",
   ready: "Disetujui (Proyek Resmi Dibuat)",
   revision_requested: "Perlu Revisi",
   rejected: "Ditolak",
@@ -19,14 +19,18 @@ export type SphRegisterRow = {
   title: string; work_scopes: string[]; amount: number | string | null; status: string;
   can_open: boolean; can_create_spk: boolean;
 }
-export type SalesNotification = {
-  id: string
-  sph_number?: number
-  document_number?: string
-  status: string
-  review_note: string | null
-  category: "approval" | "follow_up"
-  label: string
-  kind?: "sph" | "spk"
+
+export type SalesNotifications = {
+  total: number
+  items: Array<{
+    id: string
+    kind?: "sph" | "spk"
+    sph_number?: number
+    document_number?: string | null
+    status: string
+    review_note?: string
+    created_at: string
+    category: "approval" | "follow_up"
+    label: string
+  }>
 }
-export type SalesNotifications = { total: number; items: SalesNotification[] }

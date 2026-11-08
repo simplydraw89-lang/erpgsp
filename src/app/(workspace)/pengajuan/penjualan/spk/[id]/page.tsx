@@ -10,7 +10,7 @@ import { ProcurementMessage } from "@/components/procurement/section-nav"
 import { sphStatusLabels, spkStatusLabels } from "@/lib/sales"
 import { formatCurrency } from "@/lib/money"
 import { type SalesDocument } from "@/lib/procurement-ui"
-import { FolderCheck, ArrowRight, CheckCircle2, Edit3 } from "lucide-react"
+import { FolderCheck, ArrowRight, CheckCircle2, Edit3, ShieldAlert } from "lucide-react"
 
 export default async function SpkDetailPage({
   params,
@@ -101,7 +101,7 @@ export default async function SpkDetailPage({
           Status:{" "}
           <span className="font-semibold text-ink">
             {document.status === "director_review"
-              ? "Menunggu Validasi Direksi"
+              ? "Menunggu Persetujuan Direktur Utama"
               : document.status === "draft"
               ? "Draft SPK (Belum diajukan)"
               : spkStatusLabels[document.status] ?? sphStatusLabels[document.status] ?? document.status}
@@ -125,7 +125,7 @@ export default async function SpkDetailPage({
               </span>
             </div>
             <p className="mt-1 text-sm text-blue-900">
-              Dokumen ini masih tersimpan sebagai draft dan belum dikirimkan ke Direktur. Silakan periksa rincian atau perbarui dokumen di bawah, lalu klik <strong>Kirim Pengajuan SPK ke Direktur</strong> untuk memulai persetujuan.
+              Dokumen ini masih tersimpan sebagai draft dan belum dikirimkan ke Direktur Utama. Silakan periksa rincian atau perbarui dokumen di bawah, lalu klik <strong>Kirim Pengajuan SPK ke Direktur Utama</strong> untuk memulai persetujuan.
             </p>
           </div>
         </div>
@@ -220,7 +220,7 @@ export default async function SpkDetailPage({
         </div>
       </Card>
 
-      {/* Review Form khusus Direksi (Direktur Utama, Direktur Keuangan, Direktur Teknis) */}
+      {/* Review Form khusus Direktur Utama (atau Super Admin) */}
       {canReview && document.status === "director_review" && (
         <Card className="border-amber-200 bg-amber-50/40 p-5">
           <div className="flex items-center gap-2">
@@ -228,23 +228,33 @@ export default async function SpkDetailPage({
               !
             </span>
             <h2 className="text-lg font-bold text-amber-950">
-              Validasi & Persetujuan SPK (Direksi)
+              Validasi & Persetujuan SPK (Direktur Utama)
             </h2>
           </div>
           <p className="mt-1 text-sm text-amber-800">
-            Validasi dokumen kontrak/perintah kerja. Menyetujui SPK ini akan <strong>secara otomatis membuat entitas Proyek Baru</strong> dengan kode proyek resmi dan mengalokasikannya ke cabang terkait.
+            Persetujuan dokumen kontrak/perintah kerja oleh Direktur Utama. Menyetujui SPK ini akan <strong>secara otomatis membuat entitas Proyek Baru</strong> dengan kode proyek resmi dan mengalokasikannya ke cabang terkait.
           </p>
           <SpkReviewForm id={id} version={document.version} disabled={isReadOnlyPreview} />
         </Card>
       )}
 
-      {/* Form Edit Rincian SPK untuk Direksi / Pengaju */}
+      {/* Penjelasan jika dibuka oleh user selain Direktur Utama saat menunggu persetujuan */}
+      {!canReview && document.status === "director_review" && (
+        <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 p-4 text-xs text-blue-900">
+          <ShieldAlert size={18} className="text-blue-700 shrink-0" />
+          <p>
+            <strong>Kewenangan Direktur Utama:</strong> Dokumen SPK ini telah diajukan dan sedang menunggu persetujuan langsung dari <strong>Direktur Utama</strong> untuk penerbitan proyek resmi.
+          </p>
+        </div>
+      )}
+
+      {/* Form Edit Rincian SPK untuk Direktur Utama / Pengaju */}
       {canEdit && (
         <Card className="p-5">
           <div className="flex items-center gap-2 border-b border-line pb-3">
             <Edit3 size={18} className="text-brand" />
             <h2 className="font-semibold text-ink">
-              {canReview ? "Penyesuaian Data SPK oleh Direksi" : "Edit Rincian SPK"}
+              {canReview ? "Penyesuaian Data SPK oleh Direktur Utama" : "Edit Rincian SPK"}
             </h2>
           </div>
           <SpkEditForm
@@ -259,7 +269,7 @@ export default async function SpkDetailPage({
             disabled={isReadOnlyPreview}
             roleHint={
               canReview
-                ? "Sebagai Direksi, Anda dapat memperbarui judul, catatan, dan lampiran berkas SPK ini sebelum memvalidasi persetujuan."
+                ? "Sebagai Direktur Utama, Anda dapat memperbarui judul, catatan, dan lampiran berkas SPK ini sebelum memberikan persetujuan."
                 : undefined
             }
           />
@@ -269,7 +279,7 @@ export default async function SpkDetailPage({
       {/* Catatan Keputusan / Review sebelumnya */}
       {document.review_note && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <strong>Catatan Direksi:</strong> {document.review_note}
+          <strong>Catatan Direktur Utama:</strong> {document.review_note}
         </div>
       )}
 
@@ -281,13 +291,13 @@ export default async function SpkDetailPage({
             <li key={event.id} className="border-l-2 border-line pl-4">
               <p className="text-sm font-medium text-ink">
                 {event.action === "submitted_to_director"
-                  ? "SPK diajukan ke Direksi"
+                  ? "SPK diajukan ke Direktur Utama"
                   : event.action === "approved"
-                  ? "SPK divalidasi & disetujui · Proyek resmi dibuat otomatis"
+                  ? "SPK disetujui Direktur Utama · Proyek resmi dibuat otomatis"
                   : event.action === "revision_requested"
-                  ? "Diminta revisi oleh Direksi"
+                  ? "Diminta revisi oleh Direktur Utama"
                   : event.action === "rejected"
-                  ? "Ditolak oleh Direksi"
+                  ? "Ditolak oleh Direktur Utama"
                   : event.action === "updated"
                   ? "Rincian SPK disesuaikan / diperbarui"
                   : "Draft SPK disimpan"}
