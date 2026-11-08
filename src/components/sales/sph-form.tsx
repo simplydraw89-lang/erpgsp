@@ -40,6 +40,7 @@ export function SphForm({ branches, draftId, document: draft, disabled }: { bran
   }
 
   const isReviewStage = draft && ["branch_review", "director_review"].includes(draft.status)
+  const isFastTrack = draft?.return_to_stage === "director_review"
 
   return <Card className="p-5">
     <h2 className="font-semibold">{draft ? `Edit ${isReviewStage ? "Pemeriksa" : "Draft"} ${draft.document_number || `SPH No. ${draft.sph_number}`}` : "Buat draft SPH"}</h2>
@@ -48,6 +49,16 @@ export function SphForm({ branches, draftId, document: draft, disabled }: { bran
         ? "Sebagai pemeriksa, Anda dapat langsung mengubah data di bawah ini (misal nilai, tanggal, atau catatan) lalu menyimpannya."
         : "Pilih cabang, klien dan judul untuk menyimpan draft. Lengkapi seluruh data sebelum submit. Bidang usaha mengikuti master klien."}
     </p>
+    {isFastTrack && (
+      <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-950">
+        <p className="font-semibold flex items-center gap-2">
+          <span>⚡ Fast-Track Pengajuan Ulang ke Direktur</span>
+        </p>
+        <p className="mt-1">
+          Pengajuan ini sebelumnya diminta revisi oleh <strong>Direktur Keuangan</strong>. Setelah perbaikan disimpan dan diajukan, berkas akan <strong>langsung diteruskan kembali ke Direktur Keuangan</strong> tanpa perlu menunggu pemeriksaan Manager Cabang lagi.
+        </p>
+      </div>
+    )}
     <form ref={form} action={action} onSubmit={beforeSubmit} className="mt-5">
       <input type="hidden" name="id" value={draft?.id ?? draftId} />
       <input type="hidden" name="version" value={draft?.version ?? ""} />
@@ -79,16 +90,29 @@ export function SphForm({ branches, draftId, document: draft, disabled }: { bran
           </button>
           {(!draft || ["draft", "revision_requested", "rejected"].includes(draft.status)) && (
             <button ref={submitButton} type="submit" name="intent" value="submit" className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-              Submit SPH
+              {isFastTrack ? "Kirim Perbaikan Langsung ke Direktur Keuangan" : "Submit SPH"}
             </button>
           )}
         </div>
       </fieldset>
     </form>
     <dialog ref={dialog} aria-labelledby={`sph-confirm-${draftId}`} className="w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-line bg-white p-6 shadow-xl backdrop:bg-slate-900/40">
-      <h3 id={`sph-confirm-${draftId}`} className="text-lg font-semibold">Apakah data yang Anda masukkan sudah benar?</h3>
-      <p className="mt-3 text-sm leading-6 text-muted">Pilih Ya untuk mengajukan SPH ke pemeriksa berikutnya. Pilih Tidak untuk menyimpan sebagai draft.</p>
-      <div className="mt-5 flex flex-wrap gap-3"><button type="button" onClick={() => decide(true)} className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white">Ya, ajukan SPH</button><button type="button" onClick={() => decide(false)} className="rounded-lg border border-line px-4 py-2 text-sm font-semibold">Tidak, simpan draft</button></div>
+      <h3 id={`sph-confirm-${draftId}`} className="text-lg font-semibold">
+        {isFastTrack ? "Kirim perbaikan langsung ke Direktur Keuangan?" : "Apakah data yang Anda masukkan sudah benar?"}
+      </h3>
+      <p className="mt-3 text-sm leading-6 text-muted">
+        {isFastTrack
+          ? "Pengajuan perbaikan ini akan langsung diajukan ke Direktur Keuangan (melewati Manager Cabang)."
+          : "Pilih Ya untuk mengajukan SPH ke pemeriksa berikutnya. Pilih Tidak untuk menyimpan sebagai draft."}
+      </p>
+      <div className="mt-5 flex flex-wrap gap-3">
+        <button type="button" onClick={() => decide(true)} className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white">
+          {isFastTrack ? "Ya, ajukan langsung ke Direktur" : "Ya, ajukan SPH"}
+        </button>
+        <button type="button" onClick={() => decide(false)} className="rounded-lg border border-line px-4 py-2 text-sm font-semibold">
+          Tidak, simpan draft
+        </button>
+      </div>
     </dialog>
   </Card>
 }

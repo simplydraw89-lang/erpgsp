@@ -292,6 +292,8 @@ export default async function SpkDetailPage({
               <p className="text-sm font-medium text-ink">
                 {event.action === "submitted_to_director"
                   ? "SPK diajukan ke Direktur Utama"
+                  : event.action === "resubmitted_to_director"
+                  ? "Perbaikan SPK diajukan langsung kembali ke Direktur Utama"
                   : event.action === "approved"
                   ? "SPK disetujui Direktur Utama · Proyek resmi dibuat otomatis"
                   : event.action === "revision_requested"
