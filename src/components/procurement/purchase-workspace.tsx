@@ -7,6 +7,7 @@ import { ProcurementMessage, ProcurementUnavailable } from "@/components/procure
 import { SubmitButton } from "@/components/procurement/submit-button"
 import { AutoRefreshOnFocus } from "@/components/ui/auto-refresh-on-focus"
 import { requestVendor, reviewVendor } from "@/app/(workspace)/pengajuan/actions"
+import { PurchaseRequestList } from "./purchase-request-list"
 import { type BusinessUnit, type ProcurementVendor, type PurchaseRequest, type WorkAssignment, procurementInput as input, procurementLabel as label, isProcurementMissing, purchaseStatusLabels, rupiah, formatDateID } from "@/lib/procurement-ui"
 
 export async function PurchaseWorkspace({ view, query }: { view: "pembelian" | "vendor"; query: { error?: string; notice?: string; q?: string; branch_id?: string; status?: string; invoice_date?: string } }) {
@@ -90,27 +91,7 @@ export async function PurchaseWorkspace({ view, query }: { view: "pembelian" | "
             }
           ]}
         />
-        <Card className="overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-canvas text-muted"><tr>{["No.", "No. Dokumen / Invoice", "Cabang", "Vendor", "Status", "Dibayar ke vendor", ""].map(t => <th key={t} className="px-4 py-3 font-medium">{t}</th>)}</tr></thead><tbody>{sortedRows.map((r, idx) => {
-          const isUrgent = ["director_review", "branch_review", "accounting_review", "payment_ready"].includes(r.status);
-          return <tr key={r.id} className={`border-t border-line ${isUrgent ? "bg-amber-50/40" : ""}`}><td className="px-4 py-4 text-xs font-semibold text-muted">{idx + 1}</td><td className="px-4 py-4 font-medium">{r.request_number ? <span className="block font-semibold text-brand text-xs">{r.request_number}</span> : null}<span className="text-sm">{r.invoice_number}</span><span className="mt-1 block text-xs text-muted">{formatDateID(r.invoice_date)}</span></td><td className="px-4 py-4">{branches.find(b => b.id === r.branch_id)?.name ?? "Cabang"}</td><td className="px-4 py-4">{vendorRows.find(v => v.id === r.vendor_id)?.name ?? r.vendor_snapshot?.name ?? "Belum dipilih"}</td><td className="px-4 py-4">
-            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-              r.status === "director_review"
-                ? "bg-amber-100 text-amber-900 border border-amber-300 font-bold"
-                : r.status === "branch_review"
-                ? "bg-blue-100 text-blue-900 border border-blue-200"
-                : r.status === "accounting_review"
-                ? "bg-purple-100 text-purple-900 border border-purple-200"
-                : r.status === "payment_ready"
-                ? "bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold"
-                : r.status === "rejected"
-                ? "bg-orange-100 text-orange-900 border border-orange-200"
-                : "bg-canvas text-slate-700"
-            }`}>
-              {isUrgent ? "⚡ " : ""}
-              {purchaseStatusLabels[r.status] ?? r.status}
-            </span>
-          </td><td className="px-4 py-4">{rupiah(r.payable_amount)}</td><td className="px-4 py-4"><Link href={`/pengajuan/${r.id}`} className="inline-flex items-center gap-1 font-medium text-brand hover:underline">{["draft", "rejected"].includes(r.status) ? "Edit ✎" : r.status === "payment_ready" ? "Periksa & Bayar →" : isUrgent ? "Periksa & Setujui →" : "Buka →"}</Link></td></tr>;
-        })}</tbody></table></div>{!sortedRows.length && <p className="p-8 text-center text-sm text-muted">Belum ada pengajuan pembelian dalam cakupan akses Anda.</p>}</Card>
+        <PurchaseRequestList purchases={sortedRows} branches={branches} vendorRows={vendorRows} />
       </>}
       {view === "vendor" && <>
         <Card className="p-5"><h2 className="font-semibold">Usulkan vendor baru</h2><p className="mt-1 text-sm text-muted">Pendaftaran vendor tidak membuat akun login. Finance memverifikasi identitas, NPWP dan rekening sebelum vendor dipakai untuk pembayaran.</p><form action={requestVendor} className="mt-5"><fieldset disabled={isReadOnlyPreview || !writableBranches.length} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
