@@ -1,9 +1,17 @@
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 
-export type ProjectOcrTarget = "manpower" | "technical" | "schedule" | "rab" | "all"
+export type ProjectOcrTarget = "manpower" | "technical" | "schedule" | "rab" | "mom" | "all"
 
 export type ExtractedProjectPlanning = {
+  title?: string
+  meeting_date?: string
+  agreed_points?: string[]
+  action_items?: Array<{
+    task: string
+    pic?: string
+    deadline?: string
+  }>
   work_details?: string
   starts_on?: string
   ends_on?: string
@@ -132,6 +140,29 @@ Hasilkan JSON murni tanpa pembungkus markdown apapun:
 Aturan penting: Volume, unit_price, dan total WAJIB angka numerik murni tanpa simbol 'Rp' atau titik pemisah ribuan.`
   }
 
+  if (target === "mom") {
+    return `Anda adalah asisten cerdas sistem ERP Manajemen Proyek Konsultasi Lingkungan & Perizinan (PT Global Solusi Prima).
+Tugas Anda adalah membaca dokumen notulensi rapat / Minutes of Meeting (MoM) / Berita Acara Rapat koordinasi proyek yang terlampir.
+FOKUS PADA EKSTRAKSI HASIL RAPAT & KESEPAKATAN:
+Hasilkan JSON murni tanpa pembungkus markdown apapun:
+{
+  "title": "Topik atau agenda utama rapat (misal: Rapat Koordinasi Pembahasan AMDAL & Kebutuhan Data Amdalnet)",
+  "meeting_date": "Tanggal rapat jika ada (format YYYY-MM-DD), atau null jika tidak tertera",
+  "agreed_points": [
+    "Poin kesepakatan 1",
+    "Poin kesepakatan 2"
+  ],
+  "action_items": [
+    {
+      "task": "Tugas tindak lanjut (misal: Menyerahkan data layout IPAL terbaru ke konsultan)",
+      "pic": "Pihak yang bertanggung jawab (Klien / Konsultan / PIC)",
+      "deadline": "Batas waktu atau tenggat jika ada"
+    }
+  ],
+  "summary": "Ringkasan lengkap notulensi rapat dan poin penting yang disepakati bersama"
+}`
+  }
+
   // Fallback: all fields
   return `Anda adalah asisten cerdas sistem ERP Manajemen Proyek Konsultasi Lingkungan & Perizinan (PT Global Solusi Prima).
 Tugas Anda adalah membaca dokumen perencanaan proyek yang terlampir dan mengekstrak data terstruktur dalam format JSON murni:
@@ -199,6 +230,14 @@ async function extractWithGeminiProject(
     const parsed = JSON.parse(cleaned)
 
     return {
+      title: parsed.title ? String(parsed.title).trim() : undefined,
+      meeting_date: parsed.meeting_date ? String(parsed.meeting_date).trim() : undefined,
+      agreed_points: Array.isArray(parsed.agreed_points) ? parsed.agreed_points.map((p: any) => String(p).trim()).filter(Boolean) : undefined,
+      action_items: Array.isArray(parsed.action_items) ? parsed.action_items.map((a: any) => ({
+        task: String(a.task || "").trim(),
+        pic: a.pic ? String(a.pic).trim() : undefined,
+        deadline: a.deadline ? String(a.deadline).trim() : undefined,
+      })) : undefined,
       work_details: parsed.work_details || undefined,
       starts_on: parsed.starts_on || undefined,
       ends_on: parsed.ends_on || undefined,

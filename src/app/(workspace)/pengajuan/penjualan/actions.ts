@@ -111,17 +111,56 @@ export async function attachSalesDocument(data: FormData) {
   await call(path, "attach_sales_document", { p_id: value(data, "document_id"), p_attachments: json(data, "attachment_ids", path) }, "Lampiran dokumen tersimpan.")
 }
 
-export async function searchSalesClients(search = "", offset = 0): Promise<{ clients: SalesClient[]; hasMore: boolean; error?: string }> {
+export type ClientWithProjects = SalesClient & {
+  projects?: Array<{
+    id: string
+    code: string
+    name: string
+    status: string
+    approval_status?: string
+  }>
+}
+
+export async function searchSalesClients(
+  search = "",
+  offset = 0,
+  filterTab: "active" | "all" = "all"
+): Promise<{ clients: ClientWithProjects[]; hasMore: boolean; activeCount?: number; totalCount?: number; error?: string }> {
   const context = await requireWorkspace()
   const permission = await context.supabase.rpc("can_read_sales_clients", { p_org: context.organizationId })
   if (permission.error || !permission.data) return { clients: [], hasMore: false, error: "Role Anda tidak memiliki akses daftar klien." }
   if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100000) return { clients: [], hasMore: false, error: "Halaman pencarian tidak valid." }
   const term = search.trim().slice(0, 120).replace(/[\\%_]/g, character => `\\${character}`)
-  let query = context.supabase.from("sales_clients").select("id,name,address,npwp,contact,phone,email,industry,additional_information", { count: "exact" }).eq("organization_id", context.organizationId)
+  
+  let query = context.supabase
+    .from("sales_clients")
+    .select(`
+      id,name,address,npwp,contact,phone,email,industry,additional_information,
+      projects:crm_projects(id,code,name,status,approval_status)
+    `, { count: "exact" })
+    .eq("organization_id", context.organizationId)
+
   if (term) query = query.ilike("name", `%${term}%`)
-  const result = await query.order("name").order("id").range(offset, offset + 9)
+  const result = await query.order("name").order("id").range(offset, offset + 19)
   if (result.error) return { clients: [], hasMore: false, error: "Pencarian klien gagal. Periksa koneksi dan izin akses." }
-  return { clients: (result.data ?? []) as SalesClient[], hasMore: offset + (result.data?.length ?? 0) < (result.count ?? 0) }
+
+  const rows = (result.data ?? []) as ClientWithProjects[]
+  const isClientActive = (c: ClientWithProjects) =>
+    (c.projects ?? []).some(p => p.status === "active" || p.approval_status === "active" || p.status === "planned")
+
+  let filtered = rows
+  if (filterTab === "active") {
+    filtered = rows.filter(isClientActive)
+  }
+
+  const activeCount = rows.filter(isClientActive).length
+
+  return {
+    clients: filtered,
+    hasMore: offset + rows.length < (result.count ?? 0),
+    activeCount,
+    totalCount: result.count ?? rows.length,
+  }
 }
 
 export async function saveSphRequest(_previous: { error?: string }, data: FormData): Promise<{ error?: string }> {
