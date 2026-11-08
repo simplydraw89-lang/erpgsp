@@ -21,6 +21,12 @@ Baseline kebutuhan disepakati melalui arahan pemilik sistem, 4 November 2026. Do
 - Akun cabang: Manager Cabang, Admin, Project Manager/PIC, SDM, Support, lainnya. Satu orang dapat memegang lebih dari satu penugasan.
 - Pisahkan hubungan individu (probation, kontrak, tetap, konsultan/vendor, klien) dari jabatan dan cakupan organisasi/cabang/proyek. Status kontrak tidak otomatis memberi akses keuangan.
 - Pengguna pusat membaca lintas cabang menurut bidangnya: direksi memantau seluruhnya; Finance/Accounting–Tax keuangan; SDM kepegawaian. Pengguna cabang hanya cabangnya. Konsultan/vendor dan klien hanya data proyek/dokumen yang secara eksplisit diberikan.
+- **Keterbukaan Data dan Pemantauan Direksi (Board Cross-Monitoring & Transparency):**
+  - Seluruh jajaran Direksi (**Direktur Utama**, **Direktur Keuangan**, dan **Direktur Teknis**) memiliki visibilitas 360° lintas cabang untuk melihat, membaca, dan memantau seluruh dokumen transaksi dan operasional perusahaan (SPH, SPK, Pengajuan Pembelian, Proyek, RAB, Laporan Keuangan, serta seluruh berkas lampiran PDF/gambar yang diunggah).
+  - Pembatasan tombol keputusan/persetujuan (decision authority) dipisahkan secara fungsional:
+    - **Persetujuan SPK:** Langsung kepada Direktur Utama (`president`) dan Super Admin.
+    - **Persetujuan SPH & Pengajuan Pembelian:** Kepada Direktur Keuangan (`finance_director`) dan Super Admin.
+  - Direktur yang tidak memegang tombol persetujuan pada dokumen tertentu (misalnya Direktur Keuangan & Direktur Teknis pada SPK, atau Direktur Utama & Direktur Teknis pada SPH/Pembelian) tetap dapat membaca seluruh data, membuka berkas lampiran, dan meninjau riwayat audit, agar jajaran direksi tetap saling terhubung, terkoneksi, dan memiliki landasan data yang utuh.
 - Data pribadi milik akun sendiri terpisah dari akses pekerjaan. Profil publik/direktori tidak boleh menjadi jalan membaca data SDM, NPWP, atau rekening vendor.
 - Akses wajib diperiksa di database (RLS dan RPC), server, dan tampilan. `user_metadata`, kolom role dari formulir, URL cabang, dan mode pratinjau tidak menjadi sumber otorisasi.
 
