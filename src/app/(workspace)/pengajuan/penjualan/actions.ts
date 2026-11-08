@@ -32,10 +32,41 @@ function json(data: FormData, key: string, path: string): unknown {
 }
 export async function saveSalesClient(data: FormData) {
   const path = "/pengajuan/penjualan/klien"
-  const { organizationId } = await workspace(path)
-  await call(path, "save_sales_client", { p_org: organizationId, p_branch: null, p_payload: {
-    name: value(data, "name"), address: value(data, "address"), npwp: value(data, "npwp"), phone: value(data, "phone"), email: value(data, "email"), industry: value(data, "industry"), additional_information: value(data, "additional_information"),
-  } }, "Klien tersimpan langsung pada master perusahaan tanpa persetujuan.")
+  const context = await workspace(path)
+
+  // Ambil cabang dari penugasan pengguna saat ini (misal Cabang Jakarta untuk Admin Jakarta)
+  let branchId = context.workAssignments.find(job => job.branch_id)?.branch_id ?? null
+  if (!branchId) {
+    const { data: units } = await context.supabase
+      .from("business_units")
+      .select("id")
+      .eq("organization_id", context.organizationId)
+      .in("kind", ["branch", "center"])
+      .order("kind", { ascending: false })
+      .limit(1)
+    branchId = units?.[0]?.id ?? null
+  }
+
+  const phone = value(data, "phone")
+  await call(
+    path,
+    "save_sales_client",
+    {
+      p_org: context.organizationId,
+      p_branch: branchId,
+      p_payload: {
+        name: value(data, "name"),
+        address: value(data, "address"),
+        npwp: value(data, "npwp"),
+        contact: phone,
+        phone: phone,
+        email: value(data, "email"),
+        industry: value(data, "industry"),
+        additional_information: value(data, "additional_information"),
+      },
+    },
+    "Klien tersimpan langsung pada master perusahaan tanpa persetujuan."
+  )
 }
 export async function saveSalesDocument(data: FormData) {
   const kind = value(data, "kind")

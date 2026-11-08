@@ -181,4 +181,81 @@ create or replace function gsp_private.api_sales_notifications(p_org uuid) retur
  ) select jsonb_build_object('total',count(*),'items',coalesce((select jsonb_agg(x order by x.created_at desc) from (select * from items order by created_at desc limit 100)x),'[]')) from items
 $$;
 
+-- 5. Penyelarasan Pendaftaran Klien Lintas Cabang (Pusat & Seluruh Cabang)
+create or replace function public.save_sales_client(p_org uuid, p_branch uuid, p_payload jsonb)
+returns uuid language plpgsql security definer set search_path='' as $$
+declare
+  i uuid;
+  v_branch uuid := p_branch;
+  v_contact text;
+  v_client_code text;
+begin
+  -- Otomatis gunakan cabang dari penugasan pengguna jika p_branch null
+  if v_branch is null then
+    select branch_id into v_branch
+    from public.work_assignments
+    where organization_id = p_org and user_id = auth.uid() and branch_id is not null
+    limit 1;
+    if v_branch is null then
+      select id into v_branch
+      from public.business_units
+      where organization_id = p_org and kind in ('center', 'branch')
+      order by case when kind = 'center' then 1 else 2 end
+      limit 1;
+    end if;
+  end if;
+
+  if not (
+    gsp_private.is_superadmin(p_org)
+    or gsp_private.can_access_business(p_org, v_branch, 'sales')
+    or gsp_private.sales_internal_member(p_org)
+    or exists (
+      select 1 from public.work_assignments w
+      where w.organization_id = p_org and w.user_id = auth.uid()
+    )
+  ) then
+    raise exception 'Akses klien cabang ditolak.' using errcode = '42501';
+  end if;
+
+  if not exists(select 1 from public.business_units where id = v_branch and organization_id = p_org and kind in ('branch', 'center')) then
+    raise exception 'Cabang tidak valid.';
+  end if;
+
+  v_contact := btrim(coalesce(p_payload->>'phone', p_payload->>'contact', ''));
+
+  if nullif(btrim(p_payload->>'name'), '') is null or nullif(btrim(p_payload->>'address'), '') is null
+     or nullif(v_contact, '') is null or nullif(btrim(p_payload->>'industry'), '') is null then
+    raise exception 'Nama PT, alamat, kontak, dan bidang usaha wajib diisi.';
+  end if;
+
+  begin
+    v_client_code := gsp_private.generate_document_number(p_org, 'client', current_date, null, null, null);
+  exception when others then
+    v_client_code := null;
+  end;
+
+  insert into public.sales_clients(
+    organization_id, branch_id, name, address, npwp, contact, phone, email,
+    industry, additional_information, created_by, client_code
+  )
+  values (
+    p_org, v_branch, btrim(p_payload->>'name'), btrim(p_payload->>'address'),
+    nullif(btrim(p_payload->>'npwp'), ''),
+    v_contact, v_contact, lower(nullif(btrim(p_payload->>'email'), '')),
+    p_payload->>'industry',
+    nullif(btrim(p_payload->>'additional_information'), ''),
+    auth.uid(), v_client_code
+  )
+  returning id into i;
+
+  perform gsp_private.procurement_log(
+    p_org, v_branch, i, 'client', 'created', null,
+    jsonb_build_object('shared_company_directory', true, 'client_code', v_client_code)
+  );
+
+  return i;
+end $$;
+
+grant execute on function public.save_sales_client(uuid, uuid, jsonb) to authenticated;
+
 notify pgrst, 'reload schema';
