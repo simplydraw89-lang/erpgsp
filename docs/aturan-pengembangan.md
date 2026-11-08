@@ -109,3 +109,15 @@ Lihat [dasar pajak dan jurnal](pajak-dan-jurnal-pembelian.md) serta [status impl
 - Pemasangan master COA tidak membuat invoice, vendor, transaksi, saldo, atau pengguna contoh pada produksi. Migration harus diuji pada organisasi yang sudah ada dan diverifikasi sesudah pemasangan.
 - Pembacaan dokumen tidak boleh menebak kolom yang tidak terbaca, menyetujui pajak/COA, atau mengirim berkas ke penyedia eksternal tanpa keputusan terpisah. Sediakan teks hasil, peringatan bagian yang kosong, input manual dan baca ulang tanpa unggah ganda.
 - Susun rincian pajak sebagai tabel horizontal bernomor; pertahankan satu pilihan jenis PPh dan perhitungan final di database.
+
+
+## Prinsip Invarian: Master Rekanan Bersama vs Isolasi Dokumen Transaksional
+
+1. **Master Rekanan (Klien & Vendor) Adalah Master Bersama Lintas Cabang:**
+   - Rekanan (Klien maupun Vendor) adalah aset calon mitra dan vendor milik perusahaan (organization_id), **bukan milik eksklusif cabang tertentu**.
+   - Siapa pun internal cabang yang mendaftarkan (misal Cabang Surabaya), begitu rekanan tersimpan (Klien) atau disetujui Finance (Vendor), data tersebut **dapat dilihat dan dipilih oleh seluruh cabang (Jakarta, Jogja, Surabaya, Pusat)** untuk pengajuan dokumen mereka.
+   - Dilarang keras menambahkan pembatasan hak akses cabang (can_access_business(..., p_branch)) atau filter branch_id pada query/pendaftaran master Klien & Vendor yang sah.
+2. **Isolasi Cabang Hanya Berlaku Pada Dokumen Transaksional:**
+   - Dokumen pengajuan (SPH, SPK, Pengajuan Pembelian / Invoice, Proyek / RAB) adalah objek transaksional yang **terikat pada cabang pengaju (branch_id)**.
+   - Pengguna cabang hanya dapat melihat dan menindaklanjuti dokumen transaksi milik cabangnya sendiri dan hierarki reviewer-nya.
+   - Super Admin dan Direksi memiliki akses pengawasan global lintas cabang.

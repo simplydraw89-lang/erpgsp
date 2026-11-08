@@ -68,7 +68,8 @@ OCR tidak menyetujui dokumen, memilih COA atau menetapkan pajak. Nominal yang sa
 
 ### PUR-03: Vendor baru dan vendor terdaftar
 
-- Vendor terdaftar dipilih dari daftar yang boleh diakses pada cabang tersebut; tampilkan identitas pajak dan rekeningnya.
+- **Master Vendor Bersama Perusahaan (Lintas Cabang):** Vendor terverifikasi (status = 'approved') adalah master rekanan bersama milik satu perusahaan (organization_id), bukan milik eksklusif satu cabang dan tidak diisolasi per cabang. Vendor yang didaftarkan oleh Cabang Surabaya dan disetujui Finance Pusat otomatis dapat dipilih dan digunakan oleh Cabang Jakarta, Jogjakarta, maupun Pusat untuk pengajuan pembelian mereka masing-masing.
+- Pengaju internal cabang mana pun dapat memilih vendor terdaftar dari master vendor perusahaan yang telah disetujui; tampilkan identitas pajak dan rekeningnya.
 - Jika belum terdaftar, pengaju mengisi informasi vendor dari area vendor pada formulir dan memilih **Ajukan ke Finance**. Draft invoice tetap dapat dilanjutkan/disimpan.
 - Usulan vendor masuk antrean Finance pusat. Finance memeriksa identitas, alamat, NPWP/identitas pajak, pemilik/nomor rekening dan metode pembayaran, lalu menyetujui/menolak dengan jejak audit.
 - Vendor disetujui masuk master vendor dan dapat dipilih. Pengajuan pembayaran tidak dapat dikirim sebelum vendor disetujui.

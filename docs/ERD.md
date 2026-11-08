@@ -64,7 +64,7 @@ Satu profil hubungan per anggota perusahaan, beberapa penugasan per akun. Role p
 
 ```mermaid
 erDiagram
-  BUSINESS_UNITS ||--o{ PROCUREMENT_VENDORS : vendor_cabang
+  ORGANIZATIONS ||--o{ PROCUREMENT_VENDORS : master_bersama
   BUSINESS_UNITS ||--o{ PURCHASE_REQUESTS : pengajuan
   AUTH_USERS ||--o{ PURCHASE_REQUESTS : pengaju
   PROCUREMENT_VENDORS o|--o{ PURCHASE_REQUESTS : dipilih
@@ -82,7 +82,7 @@ erDiagram
   PROCUREMENT_VENDORS {
     uuid id PK
     uuid organization_id FK
-    uuid branch_id FK
+    uuid branch_id FK 'nullable, asal pendaftar saja'
     text name
     text address
     text npwp
