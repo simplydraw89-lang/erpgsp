@@ -96,4 +96,50 @@ set
 where phone is null or email is null or industry is null or phone = '' or email = '';
 
 grant execute on function public.save_sales_client(uuid, uuid, jsonb) to authenticated;
+
+-- Perbarui api_sph_register agar mengembalikan kolom document_number resmi ke tabel frontend
+create or replace function gsp_private.api_sph_register(p_org uuid, p_branch uuid default null, p_offset integer default 0)
+returns jsonb language plpgsql stable security definer set search_path='' as $$
+declare result jsonb;
+begin
+ if not gsp_private.sales_internal_member(p_org) then raise exception 'Akses daftar SPH ditolak.' using errcode='42501'; end if;
+ if p_offset is null or p_offset < 0 or p_offset > 1000000 then raise exception 'Halaman daftar tidak valid.'; end if;
+ with visible as (
+  select d.*, b.name as branch_name, d as row_data
+  from public.sales_documents d
+  join public.business_units b on b.id = d.branch_id
+  where d.organization_id = p_org and d.kind = 'sph'
+    and (p_branch is null or d.branch_id = p_branch)
+    and gsp_private.sales_document_reader(p_org, d.branch_id)
+ ), page as (
+  select
+    id, sph_number, document_number, branch_id, branch_name, created_at,
+    left(title, 120) as title, work_scopes, amount, status,
+    gsp_private.sph_opener(visible.row_data) as can_open,
+    gsp_private.sph_spk_creator(visible.row_data) as can_create_spk
+  from visible
+  order by sph_number desc
+  limit 50 offset p_offset
+ )
+ select jsonb_build_object(
+   'total', (select count(*) from visible),
+   'rows', coalesce(jsonb_agg(page order by sph_number desc), '[]'::jsonb)
+ ) into result from page;
+ return result;
+end;
+$$;
+
+-- Backfill nomor dokumen resmi untuk SPH yang sudah ada jika belum memiliki document_number
+update public.sales_documents
+set document_number = coalesce(
+  document_number,
+  gsp_private.generate_document_number(
+    organization_id,
+    'sph',
+    created_at::date,
+    client_snapshot->>'name'
+  )
+)
+where kind = 'sph' and document_number is null;
+
 notify pgrst, 'reload schema';

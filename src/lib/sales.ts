@@ -15,7 +15,7 @@ export const spkStatusLabels: Record<string, string> = {
 }
 
 export type SphRegisterRow = {
-  id: string; sph_number: number; branch_id: string; branch_name: string; created_at: string;
+  id: string; sph_number: number; document_number?: string | null; branch_id: string; branch_name: string; created_at: string;
   title: string; work_scopes: string[]; amount: number | string | null; status: string;
   can_open: boolean; can_create_spk: boolean;
 }

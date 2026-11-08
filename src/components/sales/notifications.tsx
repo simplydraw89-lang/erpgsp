@@ -153,10 +153,10 @@ export function SalesNotificationBell({ disabled = false }: { disabled?: boolean
                   const href = isSpk
                     ? `/pengajuan/penjualan/spk/${item.id}`
                     : `/pengajuan/penjualan/sph/${item.id}`
-                  const docLabel = isSpk
-                    ? item.document_number || `SPK`
-                    : item.document_number
-                    ? `SPH ${item.document_number}`
+                  const docLabel = item.document_number
+                    ? item.document_number
+                    : isSpk
+                    ? `SPK`
                     : `SPH No. ${item.sph_number ?? ""}`
 
                   const statusText = isSpk

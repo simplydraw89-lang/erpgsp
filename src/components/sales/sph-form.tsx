@@ -40,7 +40,7 @@ export function SphForm({ branches, draftId, document: draft, disabled }: { bran
   }
 
   return <Card className="p-5">
-    <h2 className="font-semibold">{draft ? `Edit draft SPH No. ${draft.sph_number}` : "Buat draft SPH"}</h2>
+    <h2 className="font-semibold">{draft ? `Edit draft ${draft.document_number || `SPH No. ${draft.sph_number}`}` : "Buat draft SPH"}</h2>
     <p className="mt-2 text-sm leading-6 text-muted">Pilih cabang, klien dan judul untuk menyimpan draft. Lengkapi seluruh data sebelum submit. Bidang usaha mengikuti master klien.</p>
     <form ref={form} action={action} onSubmit={beforeSubmit} className="mt-5">
       <input type="hidden" name="id" value={draft?.id ?? draftId} />
