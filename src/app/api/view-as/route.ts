@@ -7,7 +7,24 @@ import { previewRoles } from "@/lib/auth/view-as-roles"
 
 function isSameOrigin(request: Request) {
   const origin = request.headers.get("origin")
-  return origin !== null && origin === new URL(request.url).origin
+  const requestUrl = new URL(request.url)
+  if (origin) {
+    return origin === requestUrl.origin
+  }
+  const referer = request.headers.get("referer")
+  if (referer) {
+    try {
+      return new URL(referer).origin === requestUrl.origin
+    } catch {
+      return false
+    }
+  }
+  const secFetchSite = request.headers.get("sec-fetch-site")
+  if (secFetchSite === "same-origin") {
+    return true
+  }
+  const host = request.headers.get("host")
+  return Boolean(host && host === requestUrl.host)
 }
 
 function isPreviewRole(

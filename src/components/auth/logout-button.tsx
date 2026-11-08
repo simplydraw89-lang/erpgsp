@@ -12,10 +12,10 @@ export function LogoutButton() {
   async function signOut() {
     setErrorMessage("")
     try {
-      const previewResponse = await fetch("/api/view-as", { method: "DELETE" })
-      if (!previewResponse.ok) {
-        setErrorMessage("Gagal membersihkan mode lihat sebagai. Coba lagi.")
-        return
+      try {
+        await fetch("/api/view-as", { method: "DELETE" })
+      } catch {
+        // Non-blocking: gagal membersihkan cookie preview tidak boleh membatalkan logout pengguna
       }
       const { error } = await createClient().auth.signOut()
       if (error) {
