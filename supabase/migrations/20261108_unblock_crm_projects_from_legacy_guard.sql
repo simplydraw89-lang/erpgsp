@@ -68,13 +68,18 @@ $$;
 
 -- 3. Kebijakan RLS crm_projects yang mendukung multi-cabang dan Direksi
 create or replace function gsp_private.can_read_project(p public.crm_projects) returns boolean
-language sql stable security definer set search_path = '' as $$
-  select gsp_private.is_superadmin(p.organization_id)
-  or gsp_private.has_job(p.organization_id, null, array['president', 'technical_director', 'finance_director', 'accounting_tax', 'finance'])
-  or (p.branch_id is not null and gsp_private.can_access_business(p.organization_id, p.branch_id, 'operations'))
-  or (p.branch_id is not null and gsp_private.can_access_business(p.organization_id, p.branch_id, 'sales'))
-  or p.created_by = auth.uid()
-  or p.project_manager_id = auth.uid();
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  return gsp_private.is_superadmin(p.organization_id)
+    or gsp_private.has_job(p.organization_id, null, array['president', 'technical_director', 'finance_director', 'accounting_tax', 'finance'])
+    or (p.branch_id is not null and gsp_private.can_access_business(p.organization_id, p.branch_id, 'operations'))
+    or (p.branch_id is not null and gsp_private.can_access_business(p.organization_id, p.branch_id, 'sales'))
+    or p.created_by = auth.uid()
+    or exists(
+      select 1 from public.project_memberships m
+      where m.organization_id = p.organization_id and m.project_id = p.id and m.user_id = auth.uid()
+    );
+end;
 $$;
 
 drop policy if exists "organization members can read CRM projects" on public.crm_projects;
