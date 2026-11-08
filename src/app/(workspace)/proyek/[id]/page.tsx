@@ -1,11 +1,20 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { BriefcaseBusiness, CheckCircle2, Clock, AlertTriangle, FileText, ArrowLeft, Users, Calendar, Calculator, ShieldCheck, Receipt } from "lucide-react"
+import {
+  BriefcaseBusiness,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  FileText,
+  ArrowLeft,
+  ShieldCheck,
+  AlertCircle,
+} from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { requireWorkspace } from "@/lib/auth/context"
 import { rupiah, formatDateID } from "@/lib/procurement-ui"
 import { ProjectPlanningForm } from "@/components/project/project-planning-form"
-import { ProjectReviewForm } from "@/components/project/project-review-form"
+import { ProjectDirectorConsole, type AttachmentItem, type DirectorInsight } from "@/components/project/project-director-console"
 
 export default async function ProjectDetailPage({
   params,
@@ -42,14 +51,49 @@ export default async function ProjectDetailPage({
     .eq("organization_id", organizationId)
     .eq("entity_id", id)
     .order("created_at", { ascending: false })
-    .limit(20)
+    .limit(30)
+
+  // Load attachments
+  const attachmentIds = Array.isArray(project.attachment_ids) ? project.attachment_ids : []
+  const { data: attachmentsData } = attachmentIds.length
+    ? await supabase
+        .from("procurement_attachments")
+        .select("id, file_name, content_type, byte_size")
+        .in("id", attachmentIds)
+    : { data: [] }
+
+  const projectAttachments: AttachmentItem[] = (attachmentsData ?? []).map((a: any) => ({
+    id: a.id,
+    file_name: a.file_name,
+    content_type: a.content_type,
+    byte_size: Number(a.byte_size || 0),
+  }))
+
+  // Parse director insights
+  let insights: DirectorInsight[] = []
+  if (Array.isArray(project.director_insights) && project.director_insights.length > 0) {
+    insights = project.director_insights
+  } else if (events) {
+    insights = events
+      .filter((e: any) => e.action === "director_insight_added" || e.action === "submitted_to_directors")
+      .map((e: any) => ({
+        id: e.id,
+        author_name: e.details?.author_role || "Direksi",
+        author_role: e.details?.author_role || "Direksi",
+        section: e.details?.section || "general",
+        comment: e.note || e.action,
+        created_at: e.created_at,
+      }))
+  }
 
   // Roles & permissions
   const isOwner = actorRole === "owner"
-  const isDirut = (workAssignments ?? []).some((j) => !j.branch_id && j.job_role === "president")
-  const isDirector = (workAssignments ?? []).some(
-    (j) => !j.branch_id && ["president", "technical_director", "finance_director"].includes(j.job_role)
-  )
+  const isDirut = isOwner || (workAssignments ?? []).some((j) => !j.branch_id && j.job_role === "president")
+  const isDirector =
+    isOwner ||
+    (workAssignments ?? []).some(
+      (j) => !j.branch_id && ["president", "technical_director", "finance_director"].includes(j.job_role)
+    )
   const isBranchUser = (workAssignments ?? []).some((j) => j.branch_id === project.branch_id)
 
   const canEdit =
@@ -57,7 +101,7 @@ export default async function ProjectDetailPage({
     ["draft", "revision_requested"].includes(project.approval_status) &&
     (isOwner || isBranchUser || project.created_by === user.id)
 
-  const canReview = !isReadOnlyPreview && project.approval_status === "director_review" && (isOwner || isDirut)
+  const canReview = !isReadOnlyPreview && project.approval_status === "director_review" && isDirut
 
   const contractVal = Number(project.contract_amount) || 0
   const rabVal = Number(project.rab_total) || 0
@@ -99,52 +143,35 @@ export default async function ProjectDetailPage({
             }`}
           >
             {status === "active"
-              ? "Proyek Aktif (ACC Dirut)"
+              ? "✓ Proyek Aktif & Berjalan"
               : status === "director_review"
-              ? "Menunggu Verifikasi Dirut"
+              ? "⚡ Menunggu Verifikasi Direksi"
               : status === "revision_requested"
-              ? "Perlu Revisi Cabang"
-              : "Draft Mobilisasi Cabang"}
+              ? "⚠️ Perlu Revisi Cabang"
+              : "Draft Perencanaan"}
           </span>
-          <span className="text-[11px] text-muted mt-1">Versi Dokumen: {project.version}</span>
+          <span className="mt-1 text-[11px] text-muted font-mono">Versi Dokumen: v{project.version}</span>
         </div>
       </header>
 
+      {/* Alerts */}
       {qParams.notice && (
-        <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-          {qParams.notice}
+        <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-xs font-medium text-emerald-950 flex items-center gap-2">
+          <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
+          <span>{qParams.notice}</span>
         </div>
       )}
       {qParams.error && (
-        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          {qParams.error}
+        <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-xs font-medium text-red-950 flex items-center gap-2">
+          <AlertCircle className="size-4 text-red-600 shrink-0" />
+          <span>{qParams.error}</span>
         </div>
       )}
 
-      {/* Catatan Review Jika Ada */}
-      {project.review_note && (
-        <Card className="border-amber-200 bg-amber-50/60 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-amber-800">Catatan Direktur Utama / Pemeriksa</p>
-          <p className="mt-1.5 text-sm text-amber-950 whitespace-pre-wrap leading-6">{project.review_note}</p>
-        </Card>
-      )}
-
-      {/* Reference Card: SPK & Kontrak */}
-      <Card className="p-5 grid gap-4 sm:grid-cols-4 bg-slate-50/50">
+      {/* Ringkasan Finansial Singkat */}
+      <Card className="grid gap-4 p-5 sm:grid-cols-3">
         <div>
-          <p className="text-xs text-muted">Referensi Dokumen SPK</p>
-          <p className="mt-1 text-sm font-semibold text-brand">
-            {project.spk ? (
-              <Link href={`/pengajuan/penjualan/spk/${project.spk.id}`} className="hover:underline">
-                {project.spk.document_number || project.spk.title}
-              </Link>
-            ) : (
-              "SPK Terkait"
-            )}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-muted">Nilai Kontrak Disepakati</p>
+          <p className="text-xs text-muted">Nilai Kontrak SPK</p>
           <p className="mt-1 text-sm font-semibold text-ink">{rupiah(contractVal)}</p>
         </div>
         <div>
@@ -163,37 +190,43 @@ export default async function ProjectDetailPage({
         </div>
       </Card>
 
-      {/* JIKA STATUS DRAFT / REVISI: Tampilkan Form Perencanaan untuk Cabang */}
+      {/* JIKA STATUS DRAFT / REVISI: Mode Pengisian Cabang */}
       {canEdit && (
         <section className="space-y-4">
+          {project.approval_status === "revision_requested" && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="size-5 text-amber-600 shrink-0" />
+                <h3 className="font-bold text-amber-950 text-sm">Arahan Revisi dari Direktur Utama</h3>
+              </div>
+              <p className="text-xs text-amber-900 leading-relaxed pl-7 whitespace-pre-wrap">
+                {project.review_note || "Periksa kembali kelengkapan dokumen dan rincian teknis sesuai arahan direksi di bawah."}
+              </p>
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-ink">Lengkapi Data Perencanaan Proyek</h2>
             <span className="text-xs text-muted">
-              Wajib melengkapi SDM, rincian teknis pengerjaan, timesheet jadwal, dan rincian RAB sebelum diajukan.
+              Lengkapi SDM, rincian teknis, jadwal, RAB, lampiran, dan termin sebelum diajukan kembali ke Direksi.
             </span>
           </div>
+
           <ProjectPlanningForm project={project} disabled={isReadOnlyPreview} />
         </section>
       )}
 
-      {/* JIKA STATUS MENUNGGU REVIEW DIREKSI: Tampilkan Review Form untuk Dirut */}
-      {canReview && (
-        <section className="space-y-4">
-          <ProjectReviewForm projectId={project.id} version={project.version} disabled={isReadOnlyPreview} />
-        </section>
-      )}
-
-      {/* JIKA BUKAN MODE EDIT: Tampilkan Rangkuman Perencanaan (Read-Only) */}
-      {!canEdit && (
+      {/* KONSOL PEMERIKSAAN DOKUMEN DIREKSI & VERIFIKASI */}
+      {(!canEdit || isDirector || isDirut) && (
         <div className="space-y-6">
           {status === "active" && (
-            <div className="rounded-xl border border-emerald-300 bg-emerald-50/60 p-4 flex items-center justify-between">
+            <div className="rounded-xl border border-emerald-300 bg-emerald-50/60 p-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <ShieldCheck className="size-6 text-emerald-600" />
+                <ShieldCheck className="size-6 text-emerald-600 shrink-0" />
                 <div>
                   <h3 className="font-semibold text-emerald-950">Pagu Anggaran RAB Terkunci (Budget Baseline)</h3>
                   <p className="text-xs text-emerald-800 mt-0.5">
-                    Proyek ini telah diverifikasi dan disetujui secara resmi oleh Direktur Utama. Seluruh pengeluaran pembelian & kasbon proyek akan diverifikasi terhadap pagu ini.
+                    Proyek ini telah diverifikasi dan disahkan secara resmi oleh Direktur Utama. Seluruh pengeluaran pembelian & kasbon proyek akan diverifikasi terhadap pagu ini.
                   </p>
                 </div>
               </div>
@@ -201,212 +234,27 @@ export default async function ProjectDetailPage({
                 href={`/portal-proyek?project=${project.id}`}
                 className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800 transition"
               >
-                Buka Portal Proyek →
+                Buka Portal Proyek & MoM →
               </Link>
             </div>
           )}
 
-          {/* Readonly: SDM Tim Proyek */}
-          <Card className="p-5 space-y-3">
-            <h3 className="font-semibold text-ink flex items-center gap-2">
-              <Users className="size-4 text-brand" /> 1. Alokasi SDM / Man Power Proyek
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-canvas text-muted">
-                  <tr>
-                    <th className="px-3 py-2">No</th>
-                    <th className="px-3 py-2">Nama Personil</th>
-                    <th className="px-3 py-2">Peran di Proyek</th>
-                    <th className="px-3 py-2">Sertifikasi / Keahlian</th>
-                    <th className="px-3 py-2">Durasi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {(project.manpower || []).map((m: any, idx: number) => (
-                    <tr key={idx}>
-                      <td className="px-3 py-2 text-muted">{idx + 1}</td>
-                      <td className="px-3 py-2 font-medium text-ink">{m.name}</td>
-                      <td className="px-3 py-2">{m.role}</td>
-                      <td className="px-3 py-2">{m.certification || "-"}</td>
-                      <td className="px-3 py-2">{m.duration || "-"}</td>
-                    </tr>
-                  ))}
-                  {(!project.manpower || project.manpower.length === 0) && (
-                    <tr>
-                      <td colSpan={5} className="px-3 py-4 text-center text-muted">
-                        Belum ada personil yang ditugaskan.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          {/* Readonly: Rincian Teknis & Deliverables */}
-          <Card className="p-5 space-y-3">
-            <h3 className="font-semibold text-ink flex items-center gap-2">
-              <FileText className="size-4 text-brand" /> 2. Rincian Teknis & Deliverables Pekerjaan
-            </h3>
-            <div className="grid gap-4 sm:grid-cols-2 text-xs text-muted mb-2">
-              <p>Mulai: <span className="font-medium text-ink">{project.starts_on ? formatDateID(project.starts_on) : "Belum ditentukan"}</span></p>
-              <p>Target Selesai: <span className="font-medium text-ink">{project.ends_on ? formatDateID(project.ends_on) : "Belum ditentukan"}</span></p>
-            </div>
-            <p className="whitespace-pre-wrap text-xs leading-6 text-slate-800 bg-slate-50 p-4 rounded-lg border border-line">
-              {project.work_details || "Belum ada rincian teknis."}
-            </p>
-          </Card>
-
-          {/* Readonly: Jadwal & Timesheet */}
-          <Card className="p-5 space-y-3">
-            <h3 className="font-semibold text-ink flex items-center gap-2">
-              <Calendar className="size-4 text-brand" /> 3. Jadwal & Milestones Tahapan
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-canvas text-muted">
-                  <tr>
-                    <th className="px-3 py-2">No</th>
-                    <th className="px-3 py-2">Nama Tahapan</th>
-                    <th className="px-3 py-2">Tanggal Mulai</th>
-                    <th className="px-3 py-2">Target Selesai</th>
-                    <th className="px-3 py-2">PIC Pelaksana</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {(project.timesheet_schedule || []).map((s: any, idx: number) => (
-                    <tr key={idx}>
-                      <td className="px-3 py-2 text-muted">{idx + 1}</td>
-                      <td className="px-3 py-2 font-medium text-ink">{s.phase}</td>
-                      <td className="px-3 py-2">{s.start_date ? formatDateID(s.start_date) : "-"}</td>
-                      <td className="px-3 py-2">{s.end_date ? formatDateID(s.end_date) : "-"}</td>
-                      <td className="px-3 py-2">{s.pic || "-"}</td>
-                    </tr>
-                  ))}
-                  {(!project.timesheet_schedule || project.timesheet_schedule.length === 0) && (
-                    <tr>
-                      <td colSpan={5} className="px-3 py-4 text-center text-muted">
-                        Belum ada jadwal tahapan.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          {/* Readonly: RAB Pos Biaya */}
-          <Card className="p-5 space-y-3">
-            <h3 className="font-semibold text-ink flex items-center gap-2">
-              <Calculator className="size-4 text-brand" /> 4. Rincian Rencana Anggaran Biaya (RAB)
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-canvas text-muted">
-                  <tr>
-                    <th className="px-3 py-2">Kategori</th>
-                    <th className="px-3 py-2">Uraian Kebutuhan</th>
-                    <th className="px-3 py-2 text-right">Volume</th>
-                    <th className="px-3 py-2">Satuan</th>
-                    <th className="px-3 py-2 text-right">Harga Satuan</th>
-                    <th className="px-3 py-2 text-right">Total Pos</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {(project.rab_breakdown || []).map((r: any, idx: number) => (
-                    <tr key={idx}>
-                      <td className="px-3 py-2 capitalize font-medium text-slate-700">{r.category?.replace("_", " ")}</td>
-                      <td className="px-3 py-2 font-medium text-ink">{r.description}</td>
-                      <td className="px-3 py-2 text-right">{r.volume}</td>
-                      <td className="px-3 py-2">{r.unit}</td>
-                      <td className="px-3 py-2 text-right">{rupiah(r.unit_price)}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-900">{rupiah(r.total)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="border-t-2 border-slate-300 font-semibold text-slate-800">
-                  <tr>
-                    <td colSpan={5} className="px-3 py-3 text-right">
-                      Total Rencana Anggaran Biaya (RAB):
-                    </td>
-                    <td className="px-3 py-3 text-right text-brand">{rupiah(rabVal)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </Card>
-
-          {/* Readonly: Termin Pembayaran & Penagihan */}
-          <Card className="p-5 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
-              <h3 className="font-semibold text-ink flex items-center gap-2">
-                <Receipt className="size-4 text-brand" /> 5. Rencana Termin Pembayaran & Penagihan
-              </h3>
-              <Link
-                href="/pengajuan/penjualan/penagihan"
-                className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-brand hover:bg-slate-50 transition"
-              >
-                Buka Meja Kerja Penagihan & Invoice →
-              </Link>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-canvas text-muted">
-                  <tr>
-                    <th className="px-3 py-2">Tahap</th>
-                    <th className="px-3 py-2">Keterangan Termin</th>
-                    <th className="px-3 py-2 text-right">Bobot (%)</th>
-                    <th className="px-3 py-2 text-right">Nominal (Rp)</th>
-                    <th className="px-3 py-2">Pemicu Tagihan (Deliverables)</th>
-                    <th className="px-3 py-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {(project.payment_terms || []).map((t: any, idx: number) => (
-                    <tr key={idx}>
-                      <td className="px-3 py-2 text-muted">Termin {idx + 1}</td>
-                      <td className="px-3 py-2 font-medium text-ink">{t.name}</td>
-                      <td className="px-3 py-2 text-right">{t.percentage}%</td>
-                      <td className="px-3 py-2 text-right font-bold text-ink">{rupiah(t.amount)}</td>
-                      <td className="px-3 py-2 text-muted italic">{t.trigger || "-"}</td>
-                      <td className="px-3 py-2">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                            t.status === "paid"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : t.status === "invoiced"
-                              ? "bg-blue-100 text-blue-800"
-                              : "bg-slate-100 text-slate-700"
-                          }`}
-                        >
-                          {t.status === "paid"
-                            ? "✓ Lunas"
-                            : t.status === "invoiced"
-                            ? "⚡ Invoice Terbit"
-                            : "Rencana"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {(!project.payment_terms || project.payment_terms.length === 0) && (
-                    <tr>
-                      <td colSpan={6} className="px-3 py-4 text-center text-muted">
-                        Jadwal termin pembayaran belum diatur pada proyek ini.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          {/* Konsol Pemeriksaan Interaktif Direksi */}
+          <ProjectDirectorConsole
+            project={project}
+            attachments={projectAttachments}
+            insights={insights}
+            isDirut={isDirut}
+            isDirector={isDirector}
+            canReview={canReview}
+            disabled={isReadOnlyPreview}
+          />
         </div>
       )}
 
-      {/* Riwayat / Log Eksekusi */}
+      {/* Riwayat / Log Aktivitas Proyek */}
       <Card className="p-5">
-        <h3 className="font-semibold text-ink text-sm">Riwayat & Log Proyek</h3>
+        <h3 className="font-semibold text-ink text-sm">Riwayat Aktivitas & Log Audit Proyek</h3>
         <ol className="mt-4 space-y-3">
           {(events ?? []).map((e: any) => (
             <li key={e.id} className="border-l-2 border-line pl-4 text-xs">

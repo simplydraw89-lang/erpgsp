@@ -68,7 +68,7 @@ export async function saveProjectPlanningAction(prevState: { error?: string } | 
 }
 
 export async function decideProjectAction(prevState: { error?: string } | undefined, formData: FormData) {
-  const { supabase, isReadOnlyPreview } = await requireWorkspace()
+  const { supabase, isReadOnlyPreview, user, actorRole, workAssignments } = await requireWorkspace()
   if (isReadOnlyPreview) return { error: "Aksi dinonaktifkan dalam mode pratinjau." }
 
   const id = String(formData.get("id") || "")
@@ -95,11 +95,114 @@ export async function decideProjectAction(prevState: { error?: string } | undefi
     return { error: error.message || "Gagal memproses keputusan verifikasi proyek." }
   }
 
+  // Simpan catatan keputusan resmi ke riwayat arahan direksi (director_insights)
+  if (note) {
+    const authorRole = actorRole === "owner" ? "Super Admin" : "Direktur Utama"
+    const authorName = user.email ? user.email.split("@")[0].toUpperCase() : "Direktur Utama"
+
+    const { data: proj } = await supabase
+      .from("crm_projects")
+      .select("director_insights")
+      .eq("id", id)
+      .single()
+
+    const currentInsights = Array.isArray(proj?.director_insights) ? proj.director_insights : []
+    const newInsight = {
+      id: crypto.randomUUID(),
+      author_id: user.id,
+      author_name: authorName,
+      author_role: authorRole,
+      section: decision === "revise" ? "Instruksi Revisi" : "Pengesahan ACC",
+      comment: note,
+      created_at: new Date().toISOString(),
+    }
+
+    await supabase
+      .from("crm_projects")
+      .update({ director_insights: [...currentInsights, newInsight] })
+      .eq("id", id)
+  }
+
   revalidatePath("/proyek")
   revalidatePath(`/proyek/${id}`)
   revalidatePath("/portal-proyek")
   revalidatePath("/pekerjaan-saya")
 
-  const label = decision === "approve" ? "Proyek berhasil disetujui (ACC) dan resmi aktif." : decision === "revise" ? "Proyek dikembalikan ke cabang untuk revisi." : "Proyek ditolak."
+  const label =
+    decision === "approve"
+      ? "Proyek berhasil disetujui (ACC) dan resmi aktif."
+      : decision === "revise"
+      ? "Proyek dikembalikan ke cabang untuk revisi sesuai arahan Direktur Utama."
+      : "Proyek ditolak."
   redirect(`/proyek/${id}?notice=${encodeURIComponent(label)}`)
+}
+
+export async function addProjectDirectorCommentAction(prevState: { error?: string } | undefined, formData: FormData) {
+  const { supabase, organizationId, user, actorRole, workAssignments, isReadOnlyPreview } = await requireWorkspace()
+  if (isReadOnlyPreview) return { error: "Aksi dinonaktifkan dalam mode pratinjau." }
+
+  const id = String(formData.get("id") || "")
+  const comment = String(formData.get("comment") || "").trim()
+  const section = String(formData.get("section") || "general").trim()
+
+  if (!comment) return { error: "Isi catatan / arahan direksi tidak boleh kosong." }
+
+  const isOwner = actorRole === "owner"
+  const isDirut = (workAssignments ?? []).some((j) => !j.branch_id && j.job_role === "president")
+  const isDirtek = (workAssignments ?? []).some((j) => !j.branch_id && j.job_role === "technical_director")
+  const isDirkeu = (workAssignments ?? []).some((j) => !j.branch_id && j.job_role === "finance_director")
+
+  const authorRole = isOwner
+    ? "Super Admin / Direksi"
+    : isDirut
+    ? "Direktur Utama"
+    : isDirtek
+    ? "Direktur Teknis"
+    : isDirkeu
+    ? "Direktur Keuangan"
+    : "Tim Proyek / Cabang"
+
+  const authorName = user.email ? user.email.split("@")[0].toUpperCase() : "Direksi"
+
+  // Coba jalankan RPC add_project_director_insight
+  const { error: rpcErr } = await supabase.rpc("add_project_director_insight", {
+    p_org: organizationId,
+    p_project_id: id,
+    p_author_name: authorName,
+    p_author_role: authorRole,
+    p_section: section,
+    p_comment: comment,
+  })
+
+  if (rpcErr) {
+    const { data: proj } = await supabase.from("crm_projects").select("director_insights, branch_id").eq("id", id).single()
+    const currentInsights = Array.isArray(proj?.director_insights) ? proj.director_insights : []
+    const newInsight = {
+      id: crypto.randomUUID(),
+      author_id: user.id,
+      author_name: authorName,
+      author_role: authorRole,
+      section,
+      comment,
+      created_at: new Date().toISOString(),
+    }
+    await supabase.from("crm_projects").update({ director_insights: [...currentInsights, newInsight] }).eq("id", id)
+
+    if (proj?.branch_id) {
+      await supabase.from("procurement_events").insert({
+        organization_id: organizationId,
+        branch_id: proj.branch_id,
+        entity_id: id,
+        entity_type: "project",
+        action: "director_insight_added",
+        actor_id: user.id,
+        note: comment,
+        details: { author_role: authorRole, section },
+      })
+    }
+  }
+
+  revalidatePath(`/proyek/${id}`)
+  revalidatePath("/proyek")
+  redirect(`/proyek/${id}?notice=${encodeURIComponent("Catatan arahan direksi berhasil disampaikan ke tim proyek.")}`)
 }
