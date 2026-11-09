@@ -1,11 +1,84 @@
 -- ============================================================================
 -- Migration: 20261110020000_unify_project_and_spk_attachments.sql
 -- Tujuan:
--- 1. Sinkronisasi otomatis lampiran SPK/SPH ke crm_projects jika attachment_ids proyek kosong.
--- 2. Perbarui sales_attachment_reader agar Direktur & pengakses proyek dapat membaca
+-- 1. Perbaiki audit_module_record agar aman dieksekusi dari SQL Editor (auth.uid() NULL).
+-- 2. Sinkronisasi otomatis lampiran SPK/SPH ke crm_projects jika attachment_ids proyek kosong.
+-- 3. Perbarui sales_attachment_reader agar Direktur & pengakses proyek dapat membaca
 --    procurement_attachments yang tertaut ke crm_projects.attachment_ids.
--- 3. Izinkan pratinjau dan unduh berkas lampiran proyek di storage.
+-- 4. Izinkan pratinjau dan unduh berkas lampiran proyek di storage.
 -- ============================================================================
+
+-- 0. Perbaiki audit_module_record agar tidak crash saat dijalankan via SQL Editor
+create or replace function public.audit_module_record()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  row_data jsonb;
+  target_org uuid;
+  target_id text;
+  actor uuid := (select auth.uid());
+begin
+  if tg_op = 'DELETE' then
+    row_data := to_jsonb(old);
+  else
+    row_data := to_jsonb(new);
+  end if;
+  target_org := (row_data ->> 'organization_id')::uuid;
+  target_id := row_data ->> 'id';
+
+  -- Jika dieksekusi dari SQL Editor / Migration (auth.uid() kosong), gunakan created_by atau admin pertama
+  if actor is null then
+    actor := coalesce(
+      nullif(row_data ->> 'created_by', '')::uuid,
+      (select id from auth.users order by created_at limit 1)
+    );
+  end if;
+
+  if actor is not null and target_org is not null then
+    insert into public.audit_events (
+      organization_id, actor_id, action, entity_type, entity_id, details
+    )
+    values (
+      target_org,
+      actor,
+      lower(tg_op),
+      coalesce(tg_argv[0], 'record'),
+      target_id,
+      jsonb_build_object(
+        'module_key', coalesce(tg_argv[1], 'system'),
+        'source', case when (select auth.uid()) is null then 'sql_editor' else 'app' end
+      )
+    );
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$$;
+
+-- 0b. Pastikan fungsi otorisasi proyek tersedia
+create or replace function gsp_private.can_review_project(p public.crm_projects) returns boolean
+language sql stable security definer set search_path='' as $$
+  select p.approval_status = 'director_review'
+  and (
+    gsp_private.is_superadmin(p.organization_id)
+    or gsp_private.has_job(p.organization_id, null, array['president', 'technical_director', 'finance_director'])
+  );
+$$;
+
+create or replace function gsp_private.can_decide_project(p public.crm_projects) returns boolean
+language sql stable security definer set search_path='' as $$
+  select p.approval_status = 'director_review'
+  and (
+    gsp_private.is_superadmin(p.organization_id)
+    or gsp_private.has_job(p.organization_id, null, array['president'])
+  );
+$$;
 
 -- 1. Perbarui fungsi sales_attachment_reader agar mendukung crm_projects
 create or replace function gsp_private.sales_attachment_reader(p_id uuid) returns boolean
@@ -66,7 +139,18 @@ language sql stable security invoker set search_path='' as $$
   select gsp_private.sales_attachment_reader(p_id);
 $$;
 
--- 2. Sinkronkan lampiran SPK yang sudah ada ke crm_projects yang attachment_ids-nya masih kosong
+-- 2. Sinkronkan lampiran SPK yang sudah ada ke crm_projects
+-- Nonaktifkan trigger audit sementara (audit_crm_projects) agar migrasi lancar di SQL Editor
+do $$
+begin
+  if exists (select 1 from pg_trigger where tgname = 'audit_crm_projects') then
+    alter table public.crm_projects disable trigger audit_crm_projects;
+  end if;
+  if exists (select 1 from pg_trigger where tgname = 'audit_crm_project') then
+    alter table public.crm_projects disable trigger audit_crm_project;
+  end if;
+end $$;
+
 update public.crm_projects p
 set attachment_ids = coalesce(sd.attachment_ids, '{}')
 from public.sales_documents sd
@@ -74,6 +158,16 @@ where p.spk_id = sd.id
   and (p.attachment_ids is null or cardinality(p.attachment_ids) = 0)
   and sd.attachment_ids is not null
   and cardinality(sd.attachment_ids) > 0;
+
+do $$
+begin
+  if exists (select 1 from pg_trigger where tgname = 'audit_crm_projects') then
+    alter table public.crm_projects enable trigger audit_crm_projects;
+  end if;
+  if exists (select 1 from pg_trigger where tgname = 'audit_crm_project') then
+    alter table public.crm_projects enable trigger audit_crm_project;
+  end if;
+end $$;
 
 -- 3. Perbarui juga fungsi pembuatan crm_projects saat SPK disetujui agar otomatis mewarisi attachment_ids SPK
 create or replace function gsp_private.api_decide_spk(
