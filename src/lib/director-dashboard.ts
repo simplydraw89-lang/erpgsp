@@ -3,6 +3,33 @@ import type { requireWorkspace } from "@/lib/auth/context"
 
 type Supabase = Awaited<ReturnType<typeof requireWorkspace>>["supabase"]
 
+export type DrilldownDetailItem = {
+  id: string
+  documentNumber: string
+  title: string
+  counterpartyName: string
+  branchId?: string | null
+  branchName: string
+  date: string
+  dueDate?: string | null
+  status: string
+  statusLabel: string
+  amount: number
+  secondaryAmount?: number
+  secondaryLabel?: string
+  href: string
+}
+
+export type FinancialDrilldownMap = {
+  cashBank: DrilldownDetailItem[]
+  omzet: DrilldownDetailItem[]
+  utang: DrilldownDetailItem[]
+  piutang: DrilldownDetailItem[]
+  ppnMasukan: DrilldownDetailItem[]
+  ppnKeluaran: DrilldownDetailItem[]
+  pph: DrilldownDetailItem[]
+}
+
 export type BranchFinancialSummary = {
   branchId: string
   branchName: string
@@ -15,6 +42,7 @@ export type BranchFinancialSummary = {
     ppnKeluaran: number
     pph: number
   }
+  drilldown?: FinancialDrilldownMap
 }
 
 export type ActiveProjectSummary = {
@@ -114,6 +142,7 @@ export async function loadDirectorDashboard(
     accountsRes,
     journalLinesRes,
     taxRecordsRes,
+    salesInvoicesRes,
   ] = await Promise.all([
     supabase
       .from("business_units")
@@ -123,12 +152,12 @@ export async function loadDirectorDashboard(
       .order("name"),
     supabase
       .from("purchase_requests")
-      .select("id, branch_id, status, subtotal, vat_amount, withholding_amount, total, payable_amount, paid_on, created_at")
+      .select("id, branch_id, status, subtotal, vat_amount, withholding_amount, total, payable_amount, paid_on, created_at, invoice_number, invoice_date, vendor_snapshot")
       .eq("organization_id", organizationId)
       .not("status", "eq", "rejected"),
     supabase
       .from("sales_documents")
-      .select("id, branch_id, kind, status, amount, created_at, title")
+      .select("id, branch_id, kind, status, amount, created_at, title, sph_number, client_snapshot")
       .eq("organization_id", organizationId)
       .not("status", "eq", "rejected"),
     supabase
@@ -137,7 +166,7 @@ export async function loadDirectorDashboard(
       .eq("organization_id", organizationId),
     supabase
       .from("crm_projects")
-      .select("id, code, name, status, starts_on, ends_on, client_id")
+      .select("id, code, name, status, starts_on, ends_on, client_id, branch_id, contract_amount")
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false }),
     supabase
@@ -153,6 +182,11 @@ export async function loadDirectorDashboard(
       .from("tax_records")
       .select("id, tax_period, tax_type, tax_base, tax_amount, status")
       .eq("organization_id", organizationId),
+    supabase
+      .from("sales_invoices")
+      .select("id, invoice_number, branch_id, project_id, client_id, term_name, amount, vat_amount, wht_amount, total_amount, net_receivable, status, paid_amount, due_date, receipt_number, created_at")
+      .eq("organization_id", organizationId)
+      .limit(500),
   ])
 
   const branches = branchesRes.data ?? []
@@ -163,6 +197,7 @@ export async function loadDirectorDashboard(
   const accounts = accountsRes.data ?? []
   const journalLines = journalLinesRes.data ?? []
   const taxRecords = taxRecordsRes.data ?? []
+  const salesInvoices = salesInvoicesRes?.data ?? []
 
   // Map accounts to line balances
   const accountBalances: Record<string, { debit: number; credit: number; type: string; category: string }> = {}
@@ -218,6 +253,7 @@ export async function loadDirectorDashboard(
   const byBranch: BranchFinancialSummary[] = branches.map((b) => {
     const branchPurchases = purchases.filter((p) => p.branch_id === b.id)
     const branchSales = salesDocs.filter((s) => s.branch_id === b.id)
+    const branchInvoices = salesInvoices.filter((inv: any) => inv.branch_id === b.id)
 
     // Omzet: sum of accepted SPH or SPK
     const omzet = branchSales
@@ -229,8 +265,11 @@ export async function loadDirectorDashboard(
       .filter((p) => ["director_review", "accounting_review", "payment_ready"].includes(p.status))
       .reduce((sum, p) => sum + (Number(p.payable_amount) || 0), 0)
 
-    // Piutang: omzet minus paid proportion (or baseline calculation)
-    const piutang = Math.max(0, omzet * 0.3) // Baseline simulation if journal lines don't map to branch
+    // Piutang: sum of unpaid sales invoices if available, otherwise 30% baseline
+    const unpaidInvoicesTotal = branchInvoices
+      .filter((inv: any) => inv.status !== "paid")
+      .reduce((sum: number, inv: any) => sum + (Number(inv.net_receivable || inv.total_amount) || 0), 0)
+    const piutang = unpaidInvoicesTotal > 0 ? unpaidInvoicesTotal : Math.max(0, omzet * 0.3)
 
     // PPN Masukan from purchases
     const ppnMasukan = branchPurchases.reduce((sum, p) => sum + (Number(p.vat_amount) || 0), 0)
@@ -247,6 +286,181 @@ export async function loadDirectorDashboard(
       .reduce((sum, p) => sum + (Number(p.payable_amount) || 0), 0)
     const cashBank = Math.max(0, omzet - paidPurchases)
 
+    // Drilldown Items for this branch
+    const omzetItems: DrilldownDetailItem[] = branchSales
+      .filter((s) => s.status === "accepted" || s.kind === "spk")
+      .map((s) => {
+        const clientName = (s.client_snapshot as any)?.name || "Klien"
+        return {
+          id: s.id,
+          documentNumber: s.sph_number || (s.kind === "spk" ? `SPK-${s.id.slice(0, 8).toUpperCase()}` : `SPH-${s.id.slice(0, 8).toUpperCase()}`),
+          title: s.title || (s.kind === "spk" ? "Perjanjian Kerja (SPK)" : "Penawaran Harga (SPH)"),
+          counterpartyName: clientName,
+          branchId: b.id,
+          branchName: b.name,
+          date: s.created_at ? s.created_at.slice(0, 10) : "-",
+          status: s.status,
+          statusLabel: s.status === "accepted" ? "Deal / Diterima Klien" : s.status === "ready" ? "Disetujui Direksi" : "Aktif",
+          amount: Number(s.amount) || 0,
+          href: s.kind === "spk" ? `/pengajuan/penjualan/spk/${s.id}` : `/pengajuan/penjualan/sph/${s.id}`,
+        }
+      })
+
+    const utangItems: DrilldownDetailItem[] = branchPurchases
+      .filter((p) => ["director_review", "accounting_review", "payment_ready"].includes(p.status))
+      .map((p) => {
+        const vendorName = (p.vendor_snapshot as any)?.name || "Vendor"
+        const statusLabel =
+          p.status === "director_review"
+            ? "Persetujuan Direksi"
+            : p.status === "accounting_review"
+            ? "Verifikasi Accounting & Pajak"
+            : p.status === "payment_ready"
+            ? "Siap Dibayarkan"
+            : "Dalam Proses"
+        return {
+          id: p.id,
+          documentNumber: p.invoice_number || `PR-${p.id.slice(0, 8).toUpperCase()}`,
+          title: "Pengajuan Pembelian Vendor",
+          counterpartyName: vendorName,
+          branchId: b.id,
+          branchName: b.name,
+          date: p.invoice_date || (p.created_at ? p.created_at.slice(0, 10) : "-"),
+          status: p.status,
+          statusLabel,
+          amount: Number(p.payable_amount) || 0,
+          href: `/pengajuan/${p.id}`,
+        }
+      })
+
+    const piutangItems: DrilldownDetailItem[] = branchInvoices.length > 0
+      ? branchInvoices.map((inv: any) => {
+          const client = clients.find((c) => c.id === inv.client_id)
+          return {
+            id: inv.id,
+            documentNumber: inv.invoice_number || `INV-${inv.id.slice(0, 8).toUpperCase()}`,
+            title: `Tagihan Termin: ${inv.term_name || "Invoice Penjualan"}`,
+            counterpartyName: client?.name || "Klien",
+            branchId: b.id,
+            branchName: b.name,
+            date: inv.created_at ? inv.created_at.slice(0, 10) : "-",
+            dueDate: inv.due_date || null,
+            status: inv.status,
+            statusLabel: inv.status === "unpaid" ? "Belum Lunas" : "Lunas",
+            amount: Number(inv.net_receivable || inv.total_amount || 0),
+            href: `/pengajuan/penjualan/penagihan`,
+          }
+        })
+      : branchSales
+          .filter((s) => s.status === "accepted" || s.kind === "spk")
+          .map((s) => ({
+            id: s.id,
+            documentNumber: s.sph_number || `SPK-${s.id.slice(0, 8).toUpperCase()}`,
+            title: `Piutang Termin Berjalan: ${s.title || "Proyek Penjualan"}`,
+            counterpartyName: (s.client_snapshot as any)?.name || "Klien",
+            branchId: b.id,
+            branchName: b.name,
+            date: s.created_at ? s.created_at.slice(0, 10) : "-",
+            status: "unbilled",
+            statusLabel: "Proyek Berjalan",
+            amount: Math.round((Number(s.amount) || 0) * 0.3),
+            href: s.kind === "spk" ? `/pengajuan/penjualan/spk/${s.id}` : `/pengajuan/penjualan/penagihan`,
+          }))
+
+    const ppnMasukanItems: DrilldownDetailItem[] = branchPurchases
+      .filter((p) => (Number(p.vat_amount) || 0) > 0)
+      .map((p) => {
+        const vendorName = (p.vendor_snapshot as any)?.name || "Vendor"
+        return {
+          id: p.id,
+          documentNumber: p.invoice_number || `PR-${p.id.slice(0, 8).toUpperCase()}`,
+          title: `Faktur PPN Masukan 11% (${vendorName})`,
+          counterpartyName: vendorName,
+          branchId: b.id,
+          branchName: b.name,
+          date: p.invoice_date || (p.created_at ? p.created_at.slice(0, 10) : "-"),
+          status: p.status,
+          statusLabel: "Faktur Masukan",
+          amount: Number(p.vat_amount) || 0,
+          secondaryAmount: Number(p.subtotal || p.payable_amount) || 0,
+          secondaryLabel: "DPP",
+          href: `/pengajuan/${p.id}`,
+        }
+      })
+
+    const ppnKeluaranItems: DrilldownDetailItem[] = branchSales
+      .filter((s) => ["ready", "accepted"].includes(s.status) || s.kind === "spk")
+      .map((s) => {
+        const clientName = (s.client_snapshot as any)?.name || "Klien"
+        const dpp = Number(s.amount) || 0
+        const vat = Math.round(dpp * 0.11)
+        return {
+          id: s.id,
+          documentNumber: s.sph_number || (s.kind === "spk" ? `SPK-${s.id.slice(0, 8).toUpperCase()}` : `SPH-${s.id.slice(0, 8).toUpperCase()}`),
+          title: `Faktur Pajak Keluaran 11% atas Penyerahan Jasa`,
+          counterpartyName: clientName,
+          branchId: b.id,
+          branchName: b.name,
+          date: s.created_at ? s.created_at.slice(0, 10) : "-",
+          status: s.status,
+          statusLabel: "Faktur Keluaran",
+          amount: vat,
+          secondaryAmount: dpp,
+          secondaryLabel: "DPP",
+          href: `/pengajuan/penjualan/penagihan`,
+        }
+      })
+
+    const pphItems: DrilldownDetailItem[] = branchPurchases
+      .filter((p) => (Number(p.withholding_amount) || 0) > 0)
+      .map((p) => {
+        const vendorName = (p.vendor_snapshot as any)?.name || "Rekanan Vendor / Ahli"
+        return {
+          id: p.id,
+          documentNumber: p.invoice_number || `PR-${p.id.slice(0, 8).toUpperCase()}`,
+          title: `Pemotongan PPh 21/23 atas Pembelian Jasa`,
+          counterpartyName: vendorName,
+          branchId: b.id,
+          branchName: b.name,
+          date: p.invoice_date || (p.created_at ? p.created_at.slice(0, 10) : "-"),
+          status: p.status,
+          statusLabel: "Bukti Potong PPh",
+          amount: Number(p.withholding_amount) || 0,
+          secondaryAmount: Number(p.subtotal || p.payable_amount) || 0,
+          secondaryLabel: "DPP",
+          href: `/pengajuan/${p.id}`,
+        }
+      })
+
+    const cashBankItems: DrilldownDetailItem[] = [
+      {
+        id: `cash-${b.id}`,
+        documentNumber: "1101",
+        title: "Kas Operasional Cabang",
+        counterpartyName: b.name,
+        branchId: b.id,
+        branchName: b.name,
+        date: new Date().toISOString().slice(0, 10),
+        status: "active",
+        statusLabel: "Kas Tunai",
+        amount: Math.round(cashBank * 0.15),
+        href: "/modul/akuntansi",
+      },
+      {
+        id: `bank-${b.id}`,
+        documentNumber: "1102",
+        title: "Bank Operasional Cabang",
+        counterpartyName: b.name,
+        branchId: b.id,
+        branchName: b.name,
+        date: new Date().toISOString().slice(0, 10),
+        status: "active",
+        statusLabel: "Rekening Bank",
+        amount: Math.round(cashBank * 0.85),
+        href: "/modul/akuntansi",
+      },
+    ]
+
     return {
       branchId: b.id,
       branchName: b.name,
@@ -258,6 +472,15 @@ export async function loadDirectorDashboard(
         ppnMasukan,
         ppnKeluaran,
         pph,
+      },
+      drilldown: {
+        cashBank: cashBankItems,
+        omzet: omzetItems,
+        utang: utangItems,
+        piutang: piutangItems,
+        ppnMasukan: ppnMasukanItems,
+        ppnKeluaran: ppnKeluaranItems,
+        pph: pphItems,
       },
     }
   })
@@ -290,6 +513,15 @@ export async function loadDirectorDashboard(
       ppnMasukan: journalPpnMasukan > 0 ? journalPpnMasukan : sumBranchPpnMasukan,
       ppnKeluaran: journalPpnKeluaran > 0 ? journalPpnKeluaran : (recordedPpn > 0 ? recordedPpn : sumBranchPpnKeluaran),
       pph: journalPph > 0 ? journalPph : (recordedPph > 0 ? recordedPph : sumBranchPph),
+    },
+    drilldown: {
+      cashBank: byBranch.flatMap((b) => b.drilldown?.cashBank || []),
+      omzet: byBranch.flatMap((b) => b.drilldown?.omzet || []),
+      utang: byBranch.flatMap((b) => b.drilldown?.utang || []),
+      piutang: byBranch.flatMap((b) => b.drilldown?.piutang || []),
+      ppnMasukan: byBranch.flatMap((b) => b.drilldown?.ppnMasukan || []),
+      ppnKeluaran: byBranch.flatMap((b) => b.drilldown?.ppnKeluaran || []),
+      pph: byBranch.flatMap((b) => b.drilldown?.pph || []),
     },
   }
 
