@@ -86,6 +86,16 @@ export const requireWorkspace = cache(async function requireWorkspace() {
     }
   }
 
+  // Deteksi akun demo / tamu / auditor agar otomatis terkunci dalam mode Read-Only permanen
+  const isDemoAccount =
+    Boolean(user.email && (user.email.toLowerCase().includes("demo") || user.email.toLowerCase().includes("tamu") || user.email.toLowerCase().includes("guest"))) ||
+    Boolean((user.user_metadata as any)?.is_demo === true) ||
+    Boolean(actorRole === "auditor")
+
+  if (isDemoAccount) {
+    displayRoleLabel = displayRoleLabel ? `${displayRoleLabel} (Demo / Hanya Lihat)` : "Eksekutif (Demo / Hanya Lihat)"
+  }
+
   return {
     supabase,
     user,
@@ -95,7 +105,7 @@ export const requireWorkspace = cache(async function requireWorkspace() {
     roleLabel: displayRoleLabel,
     relationshipStatus: profile.data?.relationship_status as string | undefined,
     workAssignments: assignments.data ?? [],
-    isReadOnlyPreview: viewAs.isActive,
+    isReadOnlyPreview: viewAs.isActive || isDemoAccount,
     isPreviewInvalid: viewAs.isInvalid,
     organizationId: membership.organization_id as string,
     organizationName: (organization.name === "Gema Sinergi Peradaban" || organization.name === "PT Gema Sinergi Peradaban" || !organization.name) ? "PT. Global Solusi Prima" : (organization.name as string),
