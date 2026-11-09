@@ -19,6 +19,8 @@ import {
   Calendar,
   Sparkles,
   Search,
+  X,
+  ExternalLink,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -134,6 +136,10 @@ export function BillingWorkspace({
     project: ProjectBillingItem
   } | null>(null)
 
+  // Modal State: Drilldown KPI Box
+  const [kpiModal, setKpiModal] = useState<"contract" | "invoiced" | "paid" | "receivable" | null>(null)
+  const [kpiSearch, setKpiSearch] = useState("")
+
   // Perhitungan Ringkasan Keuangan
   let totalContractValue = 0
   let totalInvoicedValue = 0
@@ -152,6 +158,52 @@ export function BillingWorkspace({
   }
 
   const outstandingReceivable = totalInvoicedValue - totalPaidValue
+
+  // Flattened items for drilldowns
+  const allInvoices = projects.flatMap((p) =>
+    p.invoices.map((inv) => ({
+      ...inv,
+      project: p,
+    }))
+  )
+  const paidInvoices = allInvoices.filter((inv) => inv.status === "paid")
+  const unpaidInvoices = allInvoices.filter((inv) => inv.status === "unpaid")
+
+  const kq = kpiSearch.toLowerCase().trim()
+  const filteredProjectsForKpi = projects.filter(
+    (p) =>
+      !kq ||
+      p.code.toLowerCase().includes(kq) ||
+      p.name.toLowerCase().includes(kq) ||
+      p.client_name.toLowerCase().includes(kq) ||
+      p.branch_name.toLowerCase().includes(kq)
+  )
+
+  const filteredInvoicesForKpi = allInvoices.filter(
+    (inv) =>
+      !kq ||
+      inv.invoice_number.toLowerCase().includes(kq) ||
+      inv.project.name.toLowerCase().includes(kq) ||
+      inv.project.client_name.toLowerCase().includes(kq) ||
+      inv.term_name.toLowerCase().includes(kq)
+  )
+
+  const filteredPaidForKpi = paidInvoices.filter(
+    (inv) =>
+      !kq ||
+      (inv.receipt_number || "").toLowerCase().includes(kq) ||
+      inv.invoice_number.toLowerCase().includes(kq) ||
+      inv.project.name.toLowerCase().includes(kq) ||
+      inv.project.client_name.toLowerCase().includes(kq)
+  )
+
+  const filteredUnpaidForKpi = unpaidInvoices.filter(
+    (inv) =>
+      !kq ||
+      inv.invoice_number.toLowerCase().includes(kq) ||
+      inv.project.name.toLowerCase().includes(kq) ||
+      inv.project.client_name.toLowerCase().includes(kq)
+  )
 
   // Filter projects by search
   const filteredProjects = projects.filter((p) => {
@@ -175,36 +227,346 @@ export function BillingWorkspace({
 
   return (
     <div className="space-y-6">
-      {/* KPI Cards */}
+      {/* KPI Cards (Interactive Clickable Drilldowns) */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="p-4 border-l-4 border-l-brand">
-          <p className="text-xs font-semibold text-muted uppercase tracking-wider">Total Nilai Kontrak SPK</p>
+        <div
+          onClick={() => {
+            setKpiModal("contract")
+            setKpiSearch("")
+          }}
+          className="group cursor-pointer rounded-xl border border-line border-l-4 border-l-brand bg-white p-4 shadow-panel transition-all duration-150 hover:-translate-y-1 hover:shadow-lg hover:border-brand/40"
+          title="Klik untuk melihat rincian seluruh proyek & nilai kontrak SPK"
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-muted uppercase tracking-wider">Total Nilai Kontrak SPK</p>
+            <span className="text-[10px] font-semibold text-brand opacity-80 group-hover:opacity-100 transition-opacity">
+              Rincian &rarr;
+            </span>
+          </div>
           <p className="mt-1.5 text-2xl font-bold text-ink">{rupiah(totalContractValue)}</p>
           <p className="mt-1 text-xs text-muted">{projects.length} Proyek Tercatat</p>
-        </Card>
+        </div>
 
-        <Card className="p-4 border-l-4 border-l-blue-500">
-          <p className="text-xs font-semibold text-muted uppercase tracking-wider">Total Telah Ditagihkan (DPP)</p>
+        <div
+          onClick={() => {
+            setKpiModal("invoiced")
+            setKpiSearch("")
+          }}
+          className="group cursor-pointer rounded-xl border border-line border-l-4 border-l-blue-500 bg-white p-4 shadow-panel transition-all duration-150 hover:-translate-y-1 hover:shadow-lg hover:border-blue-300"
+          title="Klik untuk melihat rincian seluruh invoice termin penagihan"
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-muted uppercase tracking-wider">Total Telah Ditagihkan (DPP)</p>
+            <span className="text-[10px] font-semibold text-blue-600 opacity-80 group-hover:opacity-100 transition-opacity">
+              Rincian &rarr;
+            </span>
+          </div>
           <p className="mt-1.5 text-2xl font-bold text-blue-700">{rupiah(totalInvoicedValue)}</p>
           <p className="mt-1 text-xs text-muted">
             {totalContractValue > 0
               ? `${((totalInvoicedValue / totalContractValue) * 100).toFixed(1)}% dari total kontrak`
               : "0%"}
           </p>
-        </Card>
+        </div>
 
-        <Card className="p-4 border-l-4 border-l-emerald-500">
-          <p className="text-xs font-semibold text-muted uppercase tracking-wider">Total Kas Masuk (Lunas)</p>
+        <div
+          onClick={() => {
+            setKpiModal("paid")
+            setKpiSearch("")
+          }}
+          className="group cursor-pointer rounded-xl border border-line border-l-4 border-l-emerald-500 bg-white p-4 shadow-panel transition-all duration-150 hover:-translate-y-1 hover:shadow-lg hover:border-emerald-300"
+          title="Klik untuk melihat rincian kas masuk & kuitansi resmi"
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-muted uppercase tracking-wider">Total Kas Masuk (Lunas)</p>
+            <span className="text-[10px] font-semibold text-emerald-600 opacity-80 group-hover:opacity-100 transition-opacity">
+              Rincian &rarr;
+            </span>
+          </div>
           <p className="mt-1.5 text-2xl font-bold text-emerald-700">{rupiah(totalPaidValue)}</p>
           <p className="mt-1 text-xs text-muted">Kuitansi resmi diterbitkan</p>
-        </Card>
+        </div>
 
-        <Card className="p-4 border-l-4 border-l-amber-500">
-          <p className="text-xs font-semibold text-muted uppercase tracking-wider">Sisa Piutang Berjalan (AR)</p>
+        <div
+          onClick={() => {
+            setKpiModal("receivable")
+            setKpiSearch("")
+          }}
+          className="group cursor-pointer rounded-xl border border-line border-l-4 border-l-amber-500 bg-white p-4 shadow-panel transition-all duration-150 hover:-translate-y-1 hover:shadow-lg hover:border-amber-300"
+          title="Klik untuk melihat rincian piutang usaha berjalan yang belum lunas"
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-muted uppercase tracking-wider">Sisa Piutang Berjalan (AR)</p>
+            <span className="text-[10px] font-semibold text-amber-700 opacity-80 group-hover:opacity-100 transition-opacity">
+              Rincian &rarr;
+            </span>
+          </div>
           <p className="mt-1.5 text-2xl font-bold text-amber-700">{rupiah(Math.max(0, outstandingReceivable))}</p>
           <p className="mt-1 text-xs text-muted">Invoice terbit menunggu pelunasan</p>
-        </Card>
+        </div>
       </div>
+
+      {/* KPI Drilldown Modal */}
+      {kpiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative flex max-h-[90vh] w-full max-w-4xl flex-col rounded-2xl bg-white shadow-2xl border border-line">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-line p-5">
+              <div>
+                <h3 className="text-lg font-bold text-ink">
+                  {kpiModal === "contract" && "Rincian Nilai Kontrak Seluruh Proyek SPK"}
+                  {kpiModal === "invoiced" && "Rincian Invoice Penagihan (DPP Telah Ditagihkan)"}
+                  {kpiModal === "paid" && "Rincian Pembayaran Lunas & Kas Masuk"}
+                  {kpiModal === "receivable" && "Rincian Sisa Piutang Berjalan (Invoice Belum Lunas)"}
+                </h3>
+                <p className="mt-1 text-xs text-muted max-w-xl">
+                  {kpiModal === "contract" && "Daftar seluruh proyek dengan SPK aktif beserta nilai kontrak yang telah disepakati."}
+                  {kpiModal === "invoiced" && "Daftar invoice resmi yang telah diterbitkan untuk penagihan termin kepada klien."}
+                  {kpiModal === "paid" && "Daftar penerimaan dana pembayaran termin dan kuitansi pelunasan resmi."}
+                  {kpiModal === "receivable" && "Daftar invoice yang masih berstatus belum lunas (menunggu pembayaran dari klien)."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setKpiModal(null)}
+                className="rounded-lg p-2 text-muted hover:bg-slate-100 hover:text-ink transition-colors"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            {/* Modal Search Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-slate-50/80 p-4">
+              <div className="relative flex-1 min-w-[240px]">
+                <Search className="absolute left-3 top-2.5 size-4 text-muted" />
+                <input
+                  type="text"
+                  placeholder="Cari nomor dokumen, nama proyek, atau klien..."
+                  value={kpiSearch}
+                  onChange={(e) => setKpiSearch(e.target.value)}
+                  className="w-full rounded-lg border border-line bg-white py-2 pl-9 pr-4 text-xs text-ink placeholder:text-muted focus:border-brand focus:outline-none"
+                  autoFocus
+                />
+              </div>
+              <div className="text-xs font-semibold text-slate-800">
+                {kpiModal === "contract" && `Total Kontrak: ${rupiah(filteredProjectsForKpi.reduce((s, p) => s + Number(p.contract_amount || 0), 0))}`}
+                {kpiModal === "invoiced" && `Total Tagihan: ${rupiah(filteredInvoicesForKpi.reduce((s, inv) => s + Number(inv.amount || 0), 0))}`}
+                {kpiModal === "paid" && `Total Masuk: ${rupiah(filteredPaidForKpi.reduce((s, inv) => s + Number(inv.paid_amount || inv.net_receivable || 0), 0))}`}
+                {kpiModal === "receivable" && `Total Piutang: ${rupiah(filteredUnpaidForKpi.reduce((s, inv) => s + Number(inv.net_receivable || 0), 0))}`}
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {kpiModal === "contract" && (
+                <div className="rounded-xl border border-line overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-canvas text-muted">
+                      <tr>
+                        <th className="p-3 font-semibold">Kode Proyek</th>
+                        <th className="p-3 font-semibold">Nama Proyek</th>
+                        <th className="p-3 font-semibold">Klien / Mitra</th>
+                        <th className="p-3 font-semibold">Cabang</th>
+                        <th className="p-3 font-semibold">Status</th>
+                        <th className="p-3 text-right font-semibold">Nilai Kontrak SPK</th>
+                        <th className="p-3 text-center font-semibold">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {filteredProjectsForKpi.map((p) => (
+                        <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-3 font-mono font-medium text-brand">{p.code}</td>
+                          <td className="p-3 font-medium text-ink">{p.name}</td>
+                          <td className="p-3 text-muted">{p.client_name}</td>
+                          <td className="p-3 text-muted">{p.branch_name}</td>
+                          <td className="p-3">
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                              {p.status}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right font-bold text-ink">{rupiah(p.contract_amount)}</td>
+                          <td className="p-3 text-center">
+                            <a
+                              href={`/proyek/${p.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-[11px] font-semibold text-brand hover:bg-brand hover:text-white transition-colors"
+                            >
+                              Detail <ExternalLink className="size-3" />
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {kpiModal === "invoiced" && (
+                <div className="rounded-xl border border-line overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-canvas text-muted">
+                      <tr>
+                        <th className="p-3 font-semibold">No. Invoice</th>
+                        <th className="p-3 font-semibold">Tanggal</th>
+                        <th className="p-3 font-semibold">Proyek & Klien</th>
+                        <th className="p-3 font-semibold">Termin</th>
+                        <th className="p-3 text-right font-semibold">DPP (Rp)</th>
+                        <th className="p-3 text-right font-semibold">Total Tagihan (Rp)</th>
+                        <th className="p-3 font-semibold">Status</th>
+                        <th className="p-3 text-center font-semibold">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {filteredInvoicesForKpi.map((inv) => (
+                        <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-3 font-mono font-bold text-slate-900">{inv.invoice_number}</td>
+                          <td className="p-3 text-muted">{formatDate(inv.invoice_date)}</td>
+                          <td className="p-3">
+                            <div className="font-medium text-ink">{inv.project.name}</div>
+                            <div className="text-[10px] text-muted">{inv.project.client_name}</div>
+                          </td>
+                          <td className="p-3 text-muted">{inv.term_name}</td>
+                          <td className="p-3 text-right font-medium">{rupiah(inv.amount)}</td>
+                          <td className="p-3 text-right font-bold text-brand">{rupiah(inv.total_amount)}</td>
+                          <td className="p-3">
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                              inv.status === "paid"
+                                ? "bg-emerald-50 text-emerald-800"
+                                : "bg-amber-50 text-amber-800"
+                            }`}>
+                              {inv.status === "paid" ? "Lunas" : "Belum Lunas"}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setViewDocument({ type: "invoice", data: inv, project: inv.project })
+                                setKpiModal(null)
+                              }}
+                              className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-[11px] font-semibold text-brand hover:bg-brand hover:text-white transition-colors"
+                            >
+                              Lihat
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {kpiModal === "paid" && (
+                <div className="rounded-xl border border-line overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-canvas text-muted">
+                      <tr>
+                        <th className="p-3 font-semibold">No. Kuitansi</th>
+                        <th className="p-3 font-semibold">Tgl Lunas</th>
+                        <th className="p-3 font-semibold">No. Invoice Ref</th>
+                        <th className="p-3 font-semibold">Proyek & Klien</th>
+                        <th className="p-3 font-semibold">Metode / Bank</th>
+                        <th className="p-3 text-right font-semibold">Jumlah Dana Diterima</th>
+                        <th className="p-3 text-center font-semibold">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {filteredPaidForKpi.map((inv) => (
+                        <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-3 font-mono font-bold text-emerald-700">{inv.receipt_number || "KWT/..."}</td>
+                          <td className="p-3 text-muted">{formatDate(inv.paid_at)}</td>
+                          <td className="p-3 font-mono text-muted">{inv.invoice_number}</td>
+                          <td className="p-3">
+                            <div className="font-medium text-ink">{inv.project.name}</div>
+                            <div className="text-[10px] text-muted">{inv.project.client_name}</div>
+                          </td>
+                          <td className="p-3 text-muted">{inv.bank_name || inv.payment_method || "Transfer Bank"}</td>
+                          <td className="p-3 text-right font-bold text-emerald-700">
+                            {rupiah(inv.paid_amount || inv.net_receivable)}
+                          </td>
+                          <td className="p-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setViewDocument({ type: "receipt", data: inv, project: inv.project })
+                                setKpiModal(null)
+                              }}
+                              className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-600 hover:text-white transition-colors"
+                            >
+                              Kuitansi
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {kpiModal === "receivable" && (
+                <div className="rounded-xl border border-line overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-canvas text-muted">
+                      <tr>
+                        <th className="p-3 font-semibold">No. Invoice</th>
+                        <th className="p-3 font-semibold">Jatuh Tempo</th>
+                        <th className="p-3 font-semibold">Proyek & Klien</th>
+                        <th className="p-3 font-semibold">Termin</th>
+                        <th className="p-3 text-right font-semibold">Sisa Piutang (Rp)</th>
+                        <th className="p-3 text-center font-semibold">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {filteredUnpaidForKpi.map((inv) => (
+                        <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-3 font-mono font-bold text-slate-900">{inv.invoice_number}</td>
+                          <td className="p-3 text-muted">{formatDate(inv.due_date)}</td>
+                          <td className="p-3">
+                            <div className="font-medium text-ink">{inv.project.name}</div>
+                            <div className="text-[10px] text-muted">{inv.project.client_name}</div>
+                          </td>
+                          <td className="p-3 text-muted">{inv.term_name}</td>
+                          <td className="p-3 text-right font-bold text-amber-700">{rupiah(inv.net_receivable)}</td>
+                          <td className="p-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setViewDocument({ type: "invoice", data: inv, project: inv.project })
+                                setKpiModal(null)
+                              }}
+                              className="inline-flex items-center gap-1 rounded bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-600 hover:text-white transition-colors"
+                            >
+                              Periksa Invoice
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between border-t border-line bg-slate-50 p-4 text-xs text-muted">
+              <span>
+                {kpiModal === "contract" && `Menampilkan ${filteredProjectsForKpi.length} dari ${projects.length} proyek SPK`}
+                {kpiModal === "invoiced" && `Menampilkan ${filteredInvoicesForKpi.length} dari ${allInvoices.length} invoice`}
+                {kpiModal === "paid" && `Menampilkan ${filteredPaidForKpi.length} dari ${paidInvoices.length} pembayaran lunas`}
+                {kpiModal === "receivable" && `Menampilkan ${filteredUnpaidForKpi.length} dari ${unpaidInvoices.length} piutang belum lunas`}
+              </span>
+              <button
+                type="button"
+                onClick={() => setKpiModal(null)}
+                className="rounded-lg border border-line bg-white px-4 py-1.5 text-xs font-semibold text-ink hover:bg-slate-100 transition-colors"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Control Bar: Filter Tabs & Search */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-4">

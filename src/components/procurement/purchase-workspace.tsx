@@ -8,6 +8,7 @@ import { SubmitButton } from "@/components/procurement/submit-button"
 import { AutoRefreshOnFocus } from "@/components/ui/auto-refresh-on-focus"
 import { requestVendor, reviewVendor } from "@/app/(workspace)/pengajuan/actions"
 import { PurchaseRequestList } from "./purchase-request-list"
+import { PurchaseKpiCards } from "./purchase-kpi-cards"
 import { type BusinessUnit, type ProcurementVendor, type PurchaseRequest, type WorkAssignment, procurementInput as input, procurementLabel as label, isProcurementMissing, purchaseStatusLabels, rupiah, formatDateID } from "@/lib/procurement-ui"
 
 export async function PurchaseWorkspace({ view, query }: { view: "pembelian" | "vendor"; query: { error?: string; notice?: string; q?: string; branch_id?: string; status?: string; invoice_date?: string } }) {
@@ -74,7 +75,13 @@ export async function PurchaseWorkspace({ view, query }: { view: "pembelian" | "
     {isReadOnlyPreview && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Mode lihat sebagai aktif. Semua tindakan perubahan dinonaktifkan.</p>}
     {missing ? <ProcurementUnavailable /> : <>
       {view === "pembelian" && <>
-        <div className="grid gap-4 sm:grid-cols-3">{[["Pengajuan terlihat", String(rows.length)], ["Dalam pemeriksaan / pembayaran", String(pending.length)], ["Rencana bayar belum lunas", rupiah(pendingValue)]].map(([title, val]) => <Card key={title} className="p-5"><p className="text-sm text-muted">{title}</p><p className="mt-2 text-2xl font-semibold">{val}</p></Card>)}</div>
+        <PurchaseKpiCards
+          rows={rows}
+          pending={pending}
+          pendingValue={pendingValue}
+          branches={branches}
+          vendorRows={vendorRows}
+        />
         <p className="text-sm leading-6 text-muted">Daftar diurutkan berdasarkan prioritas status: Pengajuan yang memerlukan tindakan segera (persetujuan Direktur, verifikasi Manager, atau pembayaran) selalu berada di atas.</p>
         <TableFilterBar
           branches={branches}

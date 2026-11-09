@@ -114,32 +114,67 @@ export default async function ProjectListPage({
         </div>
       )}
 
-      {/* Summary KPI Cards */}
+      {/* Summary KPI Cards (Clickable Filter Cards) */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="p-4">
+        <Link
+          href={`/proyek?tab=draft${selectedBranch ? `&branch=${selectedBranch}` : ""}`}
+          className={`group rounded-xl border p-4 shadow-panel transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${
+            activeTab === "draft"
+              ? "border-amber-400 bg-amber-50/40 ring-2 ring-amber-400/20"
+              : "border-line bg-white hover:border-amber-300"
+          }`}
+          title="Klik untuk memfilter: Mobilisasi di Cabang"
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted">Mobilisasi di Cabang</span>
-            <Clock className="size-4 text-amber-500" />
+            <Clock className="size-4 text-amber-500 group-hover:scale-110 transition-transform" />
           </div>
           <p className="mt-2 text-2xl font-bold text-ink">{draftCount}</p>
-          <p className="mt-1 text-xs text-muted">Proyek dalam tahap pengisian SDM & RAB</p>
-        </Card>
-        <Card className="p-4">
+          <div className="mt-1 flex items-center justify-between text-xs text-muted">
+            <span>Proyek tahap pengisian SDM & RAB</span>
+            <span className="text-[11px] font-semibold text-amber-700 opacity-0 group-hover:opacity-100 transition-opacity">Buka &rarr;</span>
+          </div>
+        </Link>
+
+        <Link
+          href={`/proyek?tab=review${selectedBranch ? `&branch=${selectedBranch}` : ""}`}
+          className={`group rounded-xl border p-4 shadow-panel transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${
+            activeTab === "review"
+              ? "border-indigo-400 bg-indigo-50/40 ring-2 ring-indigo-400/20"
+              : "border-line bg-white hover:border-indigo-300"
+          }`}
+          title="Klik untuk memfilter: Menunggu Review Direksi"
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted">Menunggu Review Direksi</span>
-            <AlertTriangle className="size-4 text-indigo-500" />
+            <AlertTriangle className="size-4 text-indigo-500 group-hover:scale-110 transition-transform" />
           </div>
           <p className="mt-2 text-2xl font-bold text-indigo-600">{reviewCount}</p>
-          <p className="mt-1 text-xs text-muted">Siap diperiksa Direktur Utama / Direksi</p>
-        </Card>
-        <Card className="p-4">
+          <div className="mt-1 flex items-center justify-between text-xs text-muted">
+            <span>Siap diperiksa Direktur Utama</span>
+            <span className="text-[11px] font-semibold text-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity">Buka &rarr;</span>
+          </div>
+        </Link>
+
+        <Link
+          href={`/proyek?tab=aktif${selectedBranch ? `&branch=${selectedBranch}` : ""}`}
+          className={`group rounded-xl border p-4 shadow-panel transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${
+            activeTab === "aktif"
+              ? "border-emerald-400 bg-emerald-50/40 ring-2 ring-emerald-400/20"
+              : "border-line bg-white hover:border-emerald-300"
+          }`}
+          title="Klik untuk memfilter: Proyek Aktif (Running)"
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted">Proyek Aktif (Running)</span>
-            <CheckCircle2 className="size-4 text-emerald-500" />
+            <CheckCircle2 className="size-4 text-emerald-500 group-hover:scale-110 transition-transform" />
           </div>
           <p className="mt-2 text-2xl font-bold text-emerald-600">{activeCount}</p>
-          <p className="mt-1 text-xs text-muted">Pelaksanaan lapangan & pagu anggaran aktif</p>
-        </Card>
+          <div className="mt-1 flex items-center justify-between text-xs text-muted">
+            <span>Pelaksanaan lapangan & pagu aktif</span>
+            <span className="text-[11px] font-semibold text-emerald-700 opacity-0 group-hover:opacity-100 transition-opacity">Buka &rarr;</span>
+          </div>
+        </Link>
       </div>
 
       {/* Tabs & Filters */}

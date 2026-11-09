@@ -292,26 +292,29 @@ export default async function MyWorkPage({
       <BusinessSummary summary={businessSummary} queueOnly />
 
       <section aria-label="Ringkasan pekerjaan" className="grid gap-4 sm:grid-cols-3">
-        <Card className="p-5">
+        <Link
+          href="/modul/operasional"
+          className="group rounded-xl border border-line bg-white p-5 shadow-panel transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md hover:border-brand/40"
+        >
           <p className="text-sm text-muted">Tugas belum selesai</p>
           <p className="mt-2 text-2xl font-bold">{taskRows.length}</p>
-          <p className="mt-1 text-xs text-muted">Pekerjaan yang ditugaskan kepada Anda</p>
-        </Card>
+          <p className="mt-1 text-xs text-brand group-hover:underline">Buka tugas operasional &rarr;</p>
+        </Link>
         <Link
           href="/approvals?scope=review"
-          className="rounded-xl border border-line bg-white p-5 shadow-panel hover:border-brand/40"
+          className="group rounded-xl border border-line bg-white p-5 shadow-panel transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md hover:border-brand/40"
         >
           <p className="text-sm text-muted">Perlu persetujuan Anda</p>
           <p className="mt-2 text-2xl font-bold">{pendingApprovals}</p>
-          <p className="mt-1 text-xs text-brand">Buka antrean pemeriksaan &rarr;</p>
+          <p className="mt-1 text-xs text-brand group-hover:underline">Buka antrean pemeriksaan &rarr;</p>
         </Link>
         <Link
           href="/pekerjaan-saya/pengajuan"
-          className="rounded-xl border border-line bg-white p-5 shadow-panel hover:border-brand/40"
+          className="group rounded-xl border border-line bg-white p-5 shadow-panel transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md hover:border-brand/40"
         >
           <p className="text-sm text-muted">Pengajuan perlu revisi</p>
           <p className="mt-2 text-2xl font-bold">{needRevision}</p>
-          <p className="mt-1 text-xs text-brand">Lihat status pengajuan &rarr;</p>
+          <p className="mt-1 text-xs text-brand group-hover:underline">Lihat status pengajuan &rarr;</p>
         </Link>
       </section>
 
