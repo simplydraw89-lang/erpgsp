@@ -5,6 +5,7 @@ import { SalesMenu } from "@/components/sales/sales-menu"
 import { requireWorkspace } from "@/lib/auth/context"
 import { formatCurrency } from "@/lib/money"
 import { SphReviewForm } from "@/components/sales/sph-review-form"
+import { SphPrintTrigger } from "@/components/sales/sph-print-trigger"
 import { AttachmentList, type AttachmentItem } from "@/components/sales/attachment-list"
 import { SphForm } from "@/components/sales/sph-form"
 import { SubmitButton } from "@/components/procurement/submit-button"
@@ -53,7 +54,21 @@ export default async function SphPage({ params, searchParams }: { params: Promis
   const fields = <><input type="hidden" name="document_id" value={id} /><input type="hidden" name="version" value={document.version} /></>
   return <div className="space-y-6">
     <Link href="/pengajuan/penjualan/sph" className="text-sm font-medium text-brand">← Daftar SPH</Link>
-    <header><p className="text-sm text-brand">Penjualan</p><h1 className="mt-2 text-3xl font-bold">{document.document_number || `SPH No. ${document.sph_number}`}</h1><p className="mt-2 text-sm text-muted">{sphStatusLabels[document.status] ?? document.status}</p></header>
+    <header className="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <p className="text-sm text-brand">Penjualan</p>
+        <h1 className="mt-2 text-3xl font-bold">{document.document_number || `SPH No. ${document.sph_number}`}</h1>
+        <p className="mt-1 text-sm text-muted">{sphStatusLabels[document.status] ?? document.status}</p>
+      </div>
+      <div>
+        <SphPrintTrigger
+          document={{
+            ...document,
+            branch_name: units.data?.find(branch => branch.id === document.branch_id)?.name,
+          }}
+        />
+      </div>
+    </header>
     <SalesMenu active="sph" /><ProcurementMessage {...await searchParams} />
     <Card className="space-y-3 p-5"><h2 className="text-lg font-semibold">{document.title}</h2><p className="text-sm">Klien: {document.client_snapshot?.name ?? "Klien terdaftar"}</p><p className="text-sm">Cabang: {units.data?.find(branch => branch.id === document.branch_id)?.name}</p><dl className="grid gap-3 text-sm sm:grid-cols-2"><div>Daerah pengerjaan: {document.work_area || "Belum diisi"}</div><div>Bidang usaha: {document.client_snapshot?.industry || "Belum diisi"}</div><div>Lingkup: {document.work_scopes?.join(", ") || "Belum diisi"}</div><div>Deal Project: {document.deal_status === "sudah_deal" ? "Sudah deal" : document.deal_status === "belum_deal" ? "Belum deal" : "Belum diisi"}</div><div>Nilai SPH: {document.amount == null ? "Belum diisi" : formatCurrency(document.amount)}</div><div>Masa berlaku sampai: {document.valid_until || "Belum diisi"}</div></dl><p className="whitespace-pre-wrap text-sm text-muted">{document.notes}</p><div className="pt-2"><AttachmentList attachments={attachmentItems} title="Dokumen Lampiran SPH (Surat Penawaran, RAB, Lingkup Kerja)" /></div></Card>
     {document.review_note && <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">Catatan pemeriksa: {document.review_note}</p>}

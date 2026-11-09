@@ -5,6 +5,7 @@ import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import { SalesMenu } from "@/components/sales/sales-menu"
 import { SpkReviewForm } from "@/components/sales/spk-review-form"
 import { SpkEditForm } from "@/components/sales/spk-edit-form"
+import { SpkPrintTrigger } from "@/components/sales/spk-print-trigger"
 import { AttachmentList, type AttachmentItem } from "@/components/sales/attachment-list"
 import { ProcurementMessage } from "@/components/procurement/section-nav"
 import { sphStatusLabels, spkStatusLabels } from "@/lib/sales"
@@ -92,21 +93,31 @@ export default async function SpkDetailPage({
         ← Kembali ke Daftar SPK
       </Link>
 
-      <header>
-        <p className="text-sm font-medium text-brand">Penjualan & SPK</p>
-        <h1 className="mt-2 text-3xl font-bold">
-          {document.document_number ? document.document_number : `SPK: ${document.title}`}
-        </h1>
-        <p className="mt-2 text-sm text-muted">
-          Status:{" "}
-          <span className="font-semibold text-ink">
-            {document.status === "director_review"
-              ? "Menunggu Persetujuan Direktur Utama"
-              : document.status === "draft"
-              ? "Draft SPK (Belum diajukan)"
-              : spkStatusLabels[document.status] ?? sphStatusLabels[document.status] ?? document.status}
-          </span>
-        </p>
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-brand">Penjualan & SPK</p>
+          <h1 className="mt-2 text-3xl font-bold">
+            {document.document_number ? document.document_number : `SPK: ${document.title}`}
+          </h1>
+          <p className="mt-1 text-sm text-muted">
+            Status:{" "}
+            <span className="font-semibold text-ink">
+              {document.status === "director_review"
+                ? "Menunggu Persetujuan Direktur Utama"
+                : document.status === "draft"
+                ? "Draft SPK (Belum diajukan)"
+                : spkStatusLabels[document.status] ?? sphStatusLabels[document.status] ?? document.status}
+            </span>
+          </p>
+        </div>
+        <div>
+          <SpkPrintTrigger
+            document={{
+              ...document,
+              branch_name: branchName,
+            }}
+          />
+        </div>
       </header>
 
       <SalesMenu active="spk" />

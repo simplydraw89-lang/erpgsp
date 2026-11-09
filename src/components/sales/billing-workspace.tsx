@@ -21,11 +21,15 @@ import {
   Search,
   X,
   ExternalLink,
+  Printer,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { SalesMenu } from "@/components/sales/sales-menu"
 import { createSalesInvoiceAction, recordInvoicePaymentAction } from "@/app/(workspace)/pengajuan/penjualan/actions"
+import { DocumentPrintModal } from "@/components/documents/document-print-modal"
+import { PrintableInvoiceDocument } from "@/components/documents/printable-invoice"
+import { PrintableReceiptDocument } from "@/components/documents/printable-receipt"
 
 export type PaymentTerm = {
   id?: string
@@ -1104,122 +1108,87 @@ export function BillingWorkspace({
         </div>
       )}
 
-      {/* MODAL 3: Pratinjau Dokumen Resmi (Invoice atau Kuitansi) */}
+      {/* MODAL 3: Pratinjau Dokumen Resmi Standar PT. GSP (PDF Kop Surat, Stempel, & QR Code) */}
       {viewDocument && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-2xl space-y-6 max-h-[95vh] overflow-y-auto">
-            {/* Header Dokumen */}
-            <div className="flex items-start justify-between border-b border-line pb-4">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-brand">PT. GLOBAL SOLUSI PRIMA</p>
-                <h2 className="mt-1 text-2xl font-black text-ink">
-                  {viewDocument.type === "invoice" ? "FAKTUR / INVOICE PENJUALAN" : "KUITANSI PEMBAYARAN RESMI"}
-                </h2>
-                <p className="font-mono text-sm font-semibold text-slate-700 mt-1">
-                  {viewDocument.type === "invoice"
-                    ? viewDocument.data.invoice_number
-                    : viewDocument.data.receipt_number || "KWT/GSP/OFFICIAL"}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setViewDocument(null)}
-                className="rounded-lg border border-line px-3 py-1 text-xs font-semibold hover:bg-slate-100"
-              >
-                Tutup ✕
-              </button>
-            </div>
+        <DocumentPrintModal
+          isOpen={Boolean(viewDocument)}
+          onClose={() => setViewDocument(null)}
+          title={viewDocument.type === "invoice" ? "Dokumen Resmi: Invoice Penagihan" : "Dokumen Resmi: Kuitansi Pembayaran"}
+          documentNumber={
+            viewDocument.type === "invoice"
+              ? viewDocument.data.invoice_number
+              : viewDocument.data.receipt_number || `KWT-${viewDocument.data.invoice_number?.replace("INV/", "")}`
+          }
+        >
+          <div className="space-y-6">
+            {viewDocument.type === "invoice" ? (
+              <PrintableInvoiceDocument
+                invoice={{
+                  id: viewDocument.data.id,
+                  invoice_number: viewDocument.data.invoice_number,
+                  invoice_date: viewDocument.data.invoice_date,
+                  due_date: viewDocument.data.due_date,
+                  term_name: viewDocument.data.term_name,
+                  percentage: viewDocument.data.percentage,
+                  amount: viewDocument.data.amount,
+                  vat_amount: viewDocument.data.vat_amount,
+                  wht_amount: viewDocument.data.wht_amount,
+                  total_amount: viewDocument.data.total_amount,
+                  net_receivable: viewDocument.data.net_receivable,
+                  notes: viewDocument.data.notes,
+                  invoice_journal_number: viewDocument.data.invoice_journal_number,
+                }}
+                project={{
+                  code: viewDocument.project.code,
+                  name: viewDocument.project.name,
+                  client_name: viewDocument.project.client_name,
+                  branch_name: viewDocument.project.branch_name,
+                }}
+              />
+            ) : (
+              <PrintableReceiptDocument
+                receipt={{
+                  receipt_number: viewDocument.data.receipt_number || `KWT-${viewDocument.data.invoice_number?.replace("INV/", "")}`,
+                  invoice_number: viewDocument.data.invoice_number,
+                  paid_at: viewDocument.data.paid_at,
+                  paid_amount: viewDocument.data.paid_amount || viewDocument.data.net_receivable,
+                  payment_method: viewDocument.data.payment_method,
+                  bank_name: viewDocument.data.bank_name,
+                  bank_reference: viewDocument.data.bank_reference,
+                  term_name: viewDocument.data.term_name,
+                  notes: viewDocument.data.notes,
+                  payment_journal_number: viewDocument.data.payment_journal_number,
+                }}
+                project={{
+                  code: viewDocument.project.code,
+                  name: viewDocument.project.name,
+                  client_name: viewDocument.project.client_name,
+                  branch_name: viewDocument.project.branch_name,
+                }}
+              />
+            )}
 
-            {/* Info Klien & Proyek */}
-            <div className="grid grid-cols-2 gap-4 text-xs">
-              <div className="space-y-1">
-                <p className="text-muted uppercase tracking-wider text-[10px] font-bold">Ditagihkan Kepada:</p>
-                <p className="font-bold text-ink text-sm">{viewDocument.project.client_name}</p>
-                <p className="text-muted">Proyek: {viewDocument.project.name}</p>
-                <p className="font-mono text-muted">{viewDocument.project.code}</p>
-              </div>
-              <div className="space-y-1 text-right">
-                <p className="text-muted uppercase tracking-wider text-[10px] font-bold">Tanggal Dokumen:</p>
-                <p className="font-bold text-ink">
-                  {formatDate(viewDocument.data.paid_at || viewDocument.data.invoice_date)}
-                </p>
-                {viewDocument.type === "invoice" && (
-                  <p className="text-amber-800">Jatuh Tempo: {formatDate(viewDocument.data.due_date)}</p>
-                )}
-                <p className="text-muted">Cabang: {viewDocument.project.branch_name}</p>
-              </div>
-            </div>
-
-            {/* Rincian Finansial */}
-            <div className="rounded-xl border border-line overflow-hidden">
-              <table className="w-full text-xs">
-                <thead className="bg-slate-50 text-muted border-b border-line">
-                  <tr>
-                    <th className="py-2.5 px-4 text-left font-semibold">Deskripsi Tagihan / Termin</th>
-                    <th className="py-2.5 px-4 text-right font-semibold">Bobot</th>
-                    <th className="py-2.5 px-4 text-right font-semibold">Jumlah (Rp)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  <tr>
-                    <td className="py-3 px-4 font-semibold text-ink">
-                      {viewDocument.data.term_name}
-                      <p className="text-[11px] font-normal text-muted mt-0.5">
-                        Pekerjaan sesuai SPK No. {viewDocument.project.code}
-                      </p>
-                    </td>
-                    <td className="py-3 px-4 text-right">{viewDocument.data.percentage}%</td>
-                    <td className="py-3 px-4 text-right font-bold">{rupiah(viewDocument.data.amount)}</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div className="bg-slate-50/70 p-4 space-y-2 text-xs border-t border-line">
-                <div className="flex justify-between">
-                  <span className="text-muted">Dasar Pengenaan Pajak (DPP):</span>
-                  <span className="font-semibold">{rupiah(viewDocument.data.amount)}</span>
-                </div>
-                <div className="flex justify-between text-blue-900">
-                  <span>PPN (11%):</span>
-                  <span className="font-semibold">{rupiah(viewDocument.data.vat_amount)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-ink border-t border-line pt-2 text-sm">
-                  <span>Total Tagihan:</span>
-                  <span>{rupiah(viewDocument.data.total_amount)}</span>
-                </div>
-                {viewDocument.data.wht_amount > 0 && (
-                  <div className="flex justify-between text-amber-800 text-[11px]">
-                    <span>Potongan PPh 23 (2%):</span>
-                    <span>- {rupiah(viewDocument.data.wht_amount)}</span>
-                  </div>
-                )}
-                {viewDocument.type === "receipt" && (
-                  <div className="flex justify-between font-extrabold text-emerald-800 border-t border-emerald-200 pt-2 text-base">
-                    <span>Jumlah Dana Diterima:</span>
-                    <span>{rupiah(viewDocument.data.paid_amount || viewDocument.data.net_receivable)}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Posting Jurnal Akuntansi Otomatis */}
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3.5 space-y-2 text-xs">
+            {/* Posting Jurnal Akuntansi Otomatis (Terekam di ERP, tersembunyi saat cetak fisik) */}
+            <div className="max-w-[210mm] mx-auto rounded-xl border border-indigo-200 bg-indigo-50/70 p-4 space-y-2 text-xs print:hidden shadow-sm">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-indigo-950 flex items-center gap-1.5">
-                  <Banknote className="size-3.5 text-indigo-600" />
-                  Posting Jurnal Akuntansi (Otomatis ERP)
+                  <Banknote className="size-4 text-indigo-600" />
+                  Posting Jurnal Akuntansi Otomatis (Sistem ERP PT. Global Solusi Prima)
                 </span>
-                <span className="text-[10px] font-mono font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded">
+                <span className="text-[10px] font-mono font-bold bg-indigo-100 text-indigo-800 px-2.5 py-1 rounded border border-indigo-200">
                   {viewDocument.type === "invoice"
                     ? viewDocument.data.invoice_journal_number || "JRN/INV/AUTO"
                     : viewDocument.data.payment_journal_number || "JRN/KWT/AUTO"} · Posted
                 </span>
               </div>
-              <div className="space-y-1 font-mono text-[11px] bg-white rounded-lg p-2.5 border border-indigo-100">
+              <p className="text-[11px] text-indigo-900/80">
+                Dokumen ini telah membukukan jurnal akuntansi otomatis pada buku besar perusahaan:
+              </p>
+              <div className="space-y-1 font-mono text-[11px] bg-white rounded-lg p-3 border border-indigo-100">
                 {viewDocument.type === "invoice" ? (
                   <>
                     <div className="flex justify-between text-indigo-900">
-                      <span>[D] 1121 - Piutang Klien ({viewDocument.project.client_name})</span>
+                      <span>[D] 1121 - Piutang Usaha Klien ({viewDocument.project.client_name})</span>
                       <span className="font-semibold">{rupiah(viewDocument.data.total_amount)}</span>
                     </div>
                     <div className="flex justify-between text-slate-700 pl-4">
@@ -1236,7 +1205,7 @@ export function BillingWorkspace({
                 ) : (
                   <>
                     <div className="flex justify-between text-emerald-900">
-                      <span>[D] 1102 - Bank Operasional</span>
+                      <span>[D] 1102 - Kas & Bank Operasional ({viewDocument.data.bank_name || "Bank"})</span>
                       <span className="font-semibold">
                         {rupiah(viewDocument.data.paid_amount || viewDocument.data.net_receivable)}
                       </span>
@@ -1244,14 +1213,14 @@ export function BillingWorkspace({
                     {viewDocument.data.wht_amount > 0 && (
                       <div className="flex justify-between text-amber-900">
                         <span>
-                          [D] 1192 - Pajak Dibayar di Muka (PPh 23)
+                          [D] 1192 - Uang Muka PPh Pasal 23 (2%)
                           {viewDocument.data.wht_proof_number ? ` [Bupot: ${viewDocument.data.wht_proof_number}]` : ""}
                         </span>
                         <span className="font-semibold">{rupiah(viewDocument.data.wht_amount)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-slate-700 pl-4">
-                      <span>[K] 1121 - Piutang Klien ({viewDocument.project.client_name})</span>
+                      <span>[K] 1121 - Piutang Usaha Klien ({viewDocument.project.client_name})</span>
                       <span className="font-semibold">
                         {rupiah(
                           (viewDocument.data.paid_amount || viewDocument.data.net_receivable) +
@@ -1263,34 +1232,8 @@ export function BillingWorkspace({
                 )}
               </div>
             </div>
-
-            {/* Footer Dokumen & Tanda Tangan Resmi */}
-            <div className="flex items-end justify-between border-t border-line pt-4 text-xs text-muted">
-              <div>
-                <p className="font-semibold text-ink">PT. Global Solusi Prima</p>
-                <p className="text-[11px]">Sistem Informasi Manajemen Keuangan & Proyek</p>
-                <p className="text-[10px] italic mt-1 text-slate-400">
-                  Dokumen ini diterbitkan secara otomatis dan sah melalui ERP GSP.
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-[11px] text-muted mb-8">Bagian Keuangan & Penagihan</p>
-                <p className="font-bold text-ink underline">Finance & Billing Department</p>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 border-t border-line pt-4">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => window.print()}
-                className="gap-2 text-xs"
-              >
-                <Download className="size-3.5" /> Cetak / Unduh Dokumen Resmi
-              </Button>
-            </div>
           </div>
-        </div>
+        </DocumentPrintModal>
       )}
     </div>
   )
