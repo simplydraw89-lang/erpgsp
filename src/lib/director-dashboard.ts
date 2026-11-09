@@ -61,6 +61,31 @@ export type SalesKpiSummary = {
   sphSent: number
   totalSpk: number
   conversionRate: number // percentage
+  clientItems?: Array<{
+    id: string
+    name: string
+    created_at?: string
+  }>
+  sphItems?: Array<{
+    id: string
+    sph_number: string
+    title: string
+    client_name: string
+    branch_name: string
+    amount: number
+    status: string
+    created_at: string
+  }>
+  spkItems?: Array<{
+    id: string
+    document_number: string
+    title: string
+    client_name: string
+    branch_name: string
+    amount: number
+    status: string
+    created_at: string
+  }>
 }
 
 export type SphConversionYearly = {
@@ -579,6 +604,39 @@ export async function loadDirectorDashboard(
       sphSent,
       totalSpk,
       conversionRate,
+      clientItems: clients.map((c) => ({
+        id: c.id,
+        name: c.name,
+        created_at: c.created_at ? c.created_at.slice(0, 10) : "-",
+      })),
+      sphItems: sphList.map((s) => {
+        const branch = branches.find((b) => b.id === s.branch_id)
+        const clientName = (s.client_snapshot as any)?.name || "Klien"
+        return {
+          id: s.id,
+          sph_number: s.sph_number ? `SPH/${s.sph_number}` : `SPH-${s.id.slice(0, 8).toUpperCase()}`,
+          title: s.title || "Penawaran Harga SPH",
+          client_name: clientName,
+          branch_name: branch?.name || "Pusat",
+          amount: Number(s.amount) || 0,
+          status: s.status,
+          created_at: s.created_at ? s.created_at.slice(0, 10) : "-",
+        }
+      }),
+      spkItems: spkList.map((s) => {
+        const branch = branches.find((b) => b.id === s.branch_id)
+        const clientName = (s.client_snapshot as any)?.name || "Klien"
+        return {
+          id: s.id,
+          document_number: s.sph_number ? `SPK/${s.sph_number}` : `SPK-${s.id.slice(0, 8).toUpperCase()}`,
+          title: s.title || "Perjanjian Kerja (SPK)",
+          client_name: clientName,
+          branch_name: branch?.name || "Pusat",
+          amount: Number(s.amount) || 0,
+          status: s.status,
+          created_at: s.created_at ? s.created_at.slice(0, 10) : "-",
+        }
+      }),
     },
   }
 }
