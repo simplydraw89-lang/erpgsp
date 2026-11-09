@@ -13,6 +13,8 @@ export function LoginForm({ initialError }: { initialError?: string }) {
   const router = useRouter()
   const [errorMessage, setErrorMessage] = useState(initialError ?? "")
   const [showPassword, setShowPassword] = useState(false)
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const [rememberMe, setRememberMe] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
@@ -25,11 +27,10 @@ export function LoginForm({ initialError }: { initialError?: string }) {
     setErrorMessage("")
     setIsSubmitting(true)
 
-    const formData = new FormData(event.currentTarget)
-    const email = String(formData.get("email") ?? "").trim()
-    const password = String(formData.get("password") ?? "")
+    const cleanEmail = email.trim()
+    const cleanPassword = password
 
-    if (!email.includes("@")) {
+    if (!cleanEmail.includes("@")) {
       setErrorMessage("Gunakan alamat email lengkap (contoh: nama@perusahaan.com), bukan hanya username.")
       setIsSubmitting(false)
       return
@@ -38,8 +39,8 @@ export function LoginForm({ initialError }: { initialError?: string }) {
     try {
       const supabase = createClient()
       const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: cleanEmail,
+        password: cleanPassword,
       })
       if (error) {
         let msg = error.message
@@ -126,6 +127,8 @@ export function LoginForm({ initialError }: { initialError?: string }) {
             disabled={busy}
             name="email"
             type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
             placeholder="Username or email address"
             className="h-11 w-full rounded-xl border border-slate-200/90 bg-slate-50/70 pl-10 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 disabled:bg-slate-100"
@@ -140,6 +143,8 @@ export function LoginForm({ initialError }: { initialError?: string }) {
             disabled={busy}
             name="password"
             type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
             placeholder="Password"
             className="h-11 w-full rounded-xl border border-slate-200/90 bg-slate-50/70 pl-10 pr-10 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 disabled:bg-slate-100"
@@ -235,6 +240,23 @@ export function LoginForm({ initialError }: { initialError?: string }) {
         </svg>
         <span className="text-xs font-semibold">Google</span>
       </Button>
+
+      {/* Akses Cepat Tamu / Akun Demo (Hanya Lihat) */}
+      <div className="mt-4 pt-3.5 border-t border-slate-100 flex flex-col items-center gap-1.5 text-center">
+        <p className="text-[11px] text-slate-400 font-medium">Ingin melihat pratinjau sistem?</p>
+        <button
+          type="button"
+          onClick={() => {
+            setEmail("demo@gsp.test")
+            setPassword("demo123")
+            setErrorMessage("")
+          }}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 active:scale-95"
+        >
+          <span>Gunakan Akun Demo (demo@gsp.test)</span>
+        </button>
+      </div>
     </div>
   )
 }
