@@ -24,7 +24,7 @@ export type SalesNotifications = {
   total: number
   items: Array<{
     id: string
-    kind?: "sph" | "spk"
+    kind?: "sph" | "spk" | "project"
     sph_number?: number
     document_number?: string | null
     status: string
@@ -33,4 +33,13 @@ export type SalesNotifications = {
     category: "approval" | "follow_up"
     label: string
   }>
+}
+
+export const projectStatusLabels: Record<string, string> = {
+  draft: "Draft Perencanaan",
+  director_review: "Menunggu Persetujuan Direktur Utama",
+  active: "Proyek Aktif & Berjalan",
+  revision_requested: "Perlu Revisi Dokumen & RAB",
+  rejected: "Ditolak Direktur Utama",
+  completed: "Pekerjaan Selesai",
 }

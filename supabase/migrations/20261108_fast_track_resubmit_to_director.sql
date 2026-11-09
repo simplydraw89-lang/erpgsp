@@ -440,6 +440,7 @@ declare
   j uuid;
   ln integer := 0;
   l jsonb;
+  a uuid;
   amt numeric;
   entity uuid;
   period uuid;

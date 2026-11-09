@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Bell, X } from "lucide-react"
 import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import type { SalesNotifications } from "@/lib/sales"
-import { sphStatusLabels, spkStatusLabels } from "@/lib/sales"
+import { sphStatusLabels, spkStatusLabels, projectStatusLabels } from "@/lib/sales"
 
 export function SalesNotificationBell({ disabled = false }: { disabled?: boolean }) {
   const [data, setData] = useState<SalesNotifications | null>(null)
@@ -149,17 +149,24 @@ export function SalesNotificationBell({ disabled = false }: { disabled?: boolean
             ) : data.total ? (
               <ul className="divide-y divide-line">
                 {data.items.map((item) => {
+                  const isProject = item.kind === "project"
                   const isSpk = item.kind === "spk"
-                  const href = isSpk
+                  const href = isProject
+                    ? `/proyek/${item.id}`
+                    : isSpk
                     ? `/pengajuan/penjualan/spk/${item.id}`
                     : `/pengajuan/penjualan/sph/${item.id}`
                   const docLabel = item.document_number
                     ? item.document_number
+                    : isProject
+                    ? `PROYEK`
                     : isSpk
                     ? `SPK`
                     : `SPH No. ${item.sph_number ?? ""}`
 
-                  const statusText = isSpk
+                  const statusText = isProject
+                    ? (projectStatusLabels[item.status] ?? item.status)
+                    : isSpk
                     ? (spkStatusLabels[item.status] ?? item.status)
                     : (sphStatusLabels[item.status] ?? item.status)
 

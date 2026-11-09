@@ -50,6 +50,7 @@ export async function savePurchase(data: FormData) {
     p_id: value(data, "id") || null,
     p_version: value(data, "version") ? Number(value(data, "version")) : null,
     p_payload: {
+      project_id: value(data, "project_id") || null,
       invoice_number: value(data, "invoice_number"),
       invoice_date: value(data, "invoice_date"),
       tax_invoice_number: value(data, "tax_invoice_number") || null,
@@ -168,4 +169,38 @@ export async function requestVendorFromPurchase(data: FormData): Promise<{
 }
 export async function reviewVendor(data: FormData) {
   await call("/vendor", "review_procurement_vendor", { p_id: value(data, "vendor_id"), p_approve: value(data, "decision") === "approve", p_note: value(data, "note") }, "Keputusan vendor tersimpan.")
+}
+
+
+export async function saveSppdCashAdvance(data: FormData) {
+  const path = "/pengajuan/perjalanan-dinas"
+  const context = await workspace(path)
+  const branchId = value(data, "branch_id")
+  const projectId = value(data, "project_id") || null
+  const amount = Number(value(data, "amount") || 0)
+  const neededOn = value(data, "needed_on")
+  const tripDestination = value(data, "trip_destination")
+  const description = value(data, "description")
+  const departureOn = value(data, "departure_on") || null
+  const returnOn = value(data, "return_on") || null
+
+  const { error } = await context.supabase.rpc("save_project_sppd_advance", {
+    p_org: context.organizationId,
+    p_branch: branchId,
+    p_payload: {
+      project_id: projectId,
+      amount,
+      needed_on: neededOn,
+      trip_destination: tripDestination,
+      description,
+      departure_on: departureOn,
+      return_on: returnOn,
+    },
+  })
+
+  if (error) finish(path, "error", error.message)
+  revalidatePath("/pengajuan/perjalanan-dinas")
+  revalidatePath("/portal-proyek")
+  revalidatePath("/proyek")
+  finish(path, "notice", "Pengajuan SPPD Kasbon berhasil diterbitkan dan memotong pagu anggaran proyek.")
 }

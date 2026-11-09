@@ -84,6 +84,7 @@ export async function saveSalesDocument(data: FormData) {
       p_payload: {
         client_id: value(data, "client_id"),
         kind: value(data, "kind"),
+        document_number: value(data, "document_number") || null,
         title: value(data, "title"),
         source: value(data, "source"),
         accepted_sph_id: value(data, "accepted_sph_id") || null,

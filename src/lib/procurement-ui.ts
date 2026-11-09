@@ -6,7 +6,7 @@ export type ProcurementAccount = { id: string; code: string; name: string; accou
 export type PurchaseLine = { description: string; account_id: string; amount: number }
 export type PurchaseRequest = {
   id: string; branch_id: string; created_by: string; invoice_number: string; invoice_date: string;
-  request_number?: string | null;
+  request_number?: string | null; project_id?: string | null;
   tax_invoice_number: string | null; tax_invoice_date: string | null; vendor_id: string | null;
   vendor_snapshot: Partial<ProcurementVendor>; lines: PurchaseLine[]; vat_mode: string;
   withholding_code: string; withholding_rate: number | string; withholding_base: number | string; withholding_timing: "invoice" | "payment";

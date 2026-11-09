@@ -16,9 +16,9 @@ import { type BusinessUnit, type ProcurementVendor, type ProcurementAccount, typ
 
 const blank = (): PurchaseLine => ({ description: "", account_id: "", amount: 0 })
 const pphOptions = [
-  ["none", "Tidak dipotong PPh"], ["pph23_service", "PPh 23 � jasa (2%)"], ["pph23_rental", "PPh 23 � sewa selain tanah/bangunan (2%)"],
-  ["pph_final_rental", "PPh Final � sewa tanah/bangunan (10%)"], ["pph_final_construction", "PPh Final � jasa konstruksi (sesuai kualifikasi)"],
-  ["pph21_nonemployee", "PPh 21 � bukan pegawai (Pasal 17 � 50% bruto)"],
+  ["none", "Tidak dipotong PPh"], ["pph23_service", "PPh 23  -  -  -  jasa (2%)"], ["pph23_rental", "PPh 23  -  -  -  sewa selain tanah/bangunan (2%)"],
+  ["pph_final_rental", "PPh Final  -  -  -  sewa tanah/bangunan (10%)"], ["pph_final_construction", "PPh Final  -  -  -  jasa konstruksi (sesuai kualifikasi)"],
+  ["pph21_nonemployee", "PPh 21  -  -  -  bukan pegawai (Pasal 17  -  -  -  50% bruto)"],
 ]
 function nonemployeeTax(base: number) {
   let rest = base / 2, result = 0
@@ -37,7 +37,8 @@ function cleanOrgName(str: string) {
     .trim()
 }
 
-export function PurchaseForm({ branches, vendors, accounts, purchase, disabled = false, accountingReview }: { branches: BusinessUnit[]; vendors: ProcurementVendor[]; accounts: ProcurementAccount[]; purchase?: PurchaseRequest; disabled?: boolean; accountingReview?: React.ReactNode }) {
+export function PurchaseForm({ branches, vendors, accounts, projects, purchase, disabled = false, accountingReview }: { branches: BusinessUnit[]; vendors: ProcurementVendor[]; accounts: ProcurementAccount[]; projects?: Array<{ id: string; code: string; name: string; branch_id: string }>; purchase?: PurchaseRequest; disabled?: boolean; accountingReview?: React.ReactNode }) {
+  const [projectId, setProjectId] = useState(purchase?.project_id ?? "")
   const [branch, setBranch] = useState(purchase?.branch_id ?? branches[0]?.id ?? "")
   const [lines, setLines] = useState<PurchaseLine[]>(purchase?.lines ?? [blank()])
   const [vat, setVat] = useState(purchase?.vat_mode ?? "none")
@@ -132,7 +133,7 @@ export function PurchaseForm({ branches, vendors, accounts, purchase, disabled =
       {isFastTrack && (
         <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-950">
           <p className="font-semibold flex items-center gap-2">
-            <span>⚡ Fast-Track Pengajuan Ulang ke Direktur Keuangan</span>
+            <span> -  -  -  Fast-Track Pengajuan Ulang ke Direktur Keuangan</span>
           </p>
           <p className="mt-1">
             Pengajuan ini sebelumnya diminta revisi oleh <strong>Direktur Keuangan</strong>. Pengiriman perbaikan akan <strong>langsung kembali ke antrean Direktur Keuangan</strong> tanpa perlu diverifikasi ulang oleh Manager Cabang.
@@ -147,6 +148,7 @@ export function PurchaseForm({ branches, vendors, accounts, purchase, disabled =
         <div><h2 className="font-semibold">1. Invoice & cabang</h2><p className="mt-1 text-sm text-muted">Data pengajuan mengikuti cabang dan akan diteruskan ke pusat sesuai tahap pemeriksaannya.</p></div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className={label}>Cabang<select name="branch_id" value={branch} onChange={e => { setBranch(e.target.value); setVendorId(""); setAttachments([]) }} required disabled={Boolean(purchase)} className={input}><option value="">Pilih cabang</option>{branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>{purchase && <input type="hidden" name="branch_id" value={branch} />}</label>
+          <label className={label}>Hubungkan ke Proyek (Potong Pagu RAB)<select name="project_id" value={projectId} onChange={e => setProjectId(e.target.value)} className={input}><option value="">Bukan Biaya Proyek (Pengeluaran Umum Cabang)</option>{(projects ?? []).filter(p => !p.branch_id || p.branch_id === branch).map(p => <option key={p.id} value={p.id}>{p.code}  -  {p.name}</option>)}</select></label>
           <label className={label}>Nomor invoice<input name="invoice_number" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} required maxLength={160} className={input} /></label>
           <label className={label}>Tanggal invoice<DatePicker name="invoice_date" value={invoiceDate} onValueChange={setInvoiceDate} required className={input} /></label>
           <label className={label}>Nomor faktur pajak<input name="tax_invoice_number" value={taxInvoiceNumber} onChange={e => setTaxInvoiceNumber(e.target.value)} className={input} /></label>
@@ -172,8 +174,8 @@ export function PurchaseForm({ branches, vendors, accounts, purchase, disabled =
               if (picked.bank_account) setVendorBankAccount(picked.bank_account)
               if (picked.payment_method) setVendorPaymentMethod(picked.payment_method)
             }
-          }} className={input}><option value="">Belum dipilih � boleh simpan draft</option>{vendors.filter(v => (v.branch_id === branch || v.status === "approved" || v.id === vendorId)).map(v => <option value={v.id} key={v.id}>{v.name} � {v.status === "approved" ? `${v.bank_owner} � ${v.bank_account}` : "Menunggu persetujuan Finance"}</option>)}{vendorRequest.id && vendorRequest.branchId === branch && !vendors.some(v => v.id === vendorRequest.id) && <option value={vendorRequest.id}>{vendorRequest.name} � Menunggu persetujuan Finance</option>}</select></label>
-        {selectedVendor && <dl className="grid gap-2 rounded-lg bg-canvas p-4 text-sm sm:grid-cols-2"><div><dt className="text-muted">Nama / NPWP</dt><dd className="mt-1 font-medium">{selectedVendor.name} � {selectedVendor.npwp || "Belum dicatat"}</dd></div><div><dt className="text-muted">Alamat</dt><dd className="mt-1">{selectedVendor.address}</dd></div><div><dt className="text-muted">Pemilik / nomor rekening</dt><dd className="mt-1">{selectedVendor.bank_owner} � {selectedVendor.bank_account}</dd></div><div><dt className="text-muted">Metode pembayaran</dt><dd className="mt-1">{selectedVendor.payment_method === "cash" ? "Tunai" : "Transfer bank"}</dd></div></dl>}
+          }} className={input}><option value="">Belum dipilih  -  -  -  boleh simpan draft</option>{vendors.filter(v => (v.branch_id === branch || v.status === "approved" || v.id === vendorId)).map(v => <option value={v.id} key={v.id}>{v.name}  -  -  -  {v.status === "approved" ? `${v.bank_owner}  -  -  -  ${v.bank_account}` : "Menunggu persetujuan Finance"}</option>)}{vendorRequest.id && vendorRequest.branchId === branch && !vendors.some(v => v.id === vendorRequest.id) && <option value={vendorRequest.id}>{vendorRequest.name}  -  -  -  Menunggu persetujuan Finance</option>}</select></label>
+        {selectedVendor && <dl className="grid gap-2 rounded-lg bg-canvas p-4 text-sm sm:grid-cols-2"><div><dt className="text-muted">Nama / NPWP</dt><dd className="mt-1 font-medium">{selectedVendor.name}  -  -  -  {selectedVendor.npwp || "Belum dicatat"}</dd></div><div><dt className="text-muted">Alamat</dt><dd className="mt-1">{selectedVendor.address}</dd></div><div><dt className="text-muted">Pemilik / nomor rekening</dt><dd className="mt-1">{selectedVendor.bank_owner}  -  -  -  {selectedVendor.bank_account}</dd></div><div><dt className="text-muted">Metode pembayaran</dt><dd className="mt-1">{selectedVendor.payment_method === "cash" ? "Tunai" : "Transfer bank"}</dd></div></dl>}
         <div className="grid gap-4 sm:grid-cols-2"><label className={label}>Nama penagih pada invoice<input name="vendor_name" value={vendorName} onChange={e => setVendorName(e.target.value)} className={input} /></label><label className={label}>Alamat penagih<input name="vendor_address" value={vendorAddress} onChange={e => setVendorAddress(e.target.value)} className={input} /></label></div>
         {!accountingReview && (
           <details
@@ -182,7 +184,7 @@ export function PurchaseForm({ branches, vendors, accounts, purchase, disabled =
             onToggle={e => setShowProposeVendor((e.target as HTMLDetailsElement).open)}
           >
             <summary className="cursor-pointer text-sm font-semibold text-brand hover:underline">
-              {selectedVendor ? "Vendor sudah terdaftar (" + selectedVendor.name + ") � Klik jika ingin mengusulkan perubahan/vendor baru ke Finance" : "Vendor belum terdaftar? Ajukan ke Finance"}
+              {selectedVendor ? "Vendor sudah terdaftar (" + selectedVendor.name + ")  -  -  -  Klik jika ingin mengusulkan perubahan/vendor baru ke Finance" : "Vendor belum terdaftar? Ajukan ke Finance"}
             </summary>
           <p className="mt-3 text-sm leading-6 text-muted">Lengkapi identitas dan rekening vendor. Data dari OCR invoice otomatis disalin ke bawah ini. Klik Ajukan vendor ke Finance jika vendor belum pernah didaftarkan sebelumnya.</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -193,7 +195,7 @@ export function PurchaseForm({ branches, vendors, accounts, purchase, disabled =
             <label className={label}>Nomor rekening<input name="new_vendor_bank_account" value={vendorBankAccount} onChange={e => setVendorBankAccount(e.target.value)} maxLength={200} className={input} /></label>
             <label className={label}>Metode pembayaran<select name="new_vendor_payment_method" value={vendorPaymentMethod} onChange={e => setVendorPaymentMethod(e.target.value)} className={input}><option value="bank_transfer">Transfer bank</option><option value="cash">Tunai</option></select></label>
           </div>
-          <div className="mt-4 flex flex-wrap gap-3"><Button type="button" onClick={proposeVendor} disabled={!branch || requestingVendor}>{requestingVendor ? "Mengajukan vendor�" : "Ajukan vendor ke Finance"}</Button><Button type="button" variant="secondary" onClick={() => router.refresh()}>Muat ulang status vendor</Button></div>
+          <div className="mt-4 flex flex-wrap gap-3"><Button type="button" onClick={proposeVendor} disabled={!branch || requestingVendor}>{requestingVendor ? "Mengajukan vendor -  -  - " : "Ajukan vendor ke Finance"}</Button><Button type="button" variant="secondary" onClick={() => router.refresh()}>Muat ulang status vendor</Button></div>
         </details>
         )}
         {vendorRequest.error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{vendorRequest.error}</p>}
@@ -205,16 +207,16 @@ export function PurchaseForm({ branches, vendors, accounts, purchase, disabled =
           <div className="sm:col-span-5"><label className="text-xs text-muted">Deskripsi barang / jasa</label><input value={row.description} onChange={e => changeLine(index, { description: e.target.value })} required maxLength={200} className={input} /></div>
           <div className="sm:col-span-3"><label className="text-xs text-muted">Nominal (Rp)</label><MoneyInput value={row.amount || ""} onValueChange={amount => changeLine(index, { amount: amount === "" ? 0 : Number(amount) })} required min="0" className={input} /></div>
           <div className="sm:col-span-3"><label className="text-xs text-muted">Bagan akun (COA)</label><CoaCombobox accounts={accounts} value={row.account_id} onChange={id => changeLine(index, { account_id: id })} disabled={!accounts.length} /></div>
-          <div className="flex items-end sm:col-span-1">{lines.length > 1 && <Button type="button" variant="secondary" onClick={() => setLines(current => current.filter((_, i) => i !== index))} className="w-full">�</Button>}</div>
+          <div className="flex items-end sm:col-span-1">{lines.length > 1 && <Button type="button" variant="secondary" onClick={() => setLines(current => current.filter((_, i) => i !== index))} className="w-full"> -  -  - </Button>}</div>
         </div>)}</div>
         <div className="flex justify-end text-sm"><span className="text-muted">Subtotal:</span><span className="ml-3 font-semibold">{rupiah(subtotal)}</span></div>
       </Card>
       <Card className="space-y-4 p-5 md:p-6">
         <div><h2 className="font-semibold">4. Perlakuan pajak</h2><p className="mt-1 text-sm text-muted">PPN dan pemotongan PPh diverifikasi oleh Accounting & Tax sebelum posting utang dan pembayaran.</p></div>
         <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-line text-muted">{["No","Jenis pajak","Dasar pengenaan pajak (DPP)","Tarif","Saat pengakuan","Nominal"].map(t=><th key={t} className="p-3">{t}</th>)}</tr></thead><tbody>
-          <tr className="border-b border-line"><td className="p-3">1</td><td className="p-3"><label className={label}>PPN<select name="vat_mode" value={vat} onChange={e => setVat(e.target.value)} className={input}><option value="none">Tanpa PPN</option><option value="non_luxury">Nonmewah � 12% � DPP 11/12 (efektif 11%)</option><option value="luxury">Barang mewah � 12% (DPP penuh)</option></select></label></td><td className="p-3">{rupiah(subtotal)}<p className="text-xs text-muted">{vat === "non_luxury" ? "DPP nilai lain 11/12 dari harga" : "Harga sebelum PPN"}</p></td><td className="p-3">{vat === "none" ? "0%" : vat === "non_luxury" ? "12% � 11/12" : "12%"}</td><td className="p-3">PPN masukan; periksa hak pengkreditan di bawah</td><td className="p-3 text-right">{rupiah(vatAmount)}</td></tr>
+          <tr className="border-b border-line"><td className="p-3">1</td><td className="p-3"><label className={label}>PPN<select name="vat_mode" value={vat} onChange={e => setVat(e.target.value)} className={input}><option value="none">Tanpa PPN</option><option value="non_luxury">Nonmewah  -  -  -  12%  -  -  -  DPP 11/12 (efektif 11%)</option><option value="luxury">Barang mewah  -  -  -  12% (DPP penuh)</option></select></label></td><td className="p-3">{rupiah(subtotal)}<p className="text-xs text-muted">{vat === "non_luxury" ? "DPP nilai lain 11/12 dari harga" : "Harga sebelum PPN"}</p></td><td className="p-3">{vat === "none" ? "0%" : vat === "non_luxury" ? "12%  -  -  -  11/12" : "12%"}</td><td className="p-3">PPN masukan; periksa hak pengkreditan di bawah</td><td className="p-3 text-right">{rupiah(vatAmount)}</td></tr>
           <tr><td className="p-3">2</td><td className="p-3"><label className={label}>Pemotongan PPh<select name="withholding_code" value={pph} onChange={e => setPph(e.target.value)} className={input}>{pphOptions.map(([v, text]) => <option value={v} key={v}>{text}</option>)}</select></label></td><td className="p-3"><label className={label}>Dasar pemotongan PPh (sebelum PPN)<MoneyInput name="withholding_base" min="0" max={subtotal} value={base} placeholder={formatAmount(subtotal)} onValueChange={setBase} className={input} /><input type="hidden" name="base_fallback" value={subtotal} /></label></td><td className="p-3">{pph === "pph_final_construction" ? <label className={label}>Tarif sesuai jenis & sertifikat vendor<select name="withholding_rate" value={rate} onChange={e => setRate(Number(e.target.value))} required className={input}><option value="0">Pilih tarif</option>{[1.75, 2.65, 3.5, 4, 6].map(r => <option value={r} key={r}>{String(r).replace(".",",")}%</option>)}</select></label> : <input type="hidden" name="withholding_rate" value={taxRate} />}
-{pph === "pph21_nonemployee" ? "Pasal 17 � 50% bruto" : pph !== "pph_final_construction" ? taxRate + "%" : ""}</td><td className="p-3"><label className={label}>Saat pengakuan utang PPh<select name="withholding_timing" value={timing} onChange={e => setTiming(e.target.value as "invoice" | "payment")} className={input}><option value="invoice">Saat pencatatan invoice / utang</option><option value="payment">Saat pembayaran, jika sesuai ketentuan objek pajak</option></select><span className="mt-1 block text-xs font-normal text-muted">Accounting & Tax wajib memeriksa saat terutang menurut objek pajak, termasuk ketentuan saat dibayar, disediakan untuk dibayar, atau jatuh tempo.</span></label></td><td className="p-3 text-right">{rupiah(withholding)}</td></tr>
+{pph === "pph21_nonemployee" ? "Pasal 17  -  -  -  50% bruto" : pph !== "pph_final_construction" ? taxRate + "%" : ""}</td><td className="p-3"><label className={label}>Saat pengakuan utang PPh<select name="withholding_timing" value={timing} onChange={e => setTiming(e.target.value as "invoice" | "payment")} className={input}><option value="invoice">Saat pencatatan invoice / utang</option><option value="payment">Saat pembayaran, jika sesuai ketentuan objek pajak</option></select><span className="mt-1 block text-xs font-normal text-muted">Accounting & Tax wajib memeriksa saat terutang menurut objek pajak, termasuk ketentuan saat dibayar, disediakan untuk dibayar, atau jatuh tempo.</span></label></td><td className="p-3 text-right">{rupiah(withholding)}</td></tr>
         </tbody></table></div>
         {pph === "pph21_nonemployee" && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Perhitungan ini untuk penerima penghasilan bukan pegawai: tarif progresif Pasal 17 atas 50% penghasilan bruto. TER pegawai tidak digunakan. Accounting wajib memastikan klasifikasi penerima dan dasar pemotongannya.</p>}
         <label className="flex items-center gap-2 text-sm"><input name="vat_creditable" type="checkbox" checked={creditable} onChange={e => setCreditable(e.target.checked)} />PPN masukan dapat dikreditkan (diverifikasi Accounting & Tax)</label>

@@ -8,6 +8,23 @@ import { ClientPicker } from "./client-picker"
 import { DocumentUpload } from "./document-upload"
 import { type BusinessUnit, type SalesClient, type SalesDocument, procurementInput as input, procurementLabel as label } from "@/lib/procurement-ui"
 
+function generateSpkNumberFromSph(sphDoc?: SalesDocument | null) {
+  if (!sphDoc) return ""
+  if (sphDoc.document_number && sphDoc.document_number.includes("SPH")) {
+    return sphDoc.document_number.replace(/\bSPH\b/g, "SPK")
+  }
+  const clientName = ((sphDoc?.client_snapshot?.name as string) || "KLIEN")
+    .replace(/\b(PT\.?|CV\.?|UD\.?|TBK\.?|INC\.?|LTD\.?)\b/gi, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toUpperCase()
+    .slice(0, 15) || "KLIEN"
+  const now = new Date()
+  const mmyy = `${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getFullYear()).slice(-2)}`
+  const seq = sphDoc?.sph_number ? String(sphDoc.sph_number).padStart(6, "0") : "000001"
+  return `SPK/${clientName}/GSP/${mmyy}.${seq}`
+}
+
 export function SpkForm({
   branches,
   documents,
@@ -22,6 +39,8 @@ export function SpkForm({
   const initialDoc = initialSphId ? documents.find(d => d.id === initialSphId) : null
   const [branch, setBranch] = useState(initialDoc?.branch_id ?? branches[0]?.id ?? "")
   const [selectedSphId, setSelectedSphId] = useState(initialDoc?.id ?? "")
+  const [spkNumber, setSpkNumber] = useState(initialDoc ? generateSpkNumberFromSph(initialDoc) : "")
+  const [title, setTitle] = useState(initialDoc?.title ? `SPK ${initialDoc.title}` : "")
   const [client, setClient] = useState<SalesClient | null>(
     (initialDoc?.client_snapshot as unknown as SalesClient) ?? null
   )
@@ -40,24 +59,34 @@ export function SpkForm({
     setBranch(newBranchId)
     setAttachments([])
     setSelectedSphId("")
+    setSpkNumber("")
+    setTitle("")
     setClient(null)
   }
 
   function handleSphChange(sphId: string) {
     setSelectedSphId(sphId)
     const found = documents.find(d => d.id === sphId)
-    if (found && found.client_snapshot) {
-      setClient({
-        id: found.client_id,
-        name: (found.client_snapshot.name as string) ?? "Klien",
-        address: (found.client_snapshot.address as string) ?? "",
-        npwp: (found.client_snapshot.npwp as string) ?? null,
-        contact: (found.client_snapshot.contact as string) ?? null,
-        phone: (found.client_snapshot.phone as string) ?? null,
-        email: (found.client_snapshot.email as string) ?? null,
-        industry: (found.client_snapshot.industry as any) ?? null,
-        additional_information: null,
-      })
+    if (found) {
+      setSpkNumber(generateSpkNumberFromSph(found))
+      if (!title || title.startsWith("SPK")) {
+        setTitle(found.title ? `SPK ${found.title}` : "")
+      }
+      if (found.client_snapshot) {
+        setClient({
+          id: found.client_id,
+          name: (found.client_snapshot.name as string) ?? "Klien",
+          address: (found.client_snapshot.address as string) ?? "",
+          npwp: (found.client_snapshot.npwp as string) ?? null,
+          contact: (found.client_snapshot.contact as string) ?? null,
+          phone: (found.client_snapshot.phone as string) ?? null,
+          email: (found.client_snapshot.email as string) ?? null,
+          industry: (found.client_snapshot.industry as any) ?? null,
+          additional_information: null,
+        })
+      }
+    } else {
+      setSpkNumber("")
     }
   }
 
@@ -66,6 +95,8 @@ export function SpkForm({
     const currentSph = documents.find(d => d.id === selectedSphId)
     if (currentSph && currentSph.client_id !== newClient.id) {
       setSelectedSphId("")
+      setSpkNumber("")
+      setTitle("")
     }
   }
 
@@ -124,14 +155,50 @@ export function SpkForm({
             </p>
           )}
 
+          <input type="hidden" name="client_id" value={client?.id ?? ""} />
+
           <div className={label}>
             Klien Terpilih (Sesuai SPH)
             <ClientPicker value={client} onChange={handleClientChange} disabled={disabled || uploading} />
           </div>
 
+          {/* Kolom Nomor Dokumen SPK Otomatis dari SPH */}
+          <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-blue-900">
+                Nomor Dokumen SPK Resmi
+              </span>
+              <span className="rounded bg-blue-200/80 px-2 py-0.5 text-[11px] font-semibold text-blue-950">
+                {spkNumber ? "Otomatis dari SPH" : "Pilih SPH Terlebih Dahulu"}
+              </span>
+            </div>
+            <label className={label}>
+              Nomor SPK
+              <input
+                name="document_number"
+                value={spkNumber}
+                onChange={e => setSpkNumber(e.target.value)}
+                required
+                placeholder="SPK/KLIEN/GSP/..."
+                className={`${input} font-mono font-bold text-blue-950 bg-white`}
+              />
+            </label>
+            <p className="text-xs text-blue-700">
+              Nomor SPK disinkronkan langsung dengan kode penomoran SPH yang telah disetujui internal.
+            </p>
+          </div>
+
           <label className={label}>
-            Judul / Nomor SPK pada Dokumen
-            <input name="title" required maxLength={300} placeholder="Contoh: SPK Pekerjaan Uji Emisi & Air Limbah..." className={input} />
+            Judul / Lingkup Pekerjaan SPK
+            <input
+              name="title"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              required
+              maxLength={300}
+              placeholder="Contoh: SPK Pekerjaan Uji Emisi & Monitoring Lingkungan..."
+              className={input}
+            />
           </label>
 
           <label className={label}>

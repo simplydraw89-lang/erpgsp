@@ -15,6 +15,7 @@ import { requireWorkspace } from "@/lib/auth/context"
 import { rupiah, formatDateID } from "@/lib/procurement-ui"
 import { ProjectPlanningForm } from "@/components/project/project-planning-form"
 import { ProjectDirectorConsole, type AttachmentItem, type DirectorInsight } from "@/components/project/project-director-console"
+import { ProjectCostingCard, type ProjectCostingData } from "@/components/project/project-costing-card"
 
 export default async function ProjectDetailPage({
   params,
@@ -44,23 +45,30 @@ export default async function ProjectDetailPage({
     notFound()
   }
 
-  // Load procurement / audit events
-  const { data: events } = await supabase
-    .from("procurement_events")
-    .select("*")
-    .eq("organization_id", organizationId)
-    .eq("entity_id", id)
-    .order("created_at", { ascending: false })
-    .limit(30)
-
-  // Load attachments
+  // Load procurement events, attachments, and real-time costing
   const attachmentIds = Array.isArray(project.attachment_ids) ? project.attachment_ids : []
-  const { data: attachmentsData } = attachmentIds.length
-    ? await supabase
-        .from("procurement_attachments")
-        .select("id, file_name, content_type, byte_size")
-        .in("id", attachmentIds)
-    : { data: [] }
+  const [eventsRes, attachmentsRes, costingRes] = await Promise.all([
+    supabase
+      .from("procurement_events")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("entity_id", id)
+      .order("created_at", { ascending: false })
+      .limit(30),
+    attachmentIds.length
+      ? supabase
+          .from("procurement_attachments")
+          .select("id, file_name, content_type, byte_size")
+          .in("id", attachmentIds)
+      : Promise.resolve({ data: [] }),
+    supabase.rpc("get_project_costing", {
+      p_org: organizationId,
+      p_project_id: id,
+    }),
+  ])
+  const events = eventsRes.data
+  const attachmentsData = attachmentsRes.data
+  const costingData = (costingRes.data && !(costingRes.data as any).error) ? (costingRes.data as ProjectCostingData) : null
 
   const projectAttachments: AttachmentItem[] = (attachmentsData ?? []).map((a: any) => ({
     id: a.id,
@@ -168,27 +176,34 @@ export default async function ProjectDetailPage({
         </div>
       )}
 
-      {/* Ringkasan Finansial Singkat */}
-      <Card className="grid gap-4 p-5 sm:grid-cols-3">
-        <div>
-          <p className="text-xs text-muted">Nilai Kontrak SPK</p>
-          <p className="mt-1 text-sm font-semibold text-ink">{rupiah(contractVal)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-muted">Total Pagu Anggaran (RAB)</p>
-          <p className="mt-1 text-sm font-semibold text-brand">{rupiah(rabVal)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-muted">Estimasi Margin Laba</p>
-          <p
-            className={`mt-1 text-sm font-bold ${
-              margin >= 25 ? "text-emerald-600" : margin > 0 ? "text-amber-600" : "text-red-600"
-            }`}
-          >
-            {margin.toFixed(2)}%
-          </p>
-        </div>
-      </Card>
+      {/* Project Costing & Realisasi RAB jika Proyek Aktif atau Memiliki Realisasi */}
+      {costingData && (status === "active" || costingData.total_realized > 0) ? (
+        <ProjectCostingCard
+          costing={costingData}
+          canTransact={!isReadOnlyPreview && status === "active"}
+        />
+      ) : (
+        <Card className="grid gap-4 p-5 sm:grid-cols-3">
+          <div>
+            <p className="text-xs text-muted">Nilai Kontrak SPK</p>
+            <p className="mt-1 text-sm font-semibold text-ink">{rupiah(contractVal)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted">Total Pagu Anggaran (RAB)</p>
+            <p className="mt-1 text-sm font-semibold text-brand">{rupiah(rabVal)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted">Estimasi Margin Laba</p>
+            <p
+              className={`mt-1 text-sm font-bold ${
+                margin >= 25 ? "text-emerald-600" : margin > 0 ? "text-amber-600" : "text-red-600"
+              }`}
+            >
+              {margin.toFixed(2)}%
+            </p>
+          </div>
+        </Card>
+      )}
 
       {/* JIKA STATUS DRAFT / REVISI: Mode Pengisian Cabang */}
       {canEdit && (
