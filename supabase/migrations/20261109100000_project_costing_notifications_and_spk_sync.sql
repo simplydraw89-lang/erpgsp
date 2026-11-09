@@ -503,4 +503,82 @@ begin
 end;
 $$;
 
+-- 8. Fleksibilitas Pengajuan RAB & Dokumen Proyek: Cukup Upload Berkas RAB & Input Total Pagu
+create or replace function gsp_private.api_save_project_planning(
+  p_id uuid,
+  p_version integer,
+  p_payload jsonb,
+  p_submit boolean default false
+) returns void
+language plpgsql security definer set search_path='' as $$
+declare
+  p public.crm_projects;
+  v_rab_total numeric(15,2) := 0;
+  v_attachments uuid[];
+  v_next_status text;
+  v_item jsonb;
+  v_work_details text;
+  v_manpower jsonb;
+begin
+  select * into p from public.crm_projects where id = p_id for update;
+  if p.id is null or not gsp_private.can_edit_project_planning(p) then
+    raise exception 'Akses perancangan proyek ditolak atau status proyek sudah terkunci.' using errcode = '42501';
+  end if;
+  if p.version is distinct from p_version then
+    raise exception 'Versi proyek telah berubah. Muat ulang halaman dan periksa kembali.';
+  end if;
+
+  -- Hitung total RAB: prioritaskan nominal langsung atau hitung dari rincian breakdown
+  v_rab_total := coalesce((p_payload->>'rab_total')::numeric, 0);
+  if v_rab_total <= 0 and p_payload ? 'rab_breakdown' and jsonb_typeof(p_payload->'rab_breakdown') = 'array' then
+    for v_item in select * from jsonb_array_elements(p_payload->'rab_breakdown') loop
+      v_rab_total := v_rab_total + coalesce((v_item->>'total')::numeric, 0);
+    end loop;
+  end if;
+
+  -- Validasi lampiran jika ada
+  select coalesce(array_agg(value::uuid), '{}') into v_attachments
+  from jsonb_array_elements_text(coalesce(p_payload->'attachment_ids', '[]'));
+
+  v_work_details := coalesce(nullif(btrim(p_payload->>'work_details'), ''), p.work_details, 'Rincian teknis pekerjaan mengikuti SPK dan dokumen lampiran RAB.');
+  v_manpower := coalesce(p_payload->'manpower', p.manpower, '[{"name": "Team Pelaksana Cabang", "role": "Pelaksana Lapangan"}]'::jsonb);
+  if jsonb_array_length(v_manpower) = 0 then
+    v_manpower := '[{"name": "Team Pelaksana Cabang", "role": "Pelaksana Lapangan"}]'::jsonb;
+  end if;
+
+  -- Jika submit ke direksi, periksa kelengkapan minimum (Pagu RAB wajib ada nilai valid)
+  if coalesce(p_submit, false) then
+    if v_rab_total <= 0 then
+      raise exception 'Tentukan Total Pagu Anggaran RAB (Rp) atau unggah berkas dokumen RAB proyek sebelum submit.';
+    end if;
+    v_next_status := 'director_review';
+  else
+    v_next_status := p.approval_status;
+  end if;
+
+  update public.crm_projects
+  set work_details = v_work_details,
+      manpower = v_manpower,
+      timesheet_schedule = coalesce(p_payload->'timesheet_schedule', timesheet_schedule),
+      rab_breakdown = coalesce(p_payload->'rab_breakdown', rab_breakdown),
+      rab_total = v_rab_total,
+      attachment_ids = v_attachments,
+      starts_on = coalesce(nullif(p_payload->>'starts_on', '')::date, starts_on),
+      ends_on = coalesce(nullif(p_payload->>'ends_on', '')::date, ends_on),
+      approval_status = v_next_status,
+      submitted_at = case when p_submit then now() else submitted_at end,
+      review_note = case when p_submit then null else review_note end,
+      version = version + 1,
+      updated_at = now()
+  where id = p.id;
+
+  perform gsp_private.procurement_log(
+    p.organization_id, p.branch_id, p.id, 'project',
+    case when p_submit then 'submitted_to_directors' else 'planning_updated' end,
+    null,
+    jsonb_build_object('approval_status', v_next_status, 'rab_total', v_rab_total, 'attachments_count', cardinality(v_attachments))
+  );
+end;
+$$;
+
 notify pgrst, 'reload schema';

@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button"
 import { saveProjectPlanningAction } from "@/app/(workspace)/proyek/actions"
 import { DocumentUpload } from "@/components/sales/document-upload"
 import { rupiah } from "@/lib/procurement-ui"
+import { MoneyInput } from "@/components/ui/money-input"
 
 export type ManpowerItem = {
   id: string
@@ -120,15 +121,19 @@ export function ProjectPlanningForm({
       : [{ id: "sch-1", phase: "Persiapan & Pengumpulan Data Sekunder", start_date: "", end_date: "", pic: "" }]
   )
   const [rab, setRab] = useState<RabItem[]>(
-    project.rab_breakdown?.length > 0
-      ? project.rab_breakdown
-      : [{ id: "rab-1", category: "personil", description: "Tenaga Ahli Lingkungan", volume: 1, unit: "OB", unit_price: 0, total: 0 }]
+    project.rab_breakdown?.length > 0 ? project.rab_breakdown : []
   )
+  const initialBreakdownSum = (project.rab_breakdown || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0)
+  const [directRabTotal, setDirectRabTotal] = useState<number>(
+    project.rab_total && Number(project.rab_total) > 0 ? Number(project.rab_total) : initialBreakdownSum
+  )
+  const [showDetailedBreakdown, setShowDetailedBreakdown] = useState<boolean>(Boolean(project.rab_breakdown && project.rab_breakdown.length > 0))
   const [attachments, setAttachments] = useState<string[]>(project.attachment_ids || [])
 
   // Calculations
   const contractAmount = Number(project.contract_amount) || 0
-  const rabTotal = rab.reduce((sum, item) => sum + (Number(item.total) || 0), 0)
+  const breakdownSum = rab.reduce((sum, item) => sum + (Number(item.total) || 0), 0)
+  const rabTotal = rab.length > 0 && breakdownSum > 0 ? breakdownSum : directRabTotal
   const projectedMargin = contractAmount > 0 ? ((contractAmount - rabTotal) / contractAmount) * 100 : 0
 
   // Payment terms (Termin Pembayaran)
@@ -548,7 +553,7 @@ export function ProjectPlanningForm({
           }`}
         >
           <Calculator className="size-4" />
-          4. Rencana Anggaran Biaya (RAB) ({rab.length})
+          4. Berkas & Pagu RAB ({attachments.length})
         </button>
         <button
           type="button"
@@ -581,6 +586,7 @@ export function ProjectPlanningForm({
         <input type="hidden" name="ends_on" value={endsOn} />
         <input type="hidden" name="manpower" value={JSON.stringify(manpower)} />
         <input type="hidden" name="timesheet_schedule" value={JSON.stringify(schedule)} />
+        <input type="hidden" name="rab_total" value={rabTotal} />
         <input type="hidden" name="rab_breakdown" value={JSON.stringify(rab)} />
         <input type="hidden" name="payment_terms" value={JSON.stringify(paymentTerms)} />
         <input type="hidden" name="attachment_ids" value={JSON.stringify(attachments)} />
@@ -921,12 +927,12 @@ export function ProjectPlanningForm({
 
         {/* TAB 4: RENCANA ANGGARAN BIAYA (RAB) */}
         {activeTab === "rab" && (
-          <Card className="p-5 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <Card className="p-5 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
               <div>
-                <h3 className="font-semibold text-ink">Rencana Anggaran Biaya (RAB) Proyek</h3>
-                <p className="text-xs text-muted mt-1">
-                  Rincikan biaya personil, non-personil, laboratorium, dan operasional. Pagu ini akan terkunci setelah di-ACC Direktur Utama.
+                <h3 className="font-bold text-ink text-base">Dokumen & Pagu Rencana Anggaran Biaya (RAB)</h3>
+                <p className="text-xs text-muted mt-1 max-w-2xl">
+                  Cukup unggah berkas dokumen RAB resmi (PDF / Excel / Scan) dan tentukan Total Pagu Anggaran RAB. Pagu ini akan otomatis menjadi batas acuan serapan biaya proyek yang di-ACC Direktur Utama.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -939,16 +945,13 @@ export function ProjectPlanningForm({
                 >
                   {activeOcrLoading === "rab" ? (
                     <>
-                      <Loader2 className="size-3.5 animate-spin text-indigo-600" /> Membaca Berkas RAB / BoQ...
+                      <Loader2 className="size-3.5 animate-spin text-indigo-600" /> Membaca Berkas RAB...
                     </>
                   ) : (
                     <>
-                      <FileSpreadsheet className="size-3.5 text-indigo-600" /> Upload Berkas RAB / BoQ (OCR)
+                      <FileSpreadsheet className="size-3.5 text-indigo-600" /> Upload Berkas RAB (Auto-Extract OCR)
                     </>
                   )}
-                </Button>
-                <Button type="button" onClick={addRab} disabled={busy} variant="secondary" className="gap-1 text-xs">
-                  <Plus className="size-3.5" /> Tambah Pos Biaya
                 </Button>
               </div>
             </div>
@@ -971,105 +974,218 @@ export function ProjectPlanningForm({
               </div>
             )}
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-canvas text-muted text-xs">
-                  <tr>
-                    <th className="px-2 py-2">Kategori</th>
-                    <th className="px-2 py-2">Uraian Kebutuhan</th>
-                    <th className="px-2 py-2 w-20">Volume</th>
-                    <th className="px-2 py-2 w-24">Satuan</th>
-                    <th className="px-2 py-2 w-32">Harga Satuan (Rp)</th>
-                    <th className="px-2 py-2 w-36 text-right">Subtotal</th>
-                    <th className="px-2 py-2 text-right w-10"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {rab.map((item) => (
-                    <tr key={item.id}>
-                      <td className="px-2 py-2">
-                        <select
-                          value={item.category}
-                          disabled={busy}
-                          onChange={(e) => updateRab(item.id, "category", e.target.value)}
-                          className="w-full rounded border border-line px-2 py-1.5 text-xs"
-                        >
-                          {rabCategories.map((c) => (
-                            <option key={c.value} value={c.value}>
-                              {c.label}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          type="text"
-                          required
-                          value={item.description}
-                          disabled={busy}
-                          placeholder="e.g. Sampling Parameter Air Limbah"
-                          onChange={(e) => updateRab(item.id, "description", e.target.value)}
-                          className="w-full rounded border border-line px-2 py-1.5 text-xs"
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          type="number"
-                          min="1"
-                          step="0.01"
-                          value={item.volume}
-                          disabled={busy}
-                          onChange={(e) => updateRab(item.id, "volume", e.target.value)}
-                          className="w-full rounded border border-line px-2 py-1.5 text-xs"
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          type="text"
-                          value={item.unit}
-                          disabled={busy}
-                          placeholder="e.g. Titik, OB, Hari"
-                          onChange={(e) => updateRab(item.id, "unit", e.target.value)}
-                          className="w-full rounded border border-line px-2 py-1.5 text-xs"
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          type="number"
-                          min="0"
-                          step="1000"
-                          value={item.unit_price}
-                          disabled={busy}
-                          onChange={(e) => updateRab(item.id, "unit_price", e.target.value)}
-                          className="w-full rounded border border-line px-2 py-1.5 text-xs"
-                        />
-                      </td>
-                      <td className="px-2 py-2 text-right font-medium text-slate-800 text-xs">
-                        {rupiah(item.total)}
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => removeRab(item.id)}
-                          disabled={busy || rab.length <= 1}
-                          className="text-red-500 hover:text-red-700 disabled:opacity-40"
-                        >
-                          <Trash2 className="size-4 inline" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="border-t-2 border-slate-300 font-semibold text-slate-800">
-                  <tr>
-                    <td colSpan={5} className="px-3 py-3 text-right">
-                      Total Rencana Anggaran Biaya (RAB):
-                    </td>
-                    <td className="px-2 py-3 text-right text-brand">{rupiah(rabTotal)}</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
+            {/* Section 1: Upload Berkas Dokumen RAB Proyek */}
+            <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-5 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex size-9 items-center justify-center rounded-lg bg-blue-600 text-white shrink-0 mt-0.5">
+                  <UploadCloud className="size-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-blue-950">1. Unggah Berkas Dokumen RAB Proyek (Utama)</h4>
+                  <p className="text-xs text-blue-800 mt-0.5">
+                    Unggah file lembar kerja RAB resmi (Excel .xlsx, .xls, PDF, atau scan bertandatangan). Berkas ini akan otomatis terlampir sebagai dasar verifikasi Direktur Utama.
+                  </p>
+                </div>
+              </div>
+
+              <DocumentUpload
+                branchId={project.branch_id}
+                label="Unggah Berkas Dokumen RAB (PDF, Excel, Scan Gambar, Max 10MB)"
+                attachments={attachments}
+                onChange={setAttachments}
+                onBusyChange={setUploadBusy}
+                disabled={busy}
+              />
+            </div>
+
+            {/* Section 2: Input Total Pagu Anggaran RAB */}
+            <div className="rounded-xl border border-line bg-canvas/60 p-5 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-sm font-bold text-ink">2. Total Nominal Pagu Anggaran RAB (Rp)</h4>
+                  <p className="text-xs text-muted mt-0.5">
+                    Tentukan total pagu biaya yang disepakati untuk proyek ini. Angka ini yang akan otomatis dipotong oleh realisasi pembelian vendor dan kasbon SPPD lapangan.
+                  </p>
+                </div>
+                <span className="rounded-full bg-emerald-100 px-3 py-1 font-mono text-xs font-bold text-emerald-900">
+                  Pagu Terkunci: {rupiah(rabTotal)}
+                </span>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 pt-2">
+                <label className="text-xs font-semibold text-ink">
+                  Total Pagu Anggaran RAB (Rp)
+                  <MoneyInput
+                    name="direct_rab_total"
+                    value={directRabTotal ? String(directRabTotal) : ""}
+                    onValueChange={(val: string) => setDirectRabTotal(Number(val) || 0)}
+                    disabled={busy || (rab.length > 0 && breakdownSum > 0)}
+                    min="1000"
+                    placeholder="Contoh: 50.000.000"
+                    className="mt-1 block w-full rounded-lg border border-line bg-white px-3 py-2 text-sm font-bold text-ink"
+                  />
+                  {rab.length > 0 && breakdownSum > 0 && (
+                    <span className="mt-1 block text-[11px] text-brand">
+                      * Dihitung otomatis dari subtotal rincian pos biaya di bawah.
+                    </span>
+                  )}
+                </label>
+
+                <div className="rounded-lg border border-line bg-white p-3 space-y-1">
+                  <span className="text-[11px] text-muted block">Estimasi Gross Margin Berdasarkan Pagu:</span>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-base font-bold ${
+                      projectedMargin >= 25 ? "text-emerald-600" : projectedMargin > 0 ? "text-amber-600" : "text-red-600"
+                    }`}>
+                      {projectedMargin.toFixed(2)}%
+                    </span>
+                    <span className="text-xs text-muted">
+                      Selisih Laba: {rupiah(contractAmount - rabTotal)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Rincian Pos Biaya RAB (Opsional) */}
+            <div className="rounded-xl border border-line p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted">
+                    3. Rincian Pos Biaya Detail (Opsional)
+                  </h4>
+                  <p className="text-xs text-muted mt-0.5">
+                    Jika ingin merincikan pos personil, uji lab sampel, dll ke dalam sistem secara detail, Anda dapat menambahkannya di bawah ini.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setShowDetailedBreakdown(!showDetailedBreakdown)}
+                    className="text-xs text-brand font-semibold"
+                  >
+                    {showDetailedBreakdown ? "Sembunyikan Rincian Pos ▲" : "Tampilkan Rincian Pos Detail ▼"}
+                  </Button>
+                  {showDetailedBreakdown && (
+                    <Button type="button" onClick={addRab} disabled={busy} variant="secondary" className="gap-1 text-xs">
+                      <Plus className="size-3.5" /> Tambah Pos Biaya
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {showDetailedBreakdown && (
+                <div className="overflow-x-auto pt-2">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-canvas text-muted text-xs">
+                      <tr>
+                        <th className="px-2 py-2">Kategori</th>
+                        <th className="px-2 py-2">Uraian Kebutuhan</th>
+                        <th className="px-2 py-2 w-20">Volume</th>
+                        <th className="px-2 py-2 w-24">Satuan</th>
+                        <th className="px-2 py-2 w-32">Harga Satuan (Rp)</th>
+                        <th className="px-2 py-2 w-36 text-right">Subtotal</th>
+                        <th className="px-2 py-2 text-right w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {rab.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-3 py-4 text-center text-xs text-muted">
+                            Belum ada pos biaya rinci. Cukup isi Total Pagu RAB di atas dan unggah dokumen berkas RAB.
+                          </td>
+                        </tr>
+                      ) : (
+                        rab.map((item) => (
+                          <tr key={item.id}>
+                            <td className="px-2 py-2">
+                              <select
+                                value={item.category}
+                                disabled={busy}
+                                onChange={(e) => updateRab(item.id, "category", e.target.value)}
+                                className="w-full rounded border border-line px-2 py-1.5 text-xs"
+                              >
+                                {rabCategories.map((c) => (
+                                  <option key={c.value} value={c.value}>
+                                    {c.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-2 py-2">
+                              <input
+                                type="text"
+                                value={item.description}
+                                disabled={busy}
+                                placeholder="e.g. Sampling Parameter Air Limbah"
+                                onChange={(e) => updateRab(item.id, "description", e.target.value)}
+                                className="w-full rounded border border-line px-2 py-1.5 text-xs"
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input
+                                type="number"
+                                min="1"
+                                step="0.01"
+                                value={item.volume}
+                                disabled={busy}
+                                onChange={(e) => updateRab(item.id, "volume", e.target.value)}
+                                className="w-full rounded border border-line px-2 py-1.5 text-xs"
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input
+                                type="text"
+                                value={item.unit}
+                                disabled={busy}
+                                placeholder="e.g. Titik, OB, Hari"
+                                onChange={(e) => updateRab(item.id, "unit", e.target.value)}
+                                className="w-full rounded border border-line px-2 py-1.5 text-xs"
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <input
+                                type="number"
+                                min="0"
+                                step="1000"
+                                value={item.unit_price}
+                                disabled={busy}
+                                onChange={(e) => updateRab(item.id, "unit_price", e.target.value)}
+                                className="w-full rounded border border-line px-2 py-1.5 text-xs"
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-right font-medium text-slate-800 text-xs">
+                              {rupiah(item.total)}
+                            </td>
+                            <td className="px-2 py-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => removeRab(item.id)}
+                                disabled={busy}
+                                className="text-red-500 hover:text-red-700 disabled:opacity-40"
+                              >
+                                <Trash2 className="size-4 inline" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                    {rab.length > 0 && (
+                      <tfoot className="border-t-2 border-slate-300 font-semibold text-slate-800">
+                        <tr>
+                          <td colSpan={5} className="px-3 py-3 text-right">
+                            Subtotal Pos Biaya:
+                          </td>
+                          <td className="px-2 py-3 text-right text-brand">{rupiah(breakdownSum)}</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              )}
             </div>
           </Card>
         )}

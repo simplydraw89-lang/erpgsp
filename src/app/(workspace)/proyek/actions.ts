@@ -1,4 +1,4 @@
-"use server"
+﻿"use server"
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
@@ -32,6 +32,8 @@ export async function saveProjectPlanningAction(prevState: { error?: string } | 
     return { error: "Format data perencanaan proyek tidak valid." }
   }
 
+  const rab_total = Number(formData.get("rab_total") || "0")
+
   const payload = {
     work_details,
     starts_on,
@@ -39,6 +41,7 @@ export async function saveProjectPlanningAction(prevState: { error?: string } | 
     manpower,
     timesheet_schedule,
     rab_breakdown,
+    rab_total,
     attachment_ids,
     payment_terms,
   }
