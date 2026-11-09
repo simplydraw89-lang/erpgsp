@@ -79,6 +79,12 @@ export type ProjectBillingItem = {
     bank_reference?: string
     wht_proof_number?: string
     notes?: string
+    invoice_journal_id?: string
+    invoice_journal_number?: string
+    invoice_journal_status?: string
+    payment_journal_id?: string
+    payment_journal_number?: string
+    payment_journal_status?: string
   }>
 }
 
@@ -367,6 +373,18 @@ export function BillingWorkspace({
                                   <p className="font-semibold text-emerald-800">
                                     KWT: {matchingInvoice.receipt_number}
                                   </p>
+                                )}
+                                {matchingInvoice.invoice_journal_number && (
+                                  <div className="flex items-center justify-between text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200/60 rounded px-1.5 py-0.5">
+                                    <span>Jurnal Piutang:</span>
+                                    <span className="font-bold">{matchingInvoice.invoice_journal_number}</span>
+                                  </div>
+                                )}
+                                {matchingInvoice.payment_journal_number && (
+                                  <div className="flex items-center justify-between text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200/60 rounded px-1.5 py-0.5">
+                                    <span>Jurnal Kas/PPh:</span>
+                                    <span className="font-bold">{matchingInvoice.payment_journal_number}</span>
+                                  </div>
                                 )}
                               </div>
                             )}
@@ -818,6 +836,68 @@ export function BillingWorkspace({
                     <span>Jumlah Dana Diterima:</span>
                     <span>{rupiah(viewDocument.data.paid_amount || viewDocument.data.net_receivable)}</span>
                   </div>
+                )}
+              </div>
+            </div>
+
+            {/* Posting Jurnal Akuntansi Otomatis */}
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3.5 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-indigo-950 flex items-center gap-1.5">
+                  <Banknote className="size-3.5 text-indigo-600" />
+                  Posting Jurnal Akuntansi (Otomatis ERP)
+                </span>
+                <span className="text-[10px] font-mono font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded">
+                  {viewDocument.type === "invoice"
+                    ? viewDocument.data.invoice_journal_number || "JRN/INV/AUTO"
+                    : viewDocument.data.payment_journal_number || "JRN/KWT/AUTO"} · Posted
+                </span>
+              </div>
+              <div className="space-y-1 font-mono text-[11px] bg-white rounded-lg p-2.5 border border-indigo-100">
+                {viewDocument.type === "invoice" ? (
+                  <>
+                    <div className="flex justify-between text-indigo-900">
+                      <span>[D] 1121 - Piutang Klien ({viewDocument.project.client_name})</span>
+                      <span className="font-semibold">{rupiah(viewDocument.data.total_amount)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-700 pl-4">
+                      <span>[K] 4111 - Pendapatan Jasa Konsultansi & Proyek</span>
+                      <span className="font-semibold">{rupiah(viewDocument.data.amount)}</span>
+                    </div>
+                    {viewDocument.data.vat_amount > 0 && (
+                      <div className="flex justify-between text-slate-700 pl-4">
+                        <span>[K] 2121 - Utang PPN Keluaran (11%)</span>
+                        <span className="font-semibold">{rupiah(viewDocument.data.vat_amount)}</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-emerald-900">
+                      <span>[D] 1102 - Bank Operasional</span>
+                      <span className="font-semibold">
+                        {rupiah(viewDocument.data.paid_amount || viewDocument.data.net_receivable)}
+                      </span>
+                    </div>
+                    {viewDocument.data.wht_amount > 0 && (
+                      <div className="flex justify-between text-amber-900">
+                        <span>
+                          [D] 1192 - Pajak Dibayar di Muka (PPh 23)
+                          {viewDocument.data.wht_proof_number ? ` [Bupot: ${viewDocument.data.wht_proof_number}]` : ""}
+                        </span>
+                        <span className="font-semibold">{rupiah(viewDocument.data.wht_amount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-slate-700 pl-4">
+                      <span>[K] 1121 - Piutang Klien ({viewDocument.project.client_name})</span>
+                      <span className="font-semibold">
+                        {rupiah(
+                          (viewDocument.data.paid_amount || viewDocument.data.net_receivable) +
+                            (viewDocument.data.wht_amount || 0)
+                        )}
+                      </span>
+                    </div>
+                  </>
                 )}
               </div>
             </div>

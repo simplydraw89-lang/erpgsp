@@ -12,8 +12,8 @@ export default async function SalesBillingPage({
   const { error, notice } = await searchParams
   const w = await requireWorkspace()
 
-  // Ambil daftar proyek aktif dengan rincian klien dan cabang
-  const [projectsRes, invoicesRes] = await Promise.all([
+  // Ambil daftar proyek aktif dengan rincian klien, cabang, dan jurnal akuntansi terkait
+  const [projectsRes, invoicesRes, journalsRes] = await Promise.all([
     w.supabase
       .from("crm_projects")
       .select(`
@@ -38,10 +38,17 @@ export default async function SalesBillingPage({
       .eq("organization_id", w.organizationId)
       .order("created_at", { ascending: false })
       .limit(500),
+    w.supabase
+      .from("accounting_journals")
+      .select("id, journal_number, status, source_id, source_type, journal_date")
+      .eq("organization_id", w.organizationId)
+      .in("source_type", ["receivable", "payment"])
+      .limit(1000),
   ])
 
   const rawProjects = projectsRes.data ?? []
   const rawInvoices = invoicesRes.data ?? []
+  const rawJournals = journalsRes.data ?? []
 
   // Map ke ProjectBillingItem dengan fallback jika sales_invoices belum ada di database
   const billingProjects: ProjectBillingItem[] = rawProjects.map((p: any) => {
@@ -49,8 +56,30 @@ export default async function SalesBillingPage({
     const client = Array.isArray(p.sales_clients) ? p.sales_clients[0] : p.sales_clients
     const terms = Array.isArray(p.payment_terms) ? p.payment_terms : []
 
-    // Ambil invoice dari tabel sales_invoices yang sesuai proyek ini
-    const projectInvoices = rawInvoices.filter((inv: any) => inv.project_id === p.id)
+    // Ambil invoice dari tabel sales_invoices yang sesuai proyek ini dan hubungkan dengan jurnal akuntansi
+    const projectInvoices = rawInvoices
+      .filter((inv: any) => inv.project_id === p.id)
+      .map((inv: any) => {
+        const invJrn = rawJournals.find(
+          (j: any) =>
+            j.id === inv.invoice_journal_id ||
+            (j.source_id === inv.id && j.source_type === "receivable")
+        )
+        const pmtJrn = rawJournals.find(
+          (j: any) =>
+            j.id === inv.payment_journal_id ||
+            (j.source_id === inv.id && j.source_type === "payment")
+        )
+        return {
+          ...inv,
+          invoice_journal_id: invJrn?.id ?? inv.invoice_journal_id,
+          invoice_journal_number: invJrn?.journal_number,
+          invoice_journal_status: invJrn?.status,
+          payment_journal_id: pmtJrn?.id ?? inv.payment_journal_id,
+          payment_journal_number: pmtJrn?.journal_number,
+          payment_journal_status: pmtJrn?.status,
+        }
+      })
 
     // Jika di tabel sales_invoices belum ada tetapi di payment_terms ada status invoiced/paid,
     // buat invoice virtual dari payment_terms agar data termin tetap muncul utuh
