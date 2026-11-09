@@ -31,6 +31,8 @@ export type AttachmentItem = {
   file_name: string
   content_type: string
   byte_size: number
+  source_label?: string
+  category?: "rab" | "spk" | "sph" | "general"
 }
 
 export type DirectorInsight = {
@@ -358,7 +360,7 @@ export function ProjectDirectorConsole({
 
           {/* TAB 4: RAB POS BIAYA */}
           {activeTab === "rab" && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-line pb-2">
                 <div>
                   <h3 className="font-semibold text-sm text-ink flex items-center gap-2">
@@ -369,10 +371,88 @@ export function ProjectDirectorConsole({
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-muted">Total RAB</p>
+                  <p className="text-xs text-muted">Total Pagu RAB</p>
                   <p className="text-base font-bold text-brand">{rupiah(rabVal)}</p>
                 </div>
               </div>
+
+              {/* DOKUMEN / BERKAS LAMPIRAN RAB PROYEK */}
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs uppercase tracking-wider text-indigo-950 flex items-center gap-2">
+                    <Files className="size-4 text-indigo-600" />
+                    Dokumen Berkas Lampiran RAB & Anggaran Biaya
+                  </span>
+                  <span className="text-[11px] font-semibold text-indigo-800">
+                    {attachments.filter((a) => a.category === "rab" || a.file_name.toLowerCase().includes("rab") || a.file_name.toLowerCase().includes("biaya")).length > 0
+                      ? `${attachments.filter((a) => a.category === "rab" || a.file_name.toLowerCase().includes("rab") || a.file_name.toLowerCase().includes("biaya")).length} berkas terlampir`
+                      : attachments.length > 0
+                      ? `${attachments.length} berkas proyek/SPK terlampir`
+                      : "Belum ada berkas terunggah"}
+                  </span>
+                </div>
+
+                {attachments.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-indigo-200 bg-white/80 p-3.5 text-center text-xs text-indigo-900">
+                    <p className="font-semibold">Belum ada file dokumen RAB yang diunggah secara terpisah.</p>
+                    <p className="text-[11px] text-muted mt-1">
+                      Pagu anggaran dihitung berdasarkan rincian pos anggaran di tabel bawah. Anda juga dapat mengunggah dokumen scan/excel melalui form perencanaan cabang.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {(attachments.filter((a) => a.category === "rab" || a.file_name.toLowerCase().includes("rab") || a.file_name.toLowerCase().includes("biaya")).length > 0
+                      ? attachments.filter((a) => a.category === "rab" || a.file_name.toLowerCase().includes("rab") || a.file_name.toLowerCase().includes("biaya"))
+                      : attachments
+                    ).map((att) => {
+                      const isSpreadsheet = att.content_type?.includes("sheet") || att.file_name.endsWith(".xlsx") || att.file_name.endsWith(".csv")
+                      return (
+                        <div
+                          key={att.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-indigo-200/80 bg-white p-3 shadow-sm hover:border-indigo-400 transition"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                              {isSpreadsheet ? <FileSpreadsheet className="size-5" /> : <FileText className="size-5" />}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-bold text-ink" title={att.file_name}>
+                                {att.file_name}
+                              </p>
+                              <p className="text-[10px] text-muted flex items-center gap-1.5 mt-0.5">
+                                <span className="font-semibold text-indigo-700">{att.source_label || "Lampiran RAB"}</span>
+                                <span>&bull;</span>
+                                <span>{formatSize(att.byte_size)}</span>
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <a
+                              href={`/api/invoice-documents/${att.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-600 hover:text-white transition"
+                              title="Buka pratinjau berkas"
+                            >
+                              Buka <ExternalLink className="size-3" />
+                            </a>
+                            <a
+                              href={`/api/invoice-documents/${att.id}`}
+                              download={att.file_name}
+                              className="inline-flex items-center justify-center rounded bg-slate-100 p-1 text-slate-700 hover:bg-slate-200 transition"
+                              title="Unduh berkas"
+                            >
+                              <Download className="size-3.5" />
+                            </a>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* TABEL RINCIAN POS ANGGARAN RAB */}
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-canvas text-muted">
@@ -421,7 +501,7 @@ export function ProjectDirectorConsole({
                     <Files className="size-4 text-indigo-600" /> Berkas Dokumen Lampiran Proyek ({attachments.length})
                   </h3>
                   <p className="text-xs text-muted mt-0.5">
-                    Berkas resmi yang diunggah cabang (KAK / TOR, Rincian RAB scan, Timesheet, Surat Tugas, dsb.)
+                    Berkas resmi pengajuan proyek, berkas RAB scan/excel, serta kontrak SPK & SPH terkait.
                   </p>
                 </div>
                 {attachments.length > 1 && (
@@ -439,9 +519,9 @@ export function ProjectDirectorConsole({
 
               {attachments.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/50 p-6 text-center text-xs text-amber-900">
-                  <p className="font-semibold">Belum ada dokumen lampiran yang diunggah untuk proyek ini.</p>
+                  <p className="font-semibold">Belum ada dokumen lampiran yang terunggah untuk proyek ini.</p>
                   <p className="mt-1 text-amber-800 text-[11px]">
-                    Cabang dapat mengunggah berkas KAK / TOR teknis dan rincian pendukung melalui formulir kelengkapan.
+                    Cabang dapat mengunggah berkas KAK / TOR teknis dan berkas RAB melalui formulir kelengkapan proyek.
                   </p>
                 </div>
               ) : (
@@ -459,34 +539,42 @@ export function ProjectDirectorConsole({
                         <div className="flex items-start gap-3">
                           <div className="rounded-lg bg-white p-2 border border-line shrink-0">
                             {isPdf ? (
-                              <FileText className="size-6 text-red-500" />
+                              <FileText className="size-6 text-red-600" />
                             ) : isImage ? (
-                              <Eye className="size-6 text-blue-500" />
+                              <Files className="size-6 text-blue-600" />
                             ) : isSpreadsheet ? (
                               <FileSpreadsheet className="size-6 text-emerald-600" />
                             ) : (
-                              <Files className="size-6 text-indigo-500" />
+                              <FileText className="size-6 text-brand" />
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-xs text-ink truncate" title={att.file_name}>
+                            <span className="inline-block rounded bg-indigo-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-indigo-800">
+                              {att.source_label || (att.category === "rab" ? "Berkas RAB" : att.category === "spk" ? "Kontrak SPK" : "Lampiran Proyek")}
+                            </span>
+                            <p className="mt-1 font-semibold text-ink line-clamp-2 text-xs" title={att.file_name}>
                               {att.file_name}
                             </p>
-                            <p className="text-[11px] text-muted mt-0.5">
-                              {formatSize(att.byte_size)} · {att.content_type || "Dokumen"}
-                            </p>
+                            <p className="text-[10px] text-muted mt-0.5">{formatSize(att.byte_size)}</p>
                           </div>
                         </div>
 
-                        <div className="border-t border-line/60 pt-2 flex items-center justify-between">
-                          <span className="text-[10px] uppercase font-bold text-slate-500">Lampiran Resmi</span>
+                        <div className="flex items-center gap-2 pt-2 border-t border-line/60">
                           <a
                             href={`/api/invoice-documents/${att.id}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 rounded-md bg-brand/10 px-2.5 py-1 text-xs font-semibold text-brand hover:bg-brand/20 transition"
+                            className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg bg-white border border-line px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-brand hover:text-white transition shadow-sm"
                           >
-                            <Download className="size-3" /> Buka / Unduh
+                            <Eye className="size-3.5" /> Buka
+                          </a>
+                          <a
+                            href={`/api/invoice-documents/${att.id}`}
+                            download={att.file_name}
+                            className="inline-flex items-center justify-center rounded-lg bg-slate-100 p-1.5 text-slate-700 hover:bg-slate-200 transition"
+                            title="Unduh Berkas"
+                          >
+                            <Download className="size-3.5" />
                           </a>
                         </div>
                       </div>
@@ -496,7 +584,6 @@ export function ProjectDirectorConsole({
               )}
             </div>
           )}
-
           {/* TAB 6: TERMIN PENAGIHAN */}
           {activeTab === "termin" && (
             <div className="space-y-3">

@@ -35,7 +35,7 @@ export default async function ProjectDetailPage({
       *,
       client:sales_clients(name, contact, email),
       branch:business_units(code, name),
-      spk:sales_documents!crm_projects_spk_id_fkey(id, document_number, title, amount, valid_until)
+      spk:sales_documents!crm_projects_spk_id_fkey(id, document_number, title, amount, valid_until, attachment_ids, accepted_sph_id)
     `)
     .eq("organization_id", organizationId)
     .eq("id", id)
@@ -45,8 +45,22 @@ export default async function ProjectDetailPage({
     notFound()
   }
 
+  // Also query referenced SPH if available through SPK
+  const sphRes = (project.spk as any)?.accepted_sph_id
+    ? await supabase
+        .from("sales_documents")
+        .select("id, sph_number, title, attachment_ids")
+        .eq("id", (project.spk as any).accepted_sph_id)
+        .maybeSingle()
+    : { data: null }
+
+  // Unified attachment collection: project files + SPK files + SPH files
+  const projectAttIds = Array.isArray(project.attachment_ids) ? (project.attachment_ids as string[]) : []
+  const spkAttIds = Array.isArray((project.spk as any)?.attachment_ids) ? ((project.spk as any).attachment_ids as string[]) : []
+  const sphAttIds = Array.isArray(sphRes.data?.attachment_ids) ? (sphRes.data.attachment_ids as string[]) : []
+  const allAttachmentIds = Array.from(new Set([...projectAttIds, ...spkAttIds, ...sphAttIds]))
+
   // Load procurement events, attachments, and real-time costing
-  const attachmentIds = Array.isArray(project.attachment_ids) ? project.attachment_ids : []
   const [eventsRes, attachmentsRes, costingRes] = await Promise.all([
     supabase
       .from("procurement_events")
@@ -55,11 +69,11 @@ export default async function ProjectDetailPage({
       .eq("entity_id", id)
       .order("created_at", { ascending: false })
       .limit(30),
-    attachmentIds.length
+    allAttachmentIds.length
       ? supabase
           .from("procurement_attachments")
           .select("id, file_name, content_type, byte_size")
-          .in("id", attachmentIds)
+          .in("id", allAttachmentIds)
       : Promise.resolve({ data: [] }),
     supabase.rpc("get_project_costing", {
       p_org: organizationId,
@@ -70,12 +84,31 @@ export default async function ProjectDetailPage({
   const attachmentsData = attachmentsRes.data
   const costingData = (costingRes.data && !(costingRes.data as any).error) ? (costingRes.data as ProjectCostingData) : null
 
-  const projectAttachments: AttachmentItem[] = (attachmentsData ?? []).map((a: any) => ({
-    id: a.id,
-    file_name: a.file_name,
-    content_type: a.content_type,
-    byte_size: Number(a.byte_size || 0),
-  }))
+  const projectAttachments: AttachmentItem[] = (attachmentsData ?? []).map((a: any) => {
+    let sourceLabel = "Lampiran Proyek & RAB"
+    let category: "rab" | "spk" | "sph" | "general" = "general"
+
+    const isRabName = a.file_name.toLowerCase().includes("rab") || a.file_name.toLowerCase().includes("biaya") || a.file_name.toLowerCase().includes("budget")
+    if (isRabName || projectAttIds.includes(a.id)) {
+      sourceLabel = "Berkas RAB & Perencanaan Proyek"
+      category = "rab"
+    } else if (spkAttIds.includes(a.id)) {
+      sourceLabel = `Kontrak SPK (${(project.spk as any)?.document_number || "SPK"})`
+      category = "spk"
+    } else if (sphAttIds.includes(a.id)) {
+      sourceLabel = `Penawaran SPH (${sphRes.data?.sph_number ? `SPH/${sphRes.data.sph_number}` : "SPH"})`
+      category = "sph"
+    }
+
+    return {
+      id: a.id,
+      file_name: a.file_name,
+      content_type: a.content_type,
+      byte_size: Number(a.byte_size || 0),
+      source_label: sourceLabel,
+      category,
+    }
+  })
 
   // Parse director insights
   let insights: DirectorInsight[] = []
@@ -227,7 +260,7 @@ export default async function ProjectDetailPage({
             </span>
           </div>
 
-          <ProjectPlanningForm project={project} disabled={isReadOnlyPreview} />
+          <ProjectPlanningForm project={{ ...project, attachment_ids: allAttachmentIds }} disabled={isReadOnlyPreview} />
         </section>
       )}
 
