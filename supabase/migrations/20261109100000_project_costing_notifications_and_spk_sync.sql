@@ -17,6 +17,55 @@ alter table public.cash_advances add column if not exists created_by uuid refere
 alter table public.cash_advances add column if not exists sppd_number text;
 create index if not exists cash_advances_project on public.cash_advances(organization_id, project_id);
 
+-- 1b. Pastikan kolom-kolom crm_projects dan fungsi otorisasi proyek tersedia
+alter table public.crm_projects add column if not exists spk_id uuid references public.sales_documents(id) on delete set null;
+alter table public.crm_projects add column if not exists branch_id uuid references public.business_units(id) on delete set null;
+alter table public.crm_projects add column if not exists contract_amount numeric(15,2) default 0;
+alter table public.crm_projects add column if not exists rab_total numeric(15,2) default 0;
+alter table public.crm_projects add column if not exists rab_breakdown jsonb default '[]'::jsonb;
+alter table public.crm_projects add column if not exists manpower jsonb default '[]'::jsonb;
+alter table public.crm_projects add column if not exists work_details text;
+alter table public.crm_projects add column if not exists timesheet_schedule jsonb default '[]'::jsonb;
+alter table public.crm_projects add column if not exists attachment_ids uuid[] default '{}'::uuid[];
+alter table public.crm_projects add column if not exists approval_status text not null default 'draft';
+alter table public.crm_projects add column if not exists review_note text;
+alter table public.crm_projects add column if not exists reviewed_by uuid references auth.users(id) on delete set null;
+alter table public.crm_projects add column if not exists reviewed_at timestamptz;
+alter table public.crm_projects add column if not exists submitted_at timestamptz;
+alter table public.crm_projects add column if not exists version integer not null default 1;
+alter table public.crm_projects add column if not exists director_insights jsonb default '[]'::jsonb;
+alter table public.crm_projects add column if not exists payment_terms jsonb default '[]'::jsonb;
+
+-- Fungsi Otorisasi Proyek
+create or replace function gsp_private.can_edit_project_planning(p public.crm_projects) returns boolean
+language sql stable security definer set search_path='' as $$
+  select p.approval_status in ('draft', 'revision_requested')
+  and (
+    gsp_private.is_superadmin(p.organization_id)
+    or gsp_private.can_access_business(p.organization_id, p.branch_id, 'operations')
+    or gsp_private.can_access_business(p.organization_id, p.branch_id, 'sales')
+    or p.created_by = auth.uid()
+  );
+$$;
+
+create or replace function gsp_private.can_review_project(p public.crm_projects) returns boolean
+language sql stable security definer set search_path='' as $$
+  select p.approval_status = 'director_review'
+  and (
+    gsp_private.is_superadmin(p.organization_id)
+    or gsp_private.has_job(p.organization_id, null, array['president', 'technical_director', 'finance_director'])
+  );
+$$;
+
+create or replace function gsp_private.can_decide_project(p public.crm_projects) returns boolean
+language sql stable security definer set search_path='' as $$
+  select p.approval_status = 'director_review'
+  and (
+    gsp_private.is_superadmin(p.organization_id)
+    or gsp_private.has_job(p.organization_id, null, array['president'])
+  );
+$$;
+
 -- 2. Perbarui gsp_private.api_save_sales_document untuk menerima document_number dari SPH/User
 create or replace function gsp_private.api_save_sales_document(p_org uuid, p_branch uuid, p_payload jsonb)
 returns uuid
