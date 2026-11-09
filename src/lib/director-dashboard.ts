@@ -265,18 +265,19 @@ export async function loadDirectorDashboard(
       .filter((p) => ["director_review", "accounting_review", "payment_ready"].includes(p.status))
       .reduce((sum, p) => sum + (Number(p.payable_amount) || 0), 0)
 
-    // Piutang: sum of unpaid sales invoices if available, otherwise 30% baseline
-    const unpaidInvoicesTotal = branchInvoices
+    // Piutang Usaha: HANYA dari invoice penagihan resmi (sales_invoices) yang sudah diajukan Finance/Dirkeu dan belum lunas
+    // Tidak boleh menggunakan estimasi/simulasi piutang jika belum ada invoice resmi
+    const piutang = branchInvoices
       .filter((inv: any) => inv.status !== "paid")
       .reduce((sum: number, inv: any) => sum + (Number(inv.net_receivable || inv.total_amount) || 0), 0)
-    const piutang = unpaidInvoicesTotal > 0 ? unpaidInvoicesTotal : Math.max(0, omzet * 0.3)
 
     // PPN Masukan from purchases
     const ppnMasukan = branchPurchases.reduce((sum, p) => sum + (Number(p.vat_amount) || 0), 0)
-    // PPN Keluaran from sales (approx 11% of sales amount if taxable)
-    const ppnKeluaran = branchSales
-      .filter((s) => ["ready", "accepted"].includes(s.status))
-      .reduce((sum, s) => sum + Math.round((Number(s.amount) || 0) * 0.11), 0)
+
+    // PPN Keluaran: Sesuai UU PPN & Aturan Coretax DJP, PPN Keluaran HANYA terutang saat terbit Faktur Pajak / Invoice Penagihan Resmi (sales_invoices)
+    // SPH atau SPK yang belum final jadi proyek dan belum terbit invoice penagihan oleh Finance/Dirkeu SAMA SEKALI BUKAN PPN Keluaran
+    const ppnKeluaran = branchInvoices.reduce((sum: number, inv: any) => sum + (Number(inv.vat_amount) || 0), 0)
+
     // PPh withholding from purchases
     const pph = branchPurchases.reduce((sum, p) => sum + (Number(p.withholding_amount) || 0), 0)
 
@@ -333,39 +334,26 @@ export async function loadDirectorDashboard(
         }
       })
 
-    const piutangItems: DrilldownDetailItem[] = branchInvoices.length > 0
-      ? branchInvoices.map((inv: any) => {
-          const client = clients.find((c) => c.id === inv.client_id)
-          return {
-            id: inv.id,
-            documentNumber: inv.invoice_number || `INV-${inv.id.slice(0, 8).toUpperCase()}`,
-            title: `Tagihan Termin: ${inv.term_name || "Invoice Penjualan"}`,
-            counterpartyName: client?.name || "Klien",
-            branchId: b.id,
-            branchName: b.name,
-            date: inv.created_at ? inv.created_at.slice(0, 10) : "-",
-            dueDate: inv.due_date || null,
-            status: inv.status,
-            statusLabel: inv.status === "unpaid" ? "Belum Lunas" : "Lunas",
-            amount: Number(inv.net_receivable || inv.total_amount || 0),
-            href: `/pengajuan/penjualan/penagihan`,
-          }
-        })
-      : branchSales
-          .filter((s) => s.status === "accepted" || s.kind === "spk")
-          .map((s) => ({
-            id: s.id,
-            documentNumber: s.sph_number || `SPK-${s.id.slice(0, 8).toUpperCase()}`,
-            title: `Piutang Termin Berjalan: ${s.title || "Proyek Penjualan"}`,
-            counterpartyName: (s.client_snapshot as any)?.name || "Klien",
-            branchId: b.id,
-            branchName: b.name,
-            date: s.created_at ? s.created_at.slice(0, 10) : "-",
-            status: "unbilled",
-            statusLabel: "Proyek Berjalan",
-            amount: Math.round((Number(s.amount) || 0) * 0.3),
-            href: s.kind === "spk" ? `/pengajuan/penjualan/spk/${s.id}` : `/pengajuan/penjualan/penagihan`,
-          }))
+    // Piutang Usaha: HANYA dari invoice penagihan resmi yang belum lunas
+    const piutangItems: DrilldownDetailItem[] = branchInvoices
+      .filter((inv: any) => inv.status !== "paid")
+      .map((inv: any) => {
+        const client = clients.find((c) => c.id === inv.client_id)
+        return {
+          id: inv.id,
+          documentNumber: inv.invoice_number || `INV-${inv.id.slice(0, 8).toUpperCase()}`,
+          title: `Tagihan Termin: ${inv.term_name || "Invoice Penjualan"}`,
+          counterpartyName: client?.name || "Klien",
+          branchId: b.id,
+          branchName: b.name,
+          date: inv.invoice_date || (inv.created_at ? inv.created_at.slice(0, 10) : "-"),
+          dueDate: inv.due_date || null,
+          status: inv.status,
+          statusLabel: inv.status === "unpaid" ? "Belum Lunas" : "Sebagian",
+          amount: Number(inv.net_receivable || inv.total_amount || 0),
+          href: `/pengajuan/penjualan/penagihan`,
+        }
+      })
 
     const ppnMasukanItems: DrilldownDetailItem[] = branchPurchases
       .filter((p) => (Number(p.vat_amount) || 0) > 0)
@@ -388,24 +376,23 @@ export async function loadDirectorDashboard(
         }
       })
 
-    const ppnKeluaranItems: DrilldownDetailItem[] = branchSales
-      .filter((s) => ["ready", "accepted"].includes(s.status) || s.kind === "spk")
-      .map((s) => {
-        const clientName = (s.client_snapshot as any)?.name || "Klien"
-        const dpp = Number(s.amount) || 0
-        const vat = Math.round(dpp * 0.11)
+    // PPN Keluaran: HANYA dari invoice penagihan resmi yang diterbitkan oleh Finance/Dirkeu
+    const ppnKeluaranItems: DrilldownDetailItem[] = branchInvoices
+      .filter((inv: any) => (Number(inv.vat_amount) || 0) > 0)
+      .map((inv: any) => {
+        const client = clients.find((c) => c.id === inv.client_id)
         return {
-          id: s.id,
-          documentNumber: s.sph_number || (s.kind === "spk" ? `SPK-${s.id.slice(0, 8).toUpperCase()}` : `SPH-${s.id.slice(0, 8).toUpperCase()}`),
-          title: `Faktur Pajak Keluaran 11% atas Penyerahan Jasa`,
-          counterpartyName: clientName,
+          id: inv.id,
+          documentNumber: inv.invoice_number || `INV-${inv.id.slice(0, 8).toUpperCase()}`,
+          title: `Faktur Pajak PPN Keluaran 11% atas Penyerahan Jasa (${inv.term_name || "Invoice"})`,
+          counterpartyName: client?.name || "Klien",
           branchId: b.id,
           branchName: b.name,
-          date: s.created_at ? s.created_at.slice(0, 10) : "-",
-          status: s.status,
-          statusLabel: "Faktur Keluaran",
-          amount: vat,
-          secondaryAmount: dpp,
+          date: inv.invoice_date || (inv.created_at ? inv.created_at.slice(0, 10) : "-"),
+          status: inv.status,
+          statusLabel: "Faktur Pajak Terbit",
+          amount: Number(inv.vat_amount) || 0,
+          secondaryAmount: Number(inv.amount) || 0,
           secondaryLabel: "DPP",
           href: `/pengajuan/penjualan/penagihan`,
         }
@@ -511,7 +498,7 @@ export async function loadDirectorDashboard(
     piutang: journalPiutang > 0 ? journalPiutang : sumBranchPiutang,
     pajak: {
       ppnMasukan: journalPpnMasukan > 0 ? journalPpnMasukan : sumBranchPpnMasukan,
-      ppnKeluaran: journalPpnKeluaran > 0 ? journalPpnKeluaran : (recordedPpn > 0 ? recordedPpn : sumBranchPpnKeluaran),
+      ppnKeluaran: journalPpnKeluaran > 0 ? journalPpnKeluaran : sumBranchPpnKeluaran,
       pph: journalPph > 0 ? journalPph : (recordedPph > 0 ? recordedPph : sumBranchPph),
     },
     drilldown: {
