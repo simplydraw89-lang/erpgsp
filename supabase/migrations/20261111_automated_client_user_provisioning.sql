@@ -1,7 +1,9 @@
 -- ============================================================================
 -- Migration: 20261111_automated_client_user_provisioning.sql
--- Fitur: Pembuatan Akun User Klien Otomatis Berdasarkan Proyek &
--- Integrasi Akses Portal 2 Arah (Permintaan Data, Amdalnet, & MoM) Tanpa SQL Manual.
+-- Fitur: Pembuatan Akun User Klien Otomatis Bersanding Berdasarkan Proyek Aktif.
+-- Setiap proyek baru yang terbit dari SPK otomatis membuat/menghubungkan akun klien
+-- yang bersangkutan dengan aturan interaksi 2 arah (Permintaan Data, Amdalnet, & MoM).
+-- Multi-Klien: Setiap klien hanya bisa melihat proyek aktif mereka sendiri.
 -- ============================================================================
 
 create extension if not exists pgcrypto;
@@ -31,8 +33,8 @@ $$;
 
 
 -- 2. Fungsi Utama: auto_provision_project_client
--- Membuat akun Supabase Auth untuk klien (jika belum ada), menghubungkannya ke organisasi,
--- dan mengaktifkan hak akses interaksi 2 arah (can_submit = true) untuk proyek terkait.
+-- Membuat akun Supabase Auth untuk klien proyek (jika belum ada), menghubungkannya ke organisasi,
+-- dan mengaktifkan hak akses interaksi 2 arah (can_submit = true) khusus untuk proyek tersebut.
 create or replace function public.auto_provision_project_client(
   p_project_id uuid,
   p_email text default null,
@@ -67,24 +69,24 @@ begin
   v_org_id := v_proj.organization_id;
   v_branch_id := v_proj.branch_id;
 
-  -- 2. Ambil data klien terkait
+  -- 2. Ambil data klien terkait dari proyek
   if v_proj.client_id is not null then
     select * into v_client from public.sales_clients where id = v_proj.client_id;
   end if;
 
-  -- 3. Tentukan email & nama klien
+  -- 3. Tentukan email & nama klien proyek secara dinamis
   v_email := lower(btrim(coalesce(nullif(p_email, ''), v_client.email, '')));
   if v_email = '' then
-    raise exception 'Email klien belum ditentukan. Masukkan email klien untuk mengaktifkan akses portal.' using errcode = '22023';
+    raise exception 'Email klien belum ditentukan. Masukkan email klien untuk mengaktifkan akses portal proyek ini.' using errcode = '22023';
   end if;
 
-  v_name := coalesce(nullif(btrim(p_client_name), ''), v_client.name, split_part(v_email, '@', 1));
+  v_name := coalesce(nullif(btrim(p_client_name), ''), v_client.contact, v_client.name, split_part(v_email, '@', 1));
   v_password := coalesce(nullif(p_password, ''), 'KlienGSP2026!');
 
-  -- 4. Cari apakah akun sudah ada di auth.users
+  -- 4. Cari apakah akun sudah ada di auth.users (misal klien ini sudah punya akun di proyek sebelumnya)
   select id into v_user_id from auth.users where lower(email) = v_email limit 1;
 
-  -- 5. Jika akun belum ada di auth.users, buat secara otomatis
+  -- 5. Jika akun belum ada di auth.users, buat akun baru secara otomatis
   if v_user_id is null then
     v_is_new_user := true;
     v_user_id := gen_random_uuid();
@@ -194,8 +196,8 @@ begin
       p_project_id,
       'status',
       'external',
-      'Ruang Kolaborasi 2 Arah Proyek Aktif',
-      'Portal proyek ini aktif sebagai saluran koordinasi resmi 2 arah antara PT. Global Solusi Prima dengan pihak klien (' || v_name || '). Anda dapat memantau progres pelaksanaan, mengunggah checklist dokumen/data pendukung (seperti Amdalnet), serta berdiskusi pada notulensi rapat resmi (MoM).',
+      'Ruang Kolaborasi 2 Arah Proyek Aktif (' || v_proj.code || ')',
+      'Portal proyek ini aktif sebagai saluran koordinasi resmi 2 arah antara tim pelaksana PT. Global Solusi Prima dengan pihak klien (' || v_name || '). Anda dapat memantau progres pelaksanaan, mengunggah checklist dokumen/data pendukung (seperti Amdalnet), serta berdiskusi pada notulensi rapat resmi (MoM).',
       coalesce(v_caller, v_user_id)
     ) returning id into v_welcome_id;
   end if;
@@ -209,7 +211,7 @@ begin
     'default_password', v_password,
     'project_id', p_project_id,
     'project_code', v_proj.code,
-    'message', 'Akun klien ' || v_email || ' berhasil diaktifkan dengan hak akses interaksi 2 arah.'
+    'message', 'Akun klien ' || v_email || ' berhasil diaktifkan dengan hak akses interaksi 2 arah untuk proyek ' || v_proj.code || '.'
   );
 end;
 $$;
@@ -217,7 +219,88 @@ $$;
 grant execute on function public.auto_provision_project_client(uuid, text, text, text) to authenticated;
 
 
--- 3. Izinkan Branch Admin & Project Manager mengatur akses portal klien (menghilangkan bottleneck Super Admin)
+-- 3. Trigger Otomatis Setiap Kali Proyek Dibuat di Database
+-- Saat SPK disetujui Direktur Utama dan baris baru masuk ke crm_projects,
+-- trigger ini otomatis membuat akun klien berdasarkan client_id proyek tersebut.
+create or replace function public.on_crm_project_created_auto_provision_client()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_client public.sales_clients;
+  v_email text;
+  v_name text;
+begin
+  if new.client_id is not null then
+    select * into v_client from public.sales_clients where id = new.client_id;
+    if v_client.id is not null then
+      v_email := lower(btrim(coalesce(v_client.email, '')));
+      v_name := coalesce(v_client.contact, v_client.name, 'Klien ' || new.code);
+
+      if v_email <> '' and v_email like '%@%' then
+        perform public.auto_provision_project_client(new.id, v_email, v_name, 'KlienGSP2026!');
+      end if;
+    end if;
+  end if;
+
+  return new;
+exception
+  when others then
+    raise warning 'Gagal auto-provision klien untuk proyek baru %: %', new.id, sqlerrm;
+    return new;
+end;
+$$;
+
+drop trigger if exists trg_crm_project_auto_provision_client on public.crm_projects;
+create trigger trg_crm_project_auto_provision_client
+  after insert on public.crm_projects
+  for each row execute function public.on_crm_project_created_auto_provision_client();
+
+
+-- 4. Trigger Sinkronisasi saat Email Klien di Master Klien Diperbarui
+-- Jika email klien baru diisi setelah proyek terbit, otomatis buat akun & hubungkan ke seluruh proyek aktif klien tsb
+create or replace function public.on_sales_client_email_updated()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  v_proj record;
+  v_email text;
+begin
+  v_email := lower(btrim(coalesce(new.email, '')));
+  if v_email <> '' and v_email like '%@%' and (old.email is null or lower(btrim(old.email)) <> v_email) then
+    for v_proj in (
+      select p.id, p.code
+      from public.crm_projects p
+      where p.client_id = new.id
+        and not exists (
+          select 1 from public.project_memberships m
+          where m.project_id = p.id and m.member_type = 'client' and m.is_active
+        )
+    ) loop
+      perform public.auto_provision_project_client(v_proj.id, v_email, coalesce(new.contact, new.name), 'KlienGSP2026!');
+    end loop;
+  end if;
+
+  return new;
+exception
+  when others then
+    raise warning 'Gagal sinkronisasi email klien ke proyek: %', sqlerrm;
+    return new;
+end;
+$$;
+
+drop trigger if exists trg_sales_client_email_updated on public.sales_clients;
+create trigger trg_sales_client_email_updated
+  after update of email on public.sales_clients
+  for each row execute function public.on_sales_client_email_updated();
+
+
+-- 5. Izinkan Branch Admin & Project Manager mengatur akses portal klien (menghilangkan bottleneck Super Admin)
 create or replace function public.set_project_portal_access(
   p_org uuid,
   p_project uuid,
@@ -236,7 +319,6 @@ declare
   v_caller uuid := auth.uid();
   v_has_access boolean;
 begin
-  -- Izinkan Super Admin ATAU Pejabat yang memiliki akses bisnis pada cabang proyek
   v_has_access := gsp_private.is_superadmin(p_org) or public.can_access_business(p_org, p_branch, 'operations') or public.can_access_business(p_org, p_branch, 'procurement') or public.can_access_business(p_org, p_branch, 'sales');
   
   if not v_has_access then
@@ -272,21 +354,31 @@ $$;
 grant execute on function public.set_project_portal_access(uuid, uuid, uuid, uuid, text, boolean, boolean) to authenticated;
 
 
--- 4. Hubungkan otomatis akun bara@bara.test ke seluruh proyek aktif yang ada saat ini
+-- 6. Backfill otomatis: sinkronisasi seluruh proyek yang ada di sistem saat ini dengan klien masing-masing
 do $$
 declare
-  v_proj record;
-  v_bara_id uuid;
+  v_p record;
+  v_email text;
+  v_name text;
 begin
-  select id into v_bara_id from auth.users where lower(email) = 'bara@bara.test' limit 1;
+  for v_p in (
+    select p.id, p.code, c.email, c.name, c.contact
+    from public.crm_projects p
+    left join public.sales_clients c on c.id = p.client_id
+  ) loop
+    v_email := lower(btrim(coalesce(v_p.email, '')));
+    v_name := coalesce(v_p.contact, v_p.name, 'Klien ' || v_p.code);
 
-  for v_proj in (select id, organization_id, branch_id from public.crm_projects) loop
-    if v_bara_id is not null then
-      perform public.auto_provision_project_client(v_proj.id, 'bara@bara.test', 'Bara Multi Klien', 'KlienGSP2026!');
+    -- Jika klien proyek memiliki email, otomatis hubungkan
+    if v_email <> '' and v_email like '%@%' then
+      perform public.auto_provision_project_client(v_p.id, v_email, v_name, 'KlienGSP2026!');
+    elsif exists (select 1 from auth.users where lower(email) = 'bara@bara.test') then
+      -- Fallback untuk akun test Bara
+      perform public.auto_provision_project_client(v_p.id, 'bara@bara.test', 'Bara Multi Klien', 'KlienGSP2026!');
     end if;
   end loop;
 
-  raise notice 'Otomatisasi pembuatan akun klien & akses portal 2 arah siap digunakan.';
+  raise notice 'Otomatisasi pembuatan user klien berbasis proyek aktif selesai disiapkan.';
 end $$;
 
 notify pgrst, 'reload schema';

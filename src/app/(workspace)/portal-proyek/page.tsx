@@ -259,7 +259,7 @@ export default async function ProjectPortalPage({
                           type="email"
                           name="client_email"
                           required
-                          placeholder="Email Klien (mis: bara@bara.test)"
+                          placeholder="Email Klien (mis: klien@perusahaan.com)"
                           className="h-8 rounded border border-line px-2.5 text-xs"
                         />
                         <input

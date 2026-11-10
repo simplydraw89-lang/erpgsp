@@ -330,14 +330,14 @@ export default async function ProjectDetailPage({
                 name="client_email"
                 required
                 defaultValue={project.client?.email || ""}
-                placeholder="Email Klien (misal: bara@bara.test)"
+                placeholder="Email Resmi Klien Proyek (misal: klien@perusahaan.com)"
                 className="h-8 rounded border border-line px-3 text-xs flex-1 min-w-[220px]"
               />
               <input
                 type="text"
                 name="client_name"
                 defaultValue={project.client?.name || ""}
-                placeholder="Nama Klien / PIC"
+                placeholder="Nama PIC Klien"
                 className="h-8 rounded border border-line px-3 text-xs w-48"
               />
               <button
@@ -349,7 +349,7 @@ export default async function ProjectDetailPage({
               </button>
             </form>
             <p className="text-[11px] text-muted mt-2">
-              Sistem akan otomatis membuat akun di database, menghubungkannya ke proyek ini, dan memberikan akses interaksi 2 arah tanpa perlu query SQL manual.
+              Setiap proyek memiliki akun klien masing-masing. Sistem otomatis membuat akun baru di database dan mengunci hak interaksi 2 arah hanya untuk proyek ini tanpa perlu query SQL manual.
             </p>
           </div>
         )}
