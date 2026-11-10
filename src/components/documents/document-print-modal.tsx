@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
+import Image from "next/image"
 import { Printer, Download, X, Eye, ShieldCheck, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -37,9 +38,17 @@ export function DocumentPrintModal({
       <div className="relative flex max-h-[96vh] w-full max-w-5xl flex-col rounded-2xl bg-slate-100 shadow-2xl border border-line overflow-hidden print:max-h-none print:w-auto print:rounded-none print:border-none print:bg-white print:shadow-none">
         {/* Modal Toolbar (Disembunyikan saat Cetak PDF) */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-white px-5 py-3.5 print:hidden">
-          <div className="flex items-center gap-2">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-slate-900 text-white font-bold text-xs">
-              GSP
+          <div className="flex items-center gap-2.5">
+            <span className="flex size-9 items-center justify-center rounded-lg border border-slate-200 bg-white p-1 shadow-xs">
+              <Image
+                src="/gsp-brand-logo.jpg"
+                alt="PT. Global Solusi Prima"
+                width={40}
+                height={40}
+                priority
+                unoptimized
+                className="h-full w-full object-contain select-none"
+              />
             </span>
             <div>
               <h3 className="font-bold text-sm text-ink">{title}</h3>

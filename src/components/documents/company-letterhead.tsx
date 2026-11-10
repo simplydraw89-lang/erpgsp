@@ -1,6 +1,7 @@
 "use client"
 
 import React from "react"
+import Image from "next/image"
 
 export function CompanyLetterhead({
   branchName,
@@ -10,10 +11,18 @@ export function CompanyLetterhead({
   return (
     <header className="border-b-2 border-slate-900 pb-3 mb-6">
       <div className="flex items-center justify-between gap-4">
-        {/* Logo & Emblem */}
+        {/* Logo & Emblem Resmi PT. Global Solusi Prima */}
         <div className="flex items-center gap-3.5 shrink-0">
-          <div className="flex size-16 items-center justify-center rounded-xl bg-slate-900 text-white font-extrabold text-2xl tracking-tighter shadow-sm border border-slate-700">
-            GSP
+          <div className="flex size-16 items-center justify-center rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm print:border-slate-300 print:shadow-none">
+            <Image
+              src="/gsp-brand-logo.jpg"
+              alt="PT. Global Solusi Prima"
+              width={80}
+              height={80}
+              priority
+              unoptimized
+              className="h-full w-full object-contain select-none"
+            />
           </div>
         </div>
 
