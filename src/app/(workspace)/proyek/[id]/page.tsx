@@ -65,7 +65,7 @@ export default async function ProjectDetailPage({
   const allAttachmentIds = Array.from(new Set([...projectAttIds, ...spkAttIds, ...sphAttIds]))
 
   // Load procurement events, attachments, costing, actor directory, and client portal access
-  const [eventsRes, attachmentsRes, costingRes, actorDir, clientMembershipRes, orgUsersRes] = await Promise.all([
+  const [eventsRes, attachmentsRes, costingRes, actorDir, clientMembershipRes, orgUsersRes, clientInfoRes] = await Promise.all([
     supabase
       .from("procurement_events")
       .select("*")
@@ -92,12 +92,17 @@ export default async function ProjectDetailPage({
       .eq("member_type", "client")
       .maybeSingle(),
     supabase.rpc("list_organization_users", { p_org: organizationId }),
+    supabase.rpc("get_project_client_info", { p_project_id: id }),
   ])
   const events = eventsRes.data
   const attachmentsData = attachmentsRes.data
   const costingData = (costingRes.data && !(costingRes.data as any).error) ? (costingRes.data as ProjectCostingData) : null
   const clientMembership = clientMembershipRes.data
   const clientUser = (orgUsersRes.data as any[])?.find((u) => u.user_id === clientMembership?.user_id)
+  const clientRpcInfo = clientInfoRes.data as any
+  const isConnected = Boolean(clientRpcInfo?.is_connected || clientMembership?.is_active)
+  const connectedEmail = clientRpcInfo?.email || clientUser?.email || ""
+  const connectedName = clientRpcInfo?.full_name || clientUser?.full_name || ""
 
   const projectAttachments: AttachmentItem[] = (attachmentsData ?? []).map((a: any) => {
     let sourceLabel = "Lampiran Proyek & RAB"
@@ -277,7 +282,7 @@ export default async function ProjectDetailPage({
                 <h3 className="text-sm font-bold text-slate-900">
                   Portal Kolaborasi Klien 2 Arah (Permintaan Data & MoM)
                 </h3>
-                {clientMembership?.is_active ? (
+                {isConnected ? (
                   <span className="rounded-full bg-emerald-100 border border-emerald-300 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
                     ✓ Aktif 2 Arah
                   </span>
@@ -301,12 +306,12 @@ export default async function ProjectDetailPage({
           </Link>
         </div>
 
-        {clientMembership ? (
+        {isConnected ? (
           <div className="mt-2 rounded-lg bg-white/90 p-3 border border-slate-200/80 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div>
               <p className="font-semibold text-slate-900">
-                Akun Klien Terhubung: <span className="text-teal-700 font-bold">{clientUser?.email || "Akun Klien"}</span>
-                {clientUser?.full_name ? ` (${clientUser.full_name})` : ""}
+                Akun Klien Terhubung: <span className="text-teal-700 font-bold">{connectedEmail || "Akun Klien Aktif"}</span>
+                {connectedName ? ` (${connectedName})` : ""}
               </p>
               <p className="text-[11px] text-muted mt-0.5">
                 Izin Interaksi: <strong>Dua Arah</strong> (Dapat mengirim permintaan data, merespons instruksi, dan menulis komentar MoM)
