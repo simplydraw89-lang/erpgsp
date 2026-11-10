@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card"
 import { saveSphRequest } from "@/app/(workspace)/pengajuan/penjualan/actions"
 import { ClientPicker } from "./client-picker"
 import { DocumentUpload } from "./document-upload"
-import { sphWorkScopes } from "@/lib/sales"
+import { sphWorkScopes, formatOfficialSalesNumber } from "@/lib/sales"
 import { type BusinessUnit, type SalesClient, type SalesDocument, procurementInput as input, procurementLabel as label } from "@/lib/procurement-ui"
 
 export function SphForm({ branches, draftId, document: draft, disabled }: { branches: BusinessUnit[]; draftId: string; document?: SalesDocument; disabled: boolean }) {
@@ -43,7 +43,7 @@ export function SphForm({ branches, draftId, document: draft, disabled }: { bran
   const isFastTrack = draft?.return_to_stage === "director_review"
 
   return <Card className="p-5">
-    <h2 className="font-semibold">{draft ? `Edit ${isReviewStage ? "Pemeriksa" : "Draft"} ${draft.document_number || `SPH No. ${draft.sph_number}`}` : "Buat draft SPH"}</h2>
+    <h2 className="font-semibold">{draft ? `Edit ${isReviewStage ? "Pemeriksa" : "Draft"} ${formatOfficialSalesNumber(draft, "sph")}` : "Buat draft SPH"}</h2>
     <p className="mt-2 text-sm leading-6 text-muted">
       {isReviewStage
         ? "Sebagai pemeriksa, Anda dapat langsung mengubah data di bawah ini (misal nilai, tanggal, atau catatan) lalu menyimpannya."

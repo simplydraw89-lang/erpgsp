@@ -1284,4 +1284,51 @@ end;
 $$;
 grant execute on function public.record_sales_payment(uuid, uuid, numeric, timestamptz, text, text, text, text, text) to authenticated;
 
+-- ============================================================================
+-- 7. PASTIKAN PENOMORAN RESMI SPH & SPK (TRIGGER + BACKFILL DATA EXISTING)
+-- ============================================================================
+create or replace function gsp_private.assign_sph_document_number()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  c public.sales_clients;
+begin
+  if new.kind in ('sph', 'spk') and (new.document_number is null or btrim(new.document_number) = '' or new.document_number !~ '/') then
+    if new.client_id is not null then
+      select * into c from public.sales_clients where id = new.client_id;
+    end if;
+    new.document_number := gsp_private.generate_document_number(
+      new.organization_id,
+      new.kind,
+      coalesce(new.created_at::date, current_date),
+      coalesce(c.name, new.client_snapshot->>'name'),
+      null,
+      null
+    );
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_sph_document_number on public.sales_documents;
+create trigger trg_sph_document_number
+  before insert or update on public.sales_documents
+  for each row execute function gsp_private.assign_sph_document_number();
+
+-- Backfill dokumen SPH & SPK yang belum memiliki document_number format resmi
+update public.sales_documents d
+set document_number = (
+  case when d.kind = 'spk' then 'SPK/' else 'SPH/' end
+  || gsp_private.sanitize_code_name(coalesce(d.client_snapshot->>'name', (select c.name from public.sales_clients c where c.id = d.client_id), 'KLIEN'))
+  || '/GSP/'
+  || to_char(coalesce(d.created_at, now()), 'MMYY')
+  || '.'
+  || lpad(coalesce(d.sph_number, 1)::text, 6, '0')
+)
+where d.kind in ('sph', 'spk')
+  and (d.document_number is null or btrim(d.document_number) = '' or d.document_number !~ '/GSP/');
+
 notify pgrst, 'reload schema';

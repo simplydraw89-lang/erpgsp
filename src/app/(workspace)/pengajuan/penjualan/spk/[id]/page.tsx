@@ -8,7 +8,7 @@ import { SpkEditForm } from "@/components/sales/spk-edit-form"
 import { SpkPrintTrigger } from "@/components/sales/spk-print-trigger"
 import { AttachmentList, type AttachmentItem } from "@/components/sales/attachment-list"
 import { ProcurementMessage } from "@/components/procurement/section-nav"
-import { sphStatusLabels, spkStatusLabels } from "@/lib/sales"
+import { sphStatusLabels, spkStatusLabels, formatOfficialSalesNumber } from "@/lib/sales"
 import { formatCurrency } from "@/lib/money"
 import { type SalesDocument } from "@/lib/procurement-ui"
 import { FolderCheck, ArrowRight, CheckCircle2, Edit3, ShieldAlert } from "lucide-react"
@@ -54,7 +54,7 @@ export default async function SpkDetailPage({
     document.accepted_sph_id
       ? supabase
           .from("sales_documents")
-          .select("id,sph_number,title,document_number,amount")
+          .select("id,sph_number,title,document_number,amount,created_at,client_snapshot")
           .eq("id", document.accepted_sph_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -83,6 +83,23 @@ export default async function SpkDetailPage({
   const branchName = units.data?.find((b) => b.id === document.branch_id)?.name ?? "Cabang"
   const createdProject = projectRes.data
   const referencedSph = sphRes.data
+  const officialSphNumber = referencedSph
+    ? formatOfficialSalesNumber(
+        {
+          ...referencedSph,
+          client_snapshot: (referencedSph as any).client_snapshot || document.client_snapshot,
+          created_at: (referencedSph as any).created_at || document.created_at,
+        },
+        "sph"
+      )
+    : null
+  const officialSpkNumber = formatOfficialSalesNumber(
+    {
+      ...document,
+      sph_number: document.sph_number ?? referencedSph?.sph_number ?? null,
+    },
+    "spk"
+  )
 
   const canReview = Boolean(reviewerRes.data)
   const canEdit = Boolean(editorRes.data) && ["director_review", "revision_requested", "draft"].includes(document.status)
@@ -97,7 +114,7 @@ export default async function SpkDetailPage({
         <div>
           <p className="text-sm font-medium text-brand">Penjualan & SPK</p>
           <h1 className="mt-2 text-3xl font-bold">
-            {document.document_number ? document.document_number : `SPK: ${document.title}`}
+            {officialSpkNumber}
           </h1>
           <p className="mt-1 text-sm text-muted">
             Status:{" "}
@@ -114,6 +131,9 @@ export default async function SpkDetailPage({
           <SpkPrintTrigger
             document={{
               ...document,
+              document_number: officialSpkNumber,
+              sph_number: document.sph_number ?? referencedSph?.sph_number ?? null,
+              sph_document_number: officialSphNumber,
               branch_name: branchName,
             }}
           />
@@ -240,7 +260,7 @@ export default async function SpkDetailPage({
         <dl className="grid gap-4 text-sm sm:grid-cols-2">
           <div>
             <span className="text-xs font-medium text-muted">Nomor Resmi SPK:</span>
-            <p className="font-semibold text-ink">{document.document_number || "Menunggu penomoran"}</p>
+            <p className="font-semibold font-mono text-ink">{officialSpkNumber}</p>
           </div>
           <div>
             <span className="text-xs font-medium text-muted">Cabang Operasional:</span>
@@ -266,7 +286,7 @@ export default async function SpkDetailPage({
             <div className="sm:col-span-2 rounded-lg bg-canvas p-3 border border-line">
               <span className="text-xs font-medium text-muted">Rujukan SPH yang Disetujui:</span>
               <p className="font-semibold text-ink">
-                SPH No. {referencedSph.sph_number} {referencedSph.document_number ? `(${referencedSph.document_number})` : ""} · {referencedSph.title}
+                {officialSphNumber || `SPH No. ${referencedSph.sph_number}`} · {referencedSph.title}
               </p>
             </div>
           )}

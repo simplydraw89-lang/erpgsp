@@ -6,23 +6,12 @@ import { SubmitButton } from "@/components/procurement/submit-button"
 import { saveSalesDocument } from "@/app/(workspace)/pengajuan/penjualan/actions"
 import { ClientPicker } from "./client-picker"
 import { DocumentUpload } from "./document-upload"
+import { formatOfficialSalesNumber } from "@/lib/sales"
 import { type BusinessUnit, type SalesClient, type SalesDocument, procurementInput as input, procurementLabel as label } from "@/lib/procurement-ui"
 
 function generateSpkNumberFromSph(sphDoc?: SalesDocument | null) {
   if (!sphDoc) return ""
-  if (sphDoc.document_number && sphDoc.document_number.includes("SPH")) {
-    return sphDoc.document_number.replace(/\bSPH\b/g, "SPK")
-  }
-  const clientName = ((sphDoc?.client_snapshot?.name as string) || "KLIEN")
-    .replace(/\b(PT\.?|CV\.?|UD\.?|TBK\.?|INC\.?|LTD\.?)\b/gi, "")
-    .replace(/[^a-zA-Z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .toUpperCase()
-    .slice(0, 15) || "KLIEN"
-  const now = new Date()
-  const mmyy = `${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getFullYear()).slice(-2)}`
-  const seq = sphDoc?.sph_number ? String(sphDoc.sph_number).padStart(6, "0") : "000001"
-  return `SPK/${clientName}/GSP/${mmyy}.${seq}`
+  return formatOfficialSalesNumber(sphDoc, "spk")
 }
 
 export function SpkForm({
@@ -141,7 +130,7 @@ export function SpkForm({
               <option value="">Pilih SPH yang disetujui</option>
               {availableSphs.map(item => (
                 <option key={item.id} value={item.id}>
-                  SPH No. {item.sph_number} · {item.title} ({item.client_snapshot?.name ?? "Klien"})
+                  {formatOfficialSalesNumber(item, "sph")} · {item.title} ({item.client_snapshot?.name ?? "Klien"})
                 </option>
               ))}
             </select>

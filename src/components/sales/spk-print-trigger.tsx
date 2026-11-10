@@ -5,10 +5,11 @@ import { Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DocumentPrintModal } from "@/components/documents/document-print-modal"
 import { PrintableSpkDocument, type PrintableSpkProps } from "@/components/documents/printable-spk"
+import { formatOfficialSalesNumber } from "@/lib/sales"
 
 export function SpkPrintTrigger({ document }: { document: PrintableSpkProps["document"] }) {
   const [isOpen, setIsOpen] = useState(false)
-  const docNumber = document.document_number || `SPK-${document.id.slice(0, 8).toUpperCase()}`
+  const docNumber = formatOfficialSalesNumber(document, "spk")
 
   return (
     <>

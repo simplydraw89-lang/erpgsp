@@ -6,6 +6,7 @@ import { DocumentQrCode } from "./qr-code"
 import { SignatureStampBlock } from "./digital-stamp"
 import { terbilang } from "./terbilang"
 import { formatCurrency } from "@/lib/money"
+import { formatOfficialSalesNumber } from "@/lib/sales"
 
 export type PrintableSphProps = {
   document: {
@@ -32,7 +33,7 @@ export function PrintableSphDocument({
   signerName = "Ir. H. Bambang Sudaryanto, M.T.",
   signerRole = "Direktur Utama",
 }: PrintableSphProps) {
-  const docNumber = document.document_number || (document.sph_number ? `SPH/${document.sph_number}` : `SPH-${document.id.slice(0, 8).toUpperCase()}`)
+  const docNumber = formatOfficialSalesNumber(document, "sph")
   const dateFormatted = new Intl.DateTimeFormat("id-ID", {
     day: "numeric",
     month: "long",

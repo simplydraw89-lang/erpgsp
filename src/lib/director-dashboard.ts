@@ -1,5 +1,6 @@
 import "server-only"
 import type { requireWorkspace } from "@/lib/auth/context"
+import { formatOfficialSalesNumber } from "@/lib/sales"
 
 type Supabase = Awaited<ReturnType<typeof requireWorkspace>>["supabase"]
 
@@ -182,7 +183,7 @@ export async function loadDirectorDashboard(
       .not("status", "eq", "rejected"),
     supabase
       .from("sales_documents")
-      .select("id, branch_id, kind, status, amount, created_at, title, sph_number, client_snapshot")
+      .select("id, branch_id, kind, status, amount, created_at, title, sph_number, document_number, client_snapshot")
       .eq("organization_id", organizationId)
       .not("status", "eq", "rejected"),
     supabase
@@ -319,7 +320,7 @@ export async function loadDirectorDashboard(
         const clientName = (s.client_snapshot as any)?.name || "Klien"
         return {
           id: s.id,
-          documentNumber: s.sph_number || (s.kind === "spk" ? `SPK-${s.id.slice(0, 8).toUpperCase()}` : `SPH-${s.id.slice(0, 8).toUpperCase()}`),
+          documentNumber: formatOfficialSalesNumber(s as any, s.kind === "spk" ? "spk" : "sph"),
           title: s.title || (s.kind === "spk" ? "Perjanjian Kerja (SPK)" : "Penawaran Harga (SPH)"),
           counterpartyName: clientName,
           branchId: b.id,
@@ -614,7 +615,7 @@ export async function loadDirectorDashboard(
         const clientName = (s.client_snapshot as any)?.name || "Klien"
         return {
           id: s.id,
-          sph_number: s.sph_number ? `SPH/${s.sph_number}` : `SPH-${s.id.slice(0, 8).toUpperCase()}`,
+          sph_number: formatOfficialSalesNumber(s as any, "sph"),
           title: s.title || "Penawaran Harga SPH",
           client_name: clientName,
           branch_name: branch?.name || "Pusat",
@@ -628,7 +629,7 @@ export async function loadDirectorDashboard(
         const clientName = (s.client_snapshot as any)?.name || "Klien"
         return {
           id: s.id,
-          document_number: s.sph_number ? `SPK/${s.sph_number}` : `SPK-${s.id.slice(0, 8).toUpperCase()}`,
+          document_number: formatOfficialSalesNumber(s as any, "spk"),
           title: s.title || "Perjanjian Kerja (SPK)",
           client_name: clientName,
           branch_name: branch?.name || "Pusat",

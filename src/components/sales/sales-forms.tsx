@@ -6,7 +6,7 @@ import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import { Card } from "@/components/ui/card"
 import { ClientForm } from "./client-form"
 import { ClientDirectory } from "./client-directory"
-import { sphStatusLabels, spkStatusLabels } from "@/lib/sales"
+import { sphStatusLabels, spkStatusLabels, formatOfficialSalesNumber } from "@/lib/sales"
 import type { SphRegisterRow } from "@/lib/sales"
 import type { BusinessUnit, SalesDocument } from "@/lib/procurement-ui"
 import { FolderCheck, ArrowRight, Zap, CheckCircle2 } from "lucide-react"
@@ -180,7 +180,9 @@ export function SalesForms({
                   <tr key={row.id} className={`border-t border-line ${isUrgent ? "bg-amber-50/40" : ""}`}>
                     <td className="p-3">{offset + index + 1}</td>
                     <td className="p-3 font-medium">
-                      {row.document_number || `SPH No. ${row.sph_number}`}
+                      <span className="font-mono font-semibold text-ink">
+                        {formatOfficialSalesNumber(row, "sph")}
+                      </span>
                       <span className="mt-1 block text-xs text-muted">{row.branch_name}</span>
                     </td>
                     <td className="p-3">
@@ -369,8 +371,8 @@ export function SalesForms({
                   <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-muted">
                     No. {index + 1}
                   </span>
-                  <span className="text-xs font-semibold uppercase tracking-wide text-brand">
-                    {document.document_number || "SPK"}
+                  <span className="text-xs font-mono font-bold uppercase tracking-wide text-brand">
+                    {formatOfficialSalesNumber(document, "spk")}
                   </span>
                 </div>
                 <span
@@ -401,9 +403,10 @@ export function SalesForms({
 
               <p className="text-xs text-muted">
                 SPH Rujukan:{" "}
-                {documents.find((item) => item.id === document.accepted_sph_id)?.sph_number
-                  ? `SPH No. ${documents.find((item) => item.id === document.accepted_sph_id)?.sph_number}`
-                  : "Lihat SPH"}{" "}
+                {(() => {
+                  const refSph = documents.find((item) => item.id === document.accepted_sph_id)
+                  return refSph ? formatOfficialSalesNumber(refSph, "sph") : formatOfficialSalesNumber(document, "sph")
+                })()}{" "}
                 · Diterbitkan oleh {document.source === "client" ? "Klien" : "Perusahaan"}
               </p>
 

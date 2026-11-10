@@ -11,7 +11,7 @@ import { SphForm } from "@/components/sales/sph-form"
 import { SubmitButton } from "@/components/procurement/submit-button"
 import { ProcurementMessage } from "@/components/procurement/section-nav"
 import { acceptSalesSph } from "@/app/(workspace)/pengajuan/penjualan/actions"
-import { sphStatusLabels } from "@/lib/sales"
+import { sphStatusLabels, formatOfficialSalesNumber } from "@/lib/sales"
 import { type BusinessUnit, type SalesDocument, procurementInput as input, procurementLabel as label } from "@/lib/procurement-ui"
 
 export default async function SphPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; notice?: string }> }) {
@@ -51,19 +51,21 @@ export default async function SphPage({ params, searchParams }: { params: Promis
       (isReviewer && ["branch_review", "director_review"].includes(document.status)) ||
       actorRole === "owner")
 
+  const officialSphNumber = formatOfficialSalesNumber(document, "sph")
+  const enrichedDocument = { ...document, document_number: officialSphNumber }
   const fields = <><input type="hidden" name="document_id" value={id} /><input type="hidden" name="version" value={document.version} /></>
   return <div className="space-y-6">
     <Link href="/pengajuan/penjualan/sph" className="text-sm font-medium text-brand">← Daftar SPH</Link>
     <header className="flex flex-wrap items-center justify-between gap-4">
       <div>
         <p className="text-sm text-brand">Penjualan</p>
-        <h1 className="mt-2 text-3xl font-bold">{document.document_number || `SPH No. ${document.sph_number}`}</h1>
+        <h1 className="mt-2 text-3xl font-bold">{officialSphNumber}</h1>
         <p className="mt-1 text-sm text-muted">{sphStatusLabels[document.status] ?? document.status}</p>
       </div>
       <div>
         <SphPrintTrigger
           document={{
-            ...document,
+            ...enrichedDocument,
             branch_name: units.data?.find(branch => branch.id === document.branch_id)?.name,
           }}
         />
@@ -79,7 +81,7 @@ export default async function SphPage({ params, searchParams }: { params: Promis
             <strong>Mode Koreksi Pemeriksa:</strong> Sebagai pemeriksa, Anda dapat langsung mengubah data di bawah ini (misal nilai SPH, tanggal, atau catatan) lalu menyimpannya sebelum memutuskan persetujuan.
           </div>
         )}
-        <SphForm key={`${id}-${document.version}`} document={document} branches={(units.data ?? []).filter(branch => branch.id === document.branch_id) as BusinessUnit[]} draftId={id} disabled={isReadOnlyPreview} />
+        <SphForm key={`${id}-${document.version}`} document={enrichedDocument} branches={(units.data ?? []).filter(branch => branch.id === document.branch_id) as BusinessUnit[]} draftId={id} disabled={isReadOnlyPreview} />
       </div>
     )}
     {Boolean(reviewer.data) && <Card className="p-5"><h2 className="font-semibold">{sphStatusLabels[document.status]}</h2><SphReviewForm id={id} version={document.version} disabled={isReadOnlyPreview} /></Card>}

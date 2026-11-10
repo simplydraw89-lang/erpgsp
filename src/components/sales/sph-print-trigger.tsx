@@ -5,10 +5,11 @@ import { Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DocumentPrintModal } from "@/components/documents/document-print-modal"
 import { PrintableSphDocument, type PrintableSphProps } from "@/components/documents/printable-sph"
+import { formatOfficialSalesNumber } from "@/lib/sales"
 
 export function SphPrintTrigger({ document }: { document: PrintableSphProps["document"] }) {
   const [isOpen, setIsOpen] = useState(false)
-  const docNumber = document.document_number || (document.sph_number ? `SPH/${document.sph_number}` : "SPH")
+  const docNumber = formatOfficialSalesNumber(document, "sph")
 
   return (
     <>

@@ -6,12 +6,14 @@ import { DocumentQrCode } from "./qr-code"
 import { SignatureStampBlock } from "./digital-stamp"
 import { terbilang } from "./terbilang"
 import { formatCurrency } from "@/lib/money"
+import { formatOfficialSalesNumber } from "@/lib/sales"
 
 export type PrintableSpkProps = {
   document: {
     id: string
     document_number?: string | null
     sph_number?: number | string | null
+    sph_document_number?: string | null
     title: string
     amount?: number | string | null
     created_at: string
@@ -31,7 +33,14 @@ export function PrintableSpkDocument({
   signerName = "Ir. H. Bambang Sudaryanto, M.T.",
   signerRole = "Direktur Utama",
 }: PrintableSpkProps) {
-  const docNumber = document.document_number || `SPK-${document.id.slice(0, 8).toUpperCase()}`
+  const docNumber = formatOfficialSalesNumber(document, "spk")
+  const refSphNumber = formatOfficialSalesNumber(
+    {
+      ...document,
+      document_number: document.sph_document_number || document.document_number,
+    },
+    "sph"
+  )
   const dateFormatted = new Intl.DateTimeFormat("id-ID", {
     day: "numeric",
     month: "long",
@@ -58,7 +67,7 @@ export function PrintableSpkDocument({
         </p>
         {document.sph_number && (
           <p className="text-[11px] text-slate-500 mt-0.5">
-            Berdasarkan Surat Penawaran Harga (SPH) No: SPH/{document.sph_number}
+            Berdasarkan Surat Penawaran Harga (SPH) No: {refSphNumber}
           </p>
         )}
       </div>
