@@ -12,6 +12,8 @@ import { sphStatusLabels, spkStatusLabels, formatOfficialSalesNumber } from "@/l
 import { formatCurrency } from "@/lib/money"
 import { type SalesDocument } from "@/lib/procurement-ui"
 import { FolderCheck, ArrowRight, CheckCircle2, Edit3, ShieldAlert } from "lucide-react"
+import { loadOrganizationActorDirectory, buildWorkflowAuditSummary } from "@/lib/audit-trail"
+import { AuditWorkflowTimeline } from "@/components/procurement/audit-workflow-timeline"
 
 export default async function SpkDetailPage({
   params,
@@ -22,7 +24,7 @@ export default async function SpkDetailPage({
 }) {
   const { id } = await params
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound()
-  const { supabase, organizationId, isReadOnlyPreview } = await requireWorkspace()
+  const { supabase, organizationId, user, isReadOnlyPreview } = await requireWorkspace()
 
   const result = await supabase
     .from("sales_documents")
@@ -36,7 +38,7 @@ export default async function SpkDetailPage({
   if (!result.data) notFound()
   const document = result.data as SalesDocument
 
-  const [units, reviewerRes, editorRes, events, sphRes, projectRes, attachmentsRes] = await Promise.all([
+  const [units, reviewerRes, editorRes, events, sphRes, projectRes, attachmentsRes, actorDir] = await Promise.all([
     supabase
       .from("business_units")
       .select("id,code,name,kind")
@@ -71,6 +73,7 @@ export default async function SpkDetailPage({
           .select("id,file_name,content_type,byte_size")
           .in("id", document.attachment_ids)
       : Promise.resolve({ data: [], error: null }),
+    loadOrganizationActorDirectory(supabase, organizationId, user),
   ])
 
   const attachmentItems: AttachmentItem[] = (attachmentsRes.data ?? []).map((a) => ({
@@ -103,6 +106,20 @@ export default async function SpkDetailPage({
 
   const canReview = Boolean(reviewerRes.data)
   const canEdit = Boolean(editorRes.data) && ["director_review", "revision_requested", "draft"].includes(document.status)
+
+  const spkAuditSummary = buildWorkflowAuditSummary({
+    entityKind: "spk",
+    documentLabel: officialSpkNumber,
+    currentStatus: document.status,
+    createdByUserId: document.created_by,
+    createdAt: document.created_at,
+    returnToStage: document.return_to_stage,
+    branchId: document.branch_id,
+    branchName,
+    events: (events.data ?? []) as any,
+    actorMap: actorDir.actorMap,
+    findRoleHolder: actorDir.findRoleHolder,
+  })
 
   return (
     <div className="space-y-6">
@@ -372,42 +389,11 @@ export default async function SpkDetailPage({
         </div>
       )}
 
-      {/* Riwayat SPK */}
-      <Card className="p-5">
-        <h2 className="font-semibold text-ink">Riwayat Pemeriksaan & Tindakan SPK</h2>
-        <ol className="mt-4 space-y-4">
-          {events.data?.map((event) => (
-            <li key={event.id} className="border-l-2 border-line pl-4">
-              <p className="text-sm font-medium text-ink">
-                {event.action === "submitted_to_director"
-                  ? "SPK diajukan ke Direktur Utama"
-                  : event.action === "resubmitted_to_director"
-                  ? "Perbaikan SPK diajukan langsung kembali ke Direktur Utama"
-                  : event.action === "approved"
-                  ? "SPK disetujui Direktur Utama · Proyek resmi dibuat otomatis"
-                  : event.action === "revision_requested"
-                  ? "Diminta revisi oleh Direktur Utama"
-                  : event.action === "rejected"
-                  ? "Ditolak oleh Direktur Utama"
-                  : event.action === "updated"
-                  ? "Rincian SPK disesuaikan / diperbarui"
-                  : "Draft SPK disimpan"}
-              </p>
-              {event.note && <p className="mt-1 whitespace-pre-wrap text-sm text-muted">{event.note}</p>}
-              <time className="mt-1 block text-xs text-muted">
-                {new Intl.DateTimeFormat("id-ID", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                  timeZone: "Asia/Bangkok",
-                }).format(new Date(event.created_at))}
-              </time>
-            </li>
-          ))}
-          {!events.data?.length && (
-            <p className="text-xs text-muted">Belum ada riwayat aktivitas tercatat.</p>
-          )}
-        </ol>
-      </Card>
+      {/* Riwayat SPK, Posisi Dokumen & KPI Waktu Pengerjaan */}
+      <AuditWorkflowTimeline
+        summary={spkAuditSummary}
+        title="Riwayat SPK, Posisi Dokumen & KPI Waktu Pengerjaan"
+      />
     </div>
   )
 }

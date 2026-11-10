@@ -13,6 +13,8 @@ import { ProcurementMessage } from "@/components/procurement/section-nav"
 import { acceptSalesSph } from "@/app/(workspace)/pengajuan/penjualan/actions"
 import { sphStatusLabels, formatOfficialSalesNumber } from "@/lib/sales"
 import { type BusinessUnit, type SalesDocument, procurementInput as input, procurementLabel as label } from "@/lib/procurement-ui"
+import { loadOrganizationActorDirectory, buildWorkflowAuditSummary } from "@/lib/audit-trail"
+import { AuditWorkflowTimeline } from "@/components/procurement/audit-workflow-timeline"
 
 export default async function SphPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; notice?: string }> }) {
   const { id } = await params
@@ -22,7 +24,7 @@ export default async function SphPage({ params, searchParams }: { params: Promis
   if (result.error) throw new Error("SPH gagal dimuat. Periksa koneksi dan izin akses.")
   if (!result.data) notFound()
   const document = result.data as SalesDocument
-  const [units, reader, reviewer, acceptor, events, attachmentsRes] = await Promise.all([
+  const [units, reader, reviewer, acceptor, events, attachmentsRes, actorDir] = await Promise.all([
     supabase.from("business_units").select("id,code,name,kind").eq("organization_id", organizationId).in("kind", ["branch", "center"]).order("code"),
     supabase.rpc("can_read_sales_document", { p_org: organizationId, p_branch: document.branch_id }),
     supabase.rpc("sph_review_allowed", { p_id: id }),
@@ -34,6 +36,7 @@ export default async function SphPage({ params, searchParams }: { params: Promis
           .select("id,file_name,content_type,byte_size")
           .in("id", document.attachment_ids)
       : Promise.resolve({ data: [], error: null }),
+    loadOrganizationActorDirectory(supabase, organizationId, user),
   ])
   const attachmentItems: AttachmentItem[] = (attachmentsRes.data ?? []).map((a) => ({
     id: a.id,
@@ -52,7 +55,21 @@ export default async function SphPage({ params, searchParams }: { params: Promis
       actorRole === "owner")
 
   const officialSphNumber = formatOfficialSalesNumber(document, "sph")
+  const branchName = units.data?.find(branch => branch.id === document.branch_id)?.name ?? "Cabang"
   const enrichedDocument = { ...document, document_number: officialSphNumber }
+  const auditSummary = buildWorkflowAuditSummary({
+    entityKind: "sph",
+    documentLabel: officialSphNumber,
+    currentStatus: document.status,
+    createdByUserId: document.created_by,
+    createdAt: document.created_at,
+    returnToStage: document.return_to_stage,
+    branchId: document.branch_id,
+    branchName,
+    events: (events.data ?? []) as any,
+    actorMap: actorDir.actorMap,
+    findRoleHolder: actorDir.findRoleHolder,
+  })
   const fields = <><input type="hidden" name="document_id" value={id} /><input type="hidden" name="version" value={document.version} /></>
   return <div className="space-y-6">
     <Link href="/pengajuan/penjualan/sph" className="text-sm font-medium text-brand">← Daftar SPH</Link>
@@ -87,6 +104,6 @@ export default async function SphPage({ params, searchParams }: { params: Promis
     {Boolean(reviewer.data) && <Card className="p-5"><h2 className="font-semibold">{sphStatusLabels[document.status]}</h2><SphReviewForm id={id} version={document.version} disabled={isReadOnlyPreview} /></Card>}
     {["ready","accepted"].includes(document.status) && (document.created_by === user.id || actorRole === "owner") && !isReadOnlyPreview && <Link href={`/pengajuan/penjualan/spk/baru?sph=${id}`} className="inline-block rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white">Buat SPK →</Link>}
     {document.status === "ready" && Boolean(acceptor.data) && <Card className="p-5"><h2 className="font-semibold">Catat kesepakatan perusahaan dan klien</h2><p className="mt-2 text-sm text-muted">Persetujuan internal selesai. Status deal saja belum menjadi bukti kesepakatan kedua pihak.</p><form action={acceptSalesSph} className="mt-4 space-y-4">{fields}<fieldset disabled={isReadOnlyPreview} className="space-y-4"><label className={label}>Referensi bukti persetujuan kedua pihak<input name="acceptance_reference" required className={input} /></label><label className={label}>Tanggal kesepakatan<input name="accepted_on" type="date" required className={input} /></label><label className="flex items-start gap-2 text-sm"><input type="checkbox" name="bilateral_confirmed" required className="mt-1" />Bukti persetujuan perusahaan dan klien telah saya periksa.</label><SubmitButton>Catat kesepakatan kedua pihak</SubmitButton></fieldset></form></Card>}
-    <Card className="p-5"><h2 className="font-semibold">Riwayat SPH</h2><ol className="mt-4 space-y-4">{events.data?.map(event => <li key={event.id} className="border-l-2 border-line pl-4"><p className="text-sm font-medium" title={event.actor_id}>{event.action === "reviewer_edited" ? "Diperbarui langsung oleh pemeriksa" : event.action === "resubmitted_to_director" ? "Perbaikan diajukan langsung kembali ke Direktur Keuangan" : event.action === "submitted" ? "SPH diajukan" : event.action === "approved" ? `Disetujui · ${sphStatusLabels[event.details?.from_status] ?? "Pemeriksa"}` : event.action === "revision_requested" ? "Diminta revisi" : event.action === "rejected" ? "Ditolak" : event.action === "mutual_acceptance_recorded" ? "Kesepakatan kedua pihak dicatat" : "Draft / lampiran disimpan"}</p><p className="mt-1 whitespace-pre-wrap text-sm text-muted">{event.note}</p><time className="mt-1 block text-xs text-muted">{new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(event.created_at))}</time></li>)}</ol></Card>
+    <AuditWorkflowTimeline summary={auditSummary} title="Riwayat SPH, Posisi Dokumen & KPI Waktu Pengerjaan" />
   </div>
 }

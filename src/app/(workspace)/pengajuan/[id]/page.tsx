@@ -9,6 +9,8 @@ import { SubmitButton } from "@/components/procurement/submit-button"
 import { ProcurementMessage, ProcurementUnavailable } from "@/components/procurement/section-nav"
 import { payPurchase, reviewPurchase, submitPurchase } from "../actions"
 import { type BusinessUnit, type ProcurementAccount, type ProcurementVendor, type PurchaseRequest, type WorkAssignment, procurementInput as input, procurementLabel as label, isProcurementMissing, purchaseStatusLabels, rupiah, formatDateID } from "@/lib/procurement-ui"
+import { loadOrganizationActorDirectory, buildWorkflowAuditSummary } from "@/lib/audit-trail"
+import { AuditWorkflowTimeline } from "@/components/procurement/audit-workflow-timeline"
 
 export default async function PurchaseDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; notice?: string }> }) {
   const { id } = await params
@@ -20,14 +22,15 @@ export default async function PurchaseDetailPage({ params, searchParams }: { par
   if (request.error) throw new Error("Pengajuan tidak dapat dimuat.")
   if (!request.data) notFound()
   const purchase = request.data as PurchaseRequest
-  const [units, vendors, accounts, jobs, periods, events, projects] = await Promise.all([
+  const [units, vendors, accounts, jobs, periods, events, projects, actorDir] = await Promise.all([
     supabase.from("business_units").select("id,code,name,kind,entity_id").eq("organization_id", organizationId),
     supabase.from("procurement_vendors").select("*").eq("organization_id", organizationId),
     supabase.from("finance_accounts").select("id,code,name,account_type,posting_category,is_postable").eq("organization_id", organizationId).eq("is_active", true).eq("is_postable", true).order("code"),
     supabase.from("work_assignments").select("user_id,branch_id,job_role").eq("organization_id", organizationId).eq("user_id", user.id),
     supabase.from("accounting_periods").select("id,entity_id,period_code,starts_on,ends_on,period_status").eq("organization_id", organizationId).eq("period_status", "open"),
-    supabase.from("procurement_events").select("id,action,actor_id,note,created_at").eq("organization_id", organizationId).eq("entity_id", id).order("created_at", { ascending: false }).limit(50),
+    supabase.from("procurement_events").select("id,action,actor_id,note,details,created_at").eq("organization_id", organizationId).eq("entity_id", id).order("created_at", { ascending: false }).limit(50),
     supabase.from("crm_projects").select("id,code,name,branch_id").eq("organization_id", organizationId).order("code", { ascending: false }),
+    loadOrganizationActorDirectory(supabase, organizationId, user),
   ])
   if ([units.error, vendors.error, accounts.error, jobs.error, periods.error, events.error].some(Boolean)) throw new Error("Kelengkapan pengajuan gagal dimuat.")
   const branches = (units.data ?? []).filter(u => u.kind === "branch" || u.kind === "center") as BusinessUnit[]
@@ -57,6 +60,19 @@ export default async function PurchaseDetailPage({ params, searchParams }: { par
   const canPay = !isReadOnlyPreview && purchase.status === "payment_ready" && (owner || jobRows.some(j => !j.branch_id && j.job_role === "finance"))
   const accountRows = (accounts.data ?? []) as ProcurementAccount[]
   const branchPeriods = (periods.data ?? []).filter(p => p.entity_id === branch?.entity_id)
+  const purchaseAuditSummary = buildWorkflowAuditSummary({
+    entityKind: "purchase",
+    documentLabel: purchase.request_number || `Invoice ${purchase.invoice_number}`,
+    currentStatus: purchase.status,
+    createdByUserId: purchase.created_by,
+    createdAt: purchase.created_at,
+    returnToStage: purchase.return_to_stage,
+    branchId: purchase.branch_id,
+    branchName: branch?.name ?? "Cabang",
+    events: (events.data ?? []) as any,
+    actorMap: actorDir.actorMap,
+    findRoleHolder: actorDir.findRoleHolder,
+  })
   const fields = <><input type="hidden" name="id" value={id} /><input type="hidden" name="version" value={purchase.version} /></>
   const accountSelect = (name: string, title: string, type: string, required = true) => {
     const category: Record<string,string> = {bank_account_id:"cash_bank",payable_account_id:"trade_payable",vat_account_id:"input_vat",withholding_account_id:"withholding_tax"}
@@ -103,6 +119,6 @@ export default async function PurchaseDetailPage({ params, searchParams }: { par
       } /><Card className="p-5"><form action={reviewPurchase} className="space-y-3">{fields}<label className={label}>Alasan penolakan / revisi<textarea name="note" required rows={2} className={input} /></label><SubmitButton name="decision" value="reject" secondary>Kembalikan untuk revisi</SubmitButton></form></Card></section>}
     {canPay && <Card className="space-y-4 p-5"><h2 className="font-semibold">Finance · catat pembayaran</h2><p className="text-sm leading-6 text-muted">Lakukan transfer melalui bank sesuai prosedur perusahaan, kemudian catat bukti pembayarannya di sini. Pencatatan ini membentuk jurnal pelunasan utang; aplikasi tidak mengirim transfer bank.</p><form action={payPurchase} className="space-y-4">{fields}<PaymentSectionForm branchId={purchase.branch_id}><fieldset disabled={isReadOnlyPreview} className="grid gap-4 sm:grid-cols-2"><label className={label}>Tanggal pembayaran<DatePicker name="payment_date" required className={input} /></label><label className={label}>Nomor / referensi bukti bayar<input name="payment_reference" required className={input} /></label>{accountSelect("bank_account_id", "Akun kas / bank pembayaran", "asset")}<label className={label}>Periode pembayaran<select name="period_id" required className={input}><option value="">Pilih periode terbuka</option>{branchPeriods.map(p => <option key={p.id} value={p.id}>{p.period_code}</option>)}</select></label></fieldset></PaymentSectionForm><div className="pt-2"><SubmitButton disabled={!branchPeriods.length}>Catat pembayaran & jurnal pelunasan</SubmitButton></div></form></Card>}
     {(purchase.journal_id || purchase.payment_journal_id) && <Card className="space-y-2 p-5 text-sm"><h2 className="font-semibold">Jurnal terkait & bukti bayar</h2>{purchase.journal_id && <p>Jurnal utang: <span className="break-all font-mono text-xs">{purchase.journal_id}</span></p>}{purchase.payment_journal_id && <p>Jurnal pelunasan: <span className="break-all font-mono text-xs">{purchase.payment_journal_id}</span></p>}{purchase.paid_on && <p>Dibayar {formatDateID(purchase.paid_on)} · {purchase.payment_reference}</p>}{purchase.payment_attachment_ids && purchase.payment_attachment_ids.length > 0 && <div className="pt-2 border-t border-line"><p className="font-medium text-slate-700">Lampiran bukti pelunasan:</p><ul className="mt-1 space-y-1">{purchase.payment_attachment_ids.map((att, idx) => <li key={att}><a href={`/api/invoice-documents/${att}`} target="_blank" rel="noopener noreferrer" className="text-brand">Buka bukti bayar {idx + 1} ↗</a></li>)}</ul></div>}<Link href="/modul/akuntansi" className="inline-block pt-1 text-brand">Buka buku besar →</Link></Card>}
-    <Card className="p-5"><h2 className="font-semibold">Riwayat pengajuan</h2><ol className="mt-4 space-y-4">{(events.data ?? []).map(e => <li key={e.id} className="border-l-2 border-line pl-4"><p className="text-sm font-medium">{e.action === "resubmitted_to_director" ? "Perbaikan diajukan langsung kembali ke Direktur Keuangan" : e.action === "submitted" ? "Pengajuan pembelian diajukan" : e.action === "approved" ? "Disetujui" : e.action === "rejected" ? "Diminta revisi / Ditolak" : e.action === "reviewer_edited" ? "Diperbarui oleh pemeriksa" : e.action === "paid" ? "Pembayaran dicatat" : e.action === "draft_created" ? "Draft dibuat" : e.action === "draft_updated" ? "Draft diperbarui" : e.action}</p><p className="mt-1 whitespace-pre-wrap text-sm text-muted">{e.note}</p><p className="mt-1 text-xs text-muted">{new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(e.created_at))} · {e.actor_id}</p></li>)}</ol></Card>
+    <AuditWorkflowTimeline summary={purchaseAuditSummary} title="Riwayat Pengajuan Pembelian, Posisi Dokumen & KPI Waktu Pengerjaan" />
   </div>
 }

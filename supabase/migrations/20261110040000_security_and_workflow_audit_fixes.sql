@@ -1331,4 +1331,109 @@ set document_number = (
 where d.kind in ('sph', 'spk')
   and (d.document_number is null or btrim(d.document_number) = '' or d.document_number !~ '/GSP/');
 
+-- ============================================================================
+-- 8. PERKAYA LOG AUDIT & KPI PENUGASAN (DIREKTORI USER, SNAPSHOT ACTOR & SLA)
+-- ============================================================================
+-- Izinkan anggota internal organisasi membaca direktori nama/email/jabatan rekan seorganisasi untuk Log Audit & KPI
+create or replace function public.list_organization_users(p_org uuid)
+returns table(
+  user_id uuid,
+  email text,
+  full_name text,
+  role text
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $func$
+  select 
+    m.user_id,
+    u.email::text,
+    coalesce(nullif(u.raw_user_meta_data->>'full_name',''), nullif(u.raw_user_meta_data->>'name',''), split_part(u.email, '@', 1))::text as full_name,
+    m.role::text
+  from public.organization_members m
+  join auth.users u on u.id = m.user_id
+  where m.organization_id = p_org
+    and public.is_org_member(p_org)
+  order by full_name;
+$func$;
+grant execute on function public.list_organization_users(uuid) to authenticated;
+
+drop policy if exists own_assignments on public.work_assignments;
+create policy own_assignments on public.work_assignments
+  for select to authenticated
+  using (user_id = auth.uid() or public.is_org_member(organization_id));
+
+-- Perbarui gsp_private.procurement_log agar selalu menyertakan snapshot identitas & jabatan pelaku di details
+create or replace function gsp_private.procurement_log(
+  p_org uuid,
+  p_branch uuid,
+  p_id uuid,
+  p_type text,
+  p_action text,
+  p_note text default null,
+  p_details jsonb default '{}'
+) returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_email text;
+  v_name text;
+  v_role text;
+  v_branch text;
+  v_enriched jsonb;
+begin
+  select
+    u.email,
+    coalesce(nullif(u.raw_user_meta_data->>'full_name', ''), nullif(u.raw_user_meta_data->>'name', ''), split_part(u.email, '@', 1))
+  into v_email, v_name
+  from auth.users u
+  where u.id = auth.uid();
+
+  select
+    string_agg(
+      case w.job_role
+        when 'president' then 'Direktur Utama'
+        when 'finance_director' then 'Direktur Keuangan'
+        when 'technical_director' then 'Direktur Teknis'
+        when 'branch_manager' then 'Manager Cabang'
+        when 'accounting_tax' then 'Accounting & Tax'
+        when 'finance' then 'Finance'
+        when 'project_manager' then 'Project Manager'
+        when 'admin' then 'Admin Cabang'
+        else w.job_role
+      end,
+      ' & '
+    ),
+    max(coalesce(b.name, 'Pusat'))
+  into v_role, v_branch
+  from public.work_assignments w
+  left join public.business_units b on b.id = w.branch_id
+  where w.organization_id = p_org and w.user_id = auth.uid();
+
+  if v_role is null then
+    select case when m.role = 'owner' then 'Super Admin' else initcap(m.role) end
+    into v_role
+    from public.organization_members m
+    where m.organization_id = p_org and m.user_id = auth.uid();
+  end if;
+
+  v_enriched := coalesce(p_details, '{}'::jsonb) || jsonb_build_object(
+    'actor_name', coalesce(v_name, 'Pengguna Internal'),
+    'actor_email', coalesce(v_email, ''),
+    'actor_role', coalesce(v_role, 'Staf Internal'),
+    'actor_branch', coalesce(v_branch, (select name from public.business_units where id = p_branch), 'Pusat')
+  );
+
+  insert into public.procurement_events(
+    organization_id, branch_id, entity_id, entity_type, action, actor_id, note, details
+  ) values (
+    p_org, p_branch, p_id, p_type, p_action, auth.uid(), p_note, v_enriched
+  );
+end;
+$$;
+
 notify pgrst, 'reload schema';

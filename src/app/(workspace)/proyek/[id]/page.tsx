@@ -16,6 +16,8 @@ import { rupiah, formatDateID } from "@/lib/procurement-ui"
 import { ProjectPlanningForm } from "@/components/project/project-planning-form"
 import { ProjectDirectorConsole, type AttachmentItem, type DirectorInsight } from "@/components/project/project-director-console"
 import { ProjectCostingCard, type ProjectCostingData } from "@/components/project/project-costing-card"
+import { loadOrganizationActorDirectory, buildWorkflowAuditSummary } from "@/lib/audit-trail"
+import { AuditWorkflowTimeline } from "@/components/procurement/audit-workflow-timeline"
 
 export default async function ProjectDetailPage({
   params,
@@ -61,7 +63,7 @@ export default async function ProjectDetailPage({
   const allAttachmentIds = Array.from(new Set([...projectAttIds, ...spkAttIds, ...sphAttIds]))
 
   // Load procurement events, attachments, and real-time costing
-  const [eventsRes, attachmentsRes, costingRes] = await Promise.all([
+  const [eventsRes, attachmentsRes, costingRes, actorDir] = await Promise.all([
     supabase
       .from("procurement_events")
       .select("*")
@@ -79,6 +81,7 @@ export default async function ProjectDetailPage({
       p_org: organizationId,
       p_project_id: id,
     }),
+    loadOrganizationActorDirectory(supabase, organizationId, user),
   ])
   const events = eventsRes.data
   const attachmentsData = attachmentsRes.data
@@ -149,6 +152,18 @@ export default async function ProjectDetailPage({
   const margin = contractVal > 0 ? ((contractVal - rabVal) / contractVal) * 100 : 0
 
   const status = project.approval_status || (project.status === "active" ? "active" : "draft")
+  const projectAuditSummary = buildWorkflowAuditSummary({
+    entityKind: "project",
+    documentLabel: `${project.code} · ${project.name}`,
+    currentStatus: status,
+    createdByUserId: project.created_by,
+    createdAt: project.created_at,
+    branchId: project.branch_id,
+    branchName: project.branch?.name || "Cabang",
+    events: (events ?? []) as any,
+    actorMap: actorDir.actorMap,
+    findRoleHolder: actorDir.findRoleHolder,
+  })
 
   return (
     <div className="space-y-6">
@@ -300,28 +315,11 @@ export default async function ProjectDetailPage({
         </div>
       )}
 
-      {/* Riwayat / Log Aktivitas Proyek */}
-      <Card className="p-5">
-        <h3 className="font-semibold text-ink text-sm">Riwayat Aktivitas & Log Audit Proyek</h3>
-        <ol className="mt-4 space-y-3">
-          {(events ?? []).map((e: any) => (
-            <li key={e.id} className="border-l-2 border-line pl-4 text-xs">
-              <p className="font-semibold text-ink">{e.action}</p>
-              {e.note && <p className="mt-0.5 text-muted">{e.note}</p>}
-              <time className="mt-1 block text-[11px] text-muted">
-                {new Intl.DateTimeFormat("id-ID", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                  timeZone: "Asia/Bangkok",
-                }).format(new Date(e.created_at))}
-              </time>
-            </li>
-          ))}
-          {(!events || events.length === 0) && (
-            <p className="text-xs text-muted">Belum ada riwayat aktivitas pada proyek ini.</p>
-          )}
-        </ol>
-      </Card>
+      {/* Riwayat / Log Aktivitas Proyek & KPI Waktu Pengerjaan */}
+      <AuditWorkflowTimeline
+        summary={projectAuditSummary}
+        title="Riwayat Proyek, Posisi Dokumen & KPI Waktu Pengerjaan"
+      />
     </div>
   )
 }
