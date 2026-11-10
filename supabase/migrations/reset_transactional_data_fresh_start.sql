@@ -24,7 +24,7 @@ begin
 end $$;
 
 -- 2. Putuskan hubungan Foreign Key melingkar antar dokumen, proyek, dan jurnal
-update public.sales_documents set project_id = null, parent_id = null;
+update public.sales_documents set project_id = null;
 update public.crm_projects set spk_id = null;
 
 do $$
@@ -67,7 +67,8 @@ delete from public.project_access_scopes;
 delete from public.operational_work_items;
 delete from public.crm_projects;
 
--- 7. Bersihkan Dokumen Penjualan (SPK, SPH, dsb.)
+-- 7. Bersihkan Dokumen Penjualan (Hapus SPK terlebih dahulu karena merujuk accepted_sph_id, lalu hapus SPH)
+delete from public.sales_documents where kind <> 'sph';
 delete from public.sales_documents;
 
 -- 8. Bersihkan Event Riwayat / Timeline Pengajuan & Berkas Lampiran Transaksi
@@ -93,6 +94,13 @@ where entity_type in (
 delete from gsp_private.document_counters
 where lower(doc_type) not in ('client', 'vendor');
 
+do $$
+begin
+  if to_regclass('gsp_private.sph_counters') is not null then
+    execute 'delete from gsp_private.sph_counters';
+  end if;
+end $$;
+
 -- ============================================================================
 -- OPSIONAL: Jika Anda juga ingin menghapus Master Klien & Vendor yang pernah
 -- diinput saat testing, hapus tanda komentar (--) pada 3 baris di bawah ini:
@@ -101,7 +109,142 @@ where lower(doc_type) not in ('client', 'vendor');
 -- delete from gsp_private.document_counters where lower(doc_type) in ('client', 'vendor');
 -- ============================================================================
 
--- 10. Aktifkan kembali seluruh trigger user seperti semula
+-- 10. Pastikan akun Demo (demo@gsp.test) aktif, kata sandi sinkron, dan kolom token
+--     GoTrue tidak bernilai NULL (mencegah gagal login pada Supabase Auth)
+create extension if not exists pgcrypto;
+
+do $$
+declare
+  v_org_id uuid;
+  v_demo_id uuid;
+  v_instance_id uuid;
+  v_password text := 'GspPreview!2026#ReadOnly';
+begin
+  select id into v_org_id from public.organizations limit 1;
+  if v_org_id is null then
+    return;
+  end if;
+
+  select coalesce(
+    (select instance_id from auth.users where instance_id is not null limit 1),
+    '00000000-0000-0000-0000-000000000000'::uuid
+  ) into v_instance_id;
+
+  select id into v_demo_id from auth.users where lower(email) = 'demo@gsp.test' limit 1;
+
+  if v_demo_id is null then
+    v_demo_id := gen_random_uuid();
+
+    insert into auth.users (
+      instance_id,
+      id,
+      aud,
+      role,
+      email,
+      encrypted_password,
+      email_confirmed_at,
+      raw_app_meta_data,
+      raw_user_meta_data,
+      is_super_admin,
+      confirmation_token,
+      recovery_token,
+      email_change_token_new,
+      email_change,
+      email_change_token_current,
+      phone_change,
+      phone_change_token,
+      reauthentication_token,
+      created_at,
+      updated_at
+    ) values (
+      v_instance_id,
+      v_demo_id,
+      'authenticated',
+      'authenticated',
+      'demo@gsp.test',
+      crypt(v_password, gen_salt('bf')),
+      now(),
+      '{"provider":"email","providers":["email"]}'::jsonb,
+      '{"full_name":"Tamu / Eksekutif Demo","is_demo":true}'::jsonb,
+      false,
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      now(),
+      now()
+    );
+  else
+    update auth.users
+    set instance_id = coalesce(instance_id, v_instance_id),
+        aud = 'authenticated',
+        role = 'authenticated',
+        email_confirmed_at = coalesce(email_confirmed_at, now()),
+        encrypted_password = crypt(v_password, gen_salt('bf')),
+        raw_app_meta_data = '{"provider":"email","providers":["email"]}'::jsonb,
+        raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || '{"full_name":"Tamu / Eksekutif Demo","is_demo":true}'::jsonb,
+        confirmation_token = coalesce(confirmation_token, ''),
+        recovery_token = coalesce(recovery_token, ''),
+        email_change_token_new = coalesce(email_change_token_new, ''),
+        email_change = coalesce(email_change, ''),
+        email_change_token_current = coalesce(email_change_token_current, ''),
+        phone_change = coalesce(phone_change, ''),
+        phone_change_token = coalesce(phone_change_token, ''),
+        reauthentication_token = coalesce(reauthentication_token, ''),
+        banned_until = null,
+        deleted_at = null,
+        updated_at = now()
+    where id = v_demo_id;
+  end if;
+
+  -- Pastikan auth.identities terdaftar dengan benar untuk GoTrue
+  delete from auth.identities where user_id = v_demo_id and provider = 'email';
+
+  insert into auth.identities (
+    id,
+    user_id,
+    identity_data,
+    provider,
+    provider_id,
+    last_sign_in_at,
+    created_at,
+    updated_at
+  ) values (
+    gen_random_uuid(),
+    v_demo_id,
+    jsonb_build_object(
+      'sub', v_demo_id::text,
+      'email', 'demo@gsp.test',
+      'email_verified', true,
+      'phone_verified', false
+    ),
+    'email',
+    v_demo_id::text,
+    now(),
+    now(),
+    now()
+  );
+
+  insert into public.organization_members (organization_id, user_id, role)
+  values (v_org_id, v_demo_id, 'director')
+  on conflict (organization_id, user_id) do update set role = 'director';
+
+  insert into public.person_profiles (organization_id, user_id, relationship_status)
+  values (v_org_id, v_demo_id, 'permanent')
+  on conflict (organization_id, user_id) do update set relationship_status = 'permanent';
+
+  delete from public.work_assignments
+  where organization_id = v_org_id and user_id = v_demo_id and job_role = 'president';
+
+  insert into public.work_assignments (organization_id, user_id, branch_id, job_role)
+  values (v_org_id, v_demo_id, null, 'president');
+end $$;
+
+-- 11. Aktifkan kembali seluruh trigger user seperti semula
 alter table public.accounting_journal_lines enable trigger user;
 alter table public.accounting_journals enable trigger user;
 alter table public.crm_projects enable trigger user;
