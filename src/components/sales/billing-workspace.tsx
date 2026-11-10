@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { MoneyInput } from "@/components/ui/money-input"
 import { SalesMenu } from "@/components/sales/sales-menu"
 import { createSalesInvoiceAction, recordInvoicePaymentAction } from "@/app/(workspace)/pengajuan/penjualan/actions"
 import { DocumentPrintModal } from "@/components/documents/document-print-modal"
@@ -1054,10 +1055,10 @@ export function BillingWorkspace({
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block text-xs font-medium text-slate-700">
                   Nominal Riil Dana Masuk (Rp)
-                  <input
-                    type="number"
+                  <MoneyInput
                     name="paid_amount"
                     defaultValue={selectedInvoiceForPayment.invoice.net_receivable}
+                    min="0"
                     required
                     className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs font-bold"
                   />

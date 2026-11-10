@@ -1145,13 +1145,11 @@ export function ProjectPlanningForm({
                               />
                             </td>
                             <td className="px-2 py-2">
-                              <input
-                                type="number"
+                              <MoneyInput
                                 min="0"
-                                step="1000"
-                                value={item.unit_price}
+                                value={item.unit_price ? String(item.unit_price) : ""}
                                 disabled={busy}
-                                onChange={(e) => updateRab(item.id, "unit_price", e.target.value)}
+                                onValueChange={(val: string) => updateRab(item.id, "unit_price", Number(val) || 0)}
                                 className="w-full rounded border border-line px-2 py-1.5 text-xs"
                               />
                             </td>
@@ -1311,12 +1309,11 @@ export function ProjectPlanningForm({
 
                     <label className="block text-slate-700 font-medium">
                       Nominal Tagihan (Rp)
-                      <input
-                        type="number"
-                        min={0}
-                        value={term.amount}
+                      <MoneyInput
+                        min="0"
+                        value={term.amount ? String(term.amount) : ""}
                         disabled={busy}
-                        onChange={(e) => updatePaymentTerm(term.id, "amount", e.target.value)}
+                        onValueChange={(val: string) => updatePaymentTerm(term.id, "amount", Number(val) || 0)}
                         className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs font-bold"
                       />
                     </label>

@@ -19,14 +19,7 @@ function normalizeMoneyInput(raw: string, previousDisplay = ""): string {
   if (firstComma !== -1 && lastDot !== -1 && firstComma < lastDot) return text
   if ((text.match(/,/g) || []).length > 1) return text
 
-  // 1. Pada keyboard HP/mobile: jika pengguna menekan '.' di akhir (misal "1000." atau "1.250.")
-  // tombol titik pada keypad desimal HP otomatis diubah menjadi koma desimal Indonesia.
-  if (text.endsWith(".") && !text.includes(",")) {
-    const clean = text.slice(0, -1).replace(/[^0-9-]/g, "")
-    return (clean || "0") + ","
-  }
-
-  // 2. Jika ada koma, proses desimal
+  // 1. Jika ada koma, proses desimal (maksimal 2 digit desimal di belakang koma)
   if (text.includes(",")) {
     const parts = text.split(",")
     const sign = parts[0].startsWith("-") ? "-" : ""
@@ -35,24 +28,14 @@ function normalizeMoneyInput(raw: string, previousDisplay = ""): string {
     return (sign ? "-" : "") + (cleanWhole || "0") + "," + cleanFraction
   }
 
-  // 3. Jika pengguna menempelkan teks (paste) berformat desimal titik tunggal (misal "1250000.50"):
-  const isPaste = Math.abs(text.length - previousDisplay.length) > 1
-  const dotParts = text.split(".")
-  if (isPaste && dotParts.length === 2 && dotParts[1].length > 0 && dotParts[1].length <= 2) {
-    const sign = dotParts[0].startsWith("-") ? "-" : ""
-    const cleanWhole = dotParts[0].replace(/[^0-9]/g, "")
-    const cleanFraction = dotParts[1].replace(/[^0-9]/g, "")
-    return (sign ? "-" : "") + (cleanWhole || "0") + "," + cleanFraction
-  }
-
-  // 4. Jika sedang mengetik/menghapus angka bulat:
-  // Bersihkan titik ribuan yang lama agar penomoran ribuan diformat ulang secara dinamis tanpa error
+  // 2. Jika sedang mengetik/menghapus angka bulat (atau pengguna mengetik titik '.' ribuan secara manual):
+  // Bersihkan titik ribuan yang lama agar penomoran ribuan (titik) diformat ulang secara dinamis tanpa error
   const sign = text.startsWith("-") ? "-" : ""
   const cleanDigits = text.replace(/[^0-9]/g, "")
   return (sign ? "-" : "") + cleanDigits
 }
 
-export function MoneyInput({ name, value, defaultValue = "", onValueChange, min, max, allowNegative = false, onBlur, ...props }: Props) {
+export function MoneyInput({ name, value, defaultValue = "", onValueChange, min, max, allowNegative = false, onFocus, onBlur, ...props }: Props) {
   const [uncontrolled,setUncontrolled] = useState(defaultValue)
   const source = canonicalAmount(value === undefined ? uncontrolled : value) ?? "invalid"
   const [editing,setEditing] = useState({source,display:formatAmount(value ?? defaultValue),error:""})
@@ -86,8 +69,15 @@ export function MoneyInput({ name, value, defaultValue = "", onValueChange, min,
         value={current.display}
         aria-invalid={Boolean(current.error) || undefined}
         aria-describedby={[props["aria-describedby"],current.error ? errorId : undefined].filter(Boolean).join(" ") || undefined}
+        onFocus={event => {
+          if (!current.error && current.display.endsWith(",00")) {
+            const stripped = current.display.slice(0, -3)
+            setEditing({ source, display: stripped === "0" ? "" : stripped, error: "" })
+          }
+          onFocus?.(event)
+        }}
         onKeyDown={event => {
-          if ((event.key === "." || event.key === ",") && !current.display.includes(",")) {
+          if (event.key === "," && !current.display.includes(",")) {
             const el = event.currentTarget
             const start = el.selectionStart ?? el.value.length
             const end = el.selectionEnd ?? el.value.length
