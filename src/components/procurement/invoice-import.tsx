@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useEffect, useRef, useState } from "react"
 
@@ -7,6 +7,7 @@ export type ExtractedInvoice = {
   warnings?: string[]
   invoice_number?: string
   invoice_date?: string
+  due_date?: string
   vendor_name?: string
   vendor_address?: string
   vendor_npwp?: string
@@ -54,16 +55,22 @@ export function InvoiceImport({ branchId, disabled, mode = "invoice", onExtracte
       onAttachment?.(data.id)
       setUploaded({id:data.id,branch:uploadBranch})
       if (data.extracted) { setRecognizedText(data.extracted.text); onExtracted?.(data.extracted) }
+      const methodLabel =
+        data.method === "gemini_vision"
+          ? "[AI Gemini Vision]"
+          : data.method === "pdf_text"
+          ? "[Smart PDF Parser]"
+          : "[OCR Lokal]"
       setMessage(data.warning || (data.extracted?.warnings?.length
-        ? `Dokumen disimpan privat. ${data.extracted.warnings.join(" ")}`
-        : "Dokumen disimpan privat. Hasil pembacaan sudah disalin; periksa setiap isian sebelum menyimpan."))
+        ? `${methodLabel} Dokumen disimpan privat. ${data.extracted.warnings.join(" ")}`
+        : `${methodLabel} Dokumen disimpan privat. Hasil pembacaan sudah disalin otomatis ke form; periksa setiap isian sebelum menyimpan.`))
       if (fileRef.current) fileRef.current.value = ""
     } catch (error) { setMessage(error instanceof Error ? error.message : "Dokumen gagal diproses.") }
     finally { setBusy(false); onBusyChange?.(false) }
   }
   return <div className="space-y-3 rounded-xl border border-line bg-canvas p-4">
-    <p className="text-sm font-semibold">Unggah {mode === "spk" ? "SPK" : "invoice"} dan baca dokumen</p>
-    <p className="text-xs leading-5 text-muted">PDF digital dibaca langsung; PDF pindai dan PNG/JPEG dibaca dengan OCR Windows lokal. Maksimal 10 MB dan lima halaman. Hanya isian yang terbaca disalin ke form; periksa nominal, vendor, pajak, dan COA sebelum menyimpan.</p>
+    <p className="text-sm font-semibold">Unggah {mode === "spk" ? "SPK" : "invoice"} dan baca dokumen (Smart AI OCR)</p>
+    <p className="text-xs leading-5 text-muted">Mendukung pembacaan otomatis via AI Gemini Vision serta ekstraksi koordinat kolom PDF & OCR. Maksimal 10 MB dan lima halaman. Isian yang terbaca otomatis disalin ke form; periksa nominal, vendor, pajak, dan COA sebelum menyimpan.</p>
     <input ref={fileRef} type="file" accept="image/png,image/jpeg,application/pdf" disabled={disabled || busy || !branchId} className="block w-full text-sm" aria-label={`Dokumen ${mode}`} />
     <div className="flex flex-wrap gap-2">
       <button type="button" onClick={() => upload(false)} disabled={disabled || busy || !branchId} className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{busy ? "Membaca dokumen…" : `Unggah & baca ${mode === "spk" ? "SPK" : "dokumen"}`}</button>

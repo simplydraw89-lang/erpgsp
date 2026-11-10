@@ -31,6 +31,9 @@ begin
     'operational_work_items',
     'crm_projects',
     'sales_documents',
+    'sales_clients',
+    'crm_clients',
+    'procurement_vendors',
     'procurement_events',
     'procurement_attachments',
     'workflow_executions',
@@ -121,10 +124,19 @@ where entity_type in (
   'accounting_journal'
 );
 
--- 9. Reset counter penomoran dokumen transaksi agar mulai kembali dari 000001
---    (Tetap mempertahankan counter 'client' dan 'vendor' agar master mitra tidak bentrok)
-delete from gsp_private.document_counters
-where lower(doc_type) not in ('client', 'vendor');
+-- 9. Bersihkan juga data Klien & Vendor dummy hasil testing sebelumnya
+--    (termasuk PT Bumi Teknik Prima yang sempat terduplikasi dari hasil OCR lama)
+delete from public.sales_clients;
+delete from public.procurement_vendors;
+do $$
+begin
+  if to_regclass('public.crm_clients') is not null then
+    execute 'delete from public.crm_clients';
+  end if;
+end $$;
+
+-- 10. Reset seluruh counter penomoran dokumen agar mulai kembali dari 000001
+delete from gsp_private.document_counters;
 
 do $$
 begin
@@ -132,14 +144,6 @@ begin
     execute 'delete from gsp_private.sph_counters';
   end if;
 end $$;
-
--- ============================================================================
--- OPSIONAL: Jika Anda juga ingin menghapus Master Klien & Vendor yang pernah
--- diinput saat testing, hapus tanda komentar (--) pada 3 baris di bawah ini:
--- delete from public.sales_clients;
--- delete from public.procurement_vendors;
--- delete from gsp_private.document_counters where lower(doc_type) in ('client', 'vendor');
--- ============================================================================
 
 -- 10. Pastikan akun Demo (demo@gsp.test) aktif, kata sandi sinkron, dan kolom token
 --     GoTrue tidak bernilai NULL (mencegah gagal login pada Supabase Auth)
@@ -298,6 +302,9 @@ begin
     'operational_work_items',
     'crm_projects',
     'sales_documents',
+    'sales_clients',
+    'crm_clients',
+    'procurement_vendors',
     'procurement_events',
     'procurement_attachments',
     'workflow_executions',

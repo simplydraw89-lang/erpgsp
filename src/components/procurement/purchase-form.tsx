@@ -49,6 +49,7 @@ export function PurchaseForm({ branches, vendors, accounts, projects, purchase, 
   const [timing, setTiming] = useState(purchase?.withholding_timing ?? "invoice")
   const [invoiceNumber, setInvoiceNumber] = useState(purchase?.invoice_number ?? "")
   const [invoiceDate, setInvoiceDate] = useState(purchase?.invoice_date ?? "")
+  const [requestedPaymentDate, setRequestedPaymentDate] = useState(purchase?.requested_payment_date ?? "")
   const [vendorName, setVendorName] = useState(purchase?.vendor_snapshot?.name ?? "")
   const [vendorAddress, setVendorAddress] = useState(purchase?.vendor_snapshot?.address ?? "")
   const [newVendorName, setNewVendorName] = useState(purchase?.vendor_snapshot?.name ?? "")
@@ -93,6 +94,7 @@ export function PurchaseForm({ branches, vendors, accounts, projects, purchase, 
   function handleExtracted(data: ExtractedInvoice) {
     if (data.invoice_number) setInvoiceNumber(data.invoice_number)
     if (data.invoice_date) setInvoiceDate(data.invoice_date)
+    if (data.due_date) setRequestedPaymentDate(data.due_date)
     if (data.tax_invoice_number) setTaxInvoiceNumber(data.tax_invoice_number)
     if (data.tax_invoice_date) setTaxInvoiceDate(data.tax_invoice_date)
     if (data.vat_mode) setVat(data.vat_mode)
@@ -153,7 +155,7 @@ export function PurchaseForm({ branches, vendors, accounts, projects, purchase, 
           <label className={label}>Tanggal invoice<DatePicker name="invoice_date" value={invoiceDate} onValueChange={setInvoiceDate} required className={input} /></label>
           <label className={label}>Nomor faktur pajak<input name="tax_invoice_number" value={taxInvoiceNumber} onChange={e => setTaxInvoiceNumber(e.target.value)} className={input} /></label>
           <label className={label}>Tanggal faktur pajak<DatePicker name="tax_invoice_date" value={taxInvoiceDate} onValueChange={setTaxInvoiceDate} className={input} /></label>
-          <label className={label}>Rencana tanggal pembayaran<DatePicker name="requested_payment_date" defaultValue={purchase?.requested_payment_date ?? ""} className={input} /></label>
+          <label className={label}>Rencana tanggal pembayaran<DatePicker name="requested_payment_date" value={requestedPaymentDate} onValueChange={setRequestedPaymentDate} className={input} /></label>
         </div>
       </Card>
       <Card className="space-y-5 p-5 md:p-6">
