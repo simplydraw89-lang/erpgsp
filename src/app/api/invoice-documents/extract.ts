@@ -594,8 +594,11 @@ Kembalikan JSON valid saja.`
 
   const candidateModels = [
     process.env.GEMINI_MODEL?.trim(),
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3-flash-preview",
+    "gemini-flash-latest",
+    "gemini-3.8-flash",
   ].filter((m): m is string => Boolean(m))
 
   // Dukung kunci Vertex AI Express Mode (diawali "AQ.") maupun Google AI Studio ("AIza...")

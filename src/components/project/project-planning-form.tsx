@@ -17,6 +17,10 @@ import {
   AlertCircle,
   FileSpreadsheet,
   Receipt,
+  CheckSquare,
+  Square,
+  Clock,
+  Layers,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -33,6 +37,13 @@ export type ManpowerItem = {
   duration?: string
 }
 
+export type DeliverableItem = {
+  id: string
+  stage: string
+  deliverable: string
+  acceptance_criteria?: string
+}
+
 export type ScheduleItem = {
   id: string
   phase: string
@@ -43,12 +54,20 @@ export type ScheduleItem = {
 
 export type RabItem = {
   id: string
-  category: "personil" | "non_personil" | "lab_sampling" | "operasional" | "sidang_perizinan"
+  category: string
   description: string
   volume: number
   unit: string
   unit_price: number
   total: number
+  proportion?: string
+}
+
+export type SupportingDocumentItem = {
+  id: string
+  name: string
+  checked: boolean
+  notes?: string
 }
 
 export type PaymentTermItem = {
@@ -63,11 +82,32 @@ export type PaymentTermItem = {
 }
 
 const rabCategories = [
-  { value: "personil", label: "Biaya Personil (Tenaga Ahli & Surveyor)" },
-  { value: "non_personil", label: "Biaya Non-Personil / Akomodasi & Transportasi" },
-  { value: "lab_sampling", label: "Uji Laboratorium & Pengukuran Sampel" },
-  { value: "sidang_perizinan", label: "Biaya Sidang Komisi & Koordinasi Teknis" },
-  { value: "operasional", label: "Perlengkapan Lapangan & Laporan Teknis" },
+  { value: "Tenaga ahli dan tim pelaksana", label: "Tenaga Ahli dan Tim Pelaksana (Biaya Personil)" },
+  { value: "Survei lapangan dan sampling", label: "Survei Lapangan dan Sampling" },
+  { value: "Pengujian laboratorium / data", label: "Pengujian Laboratorium / Data Pengukuran" },
+  { value: "Perjalanan dan akomodasi", label: "Perjalanan Dinas & Akomodasi Tim" },
+  { value: "Penyusunan dokumen dan rapat", label: "Penyusunan Dokumen Laporan & Rapat Koordinasi" },
+  { value: "GIS, administrasi dan QA", label: "GIS, Pemetaan, Administrasi & QA" },
+  { value: "Overhead internal", label: "Overhead Internal Kantor" },
+  { value: "Cadangan risiko", label: "Cadangan Risiko Proyek" },
+  { value: "personil", label: "Biaya Personil Umum" },
+  { value: "non_personil", label: "Biaya Non-Personil / Akomodasi Umum" },
+  { value: "lab_sampling", label: "Uji Laboratorium Umum" },
+  { value: "sidang_perizinan", label: "Sidang Komisi & Perizinan Dinas" },
+  { value: "operasional", label: "Operasional & ATK Umum" },
+]
+
+const defaultChecklist: SupportingDocumentItem[] = [
+  { id: "chk-1", name: "SPH dan persetujuan komersial", checked: true, notes: "Otomatis dari SPH" },
+  { id: "chk-2", name: "Kontrak / SPK / PO klien", checked: true, notes: "Otomatis dari SPK" },
+  { id: "chk-3", name: "KAK / TOR dan data teknis awal", checked: false, notes: "Spesifikasi pekerjaan" },
+  { id: "chk-4", name: "Peta lokasi dan dokumen kegiatan", checked: false, notes: "Koordinat & batas area" },
+  { id: "chk-5", name: "Surat penugasan dan CV tenaga ahli", checked: false, notes: "Kelengkapan tim SDM" },
+  { id: "chk-6", name: "Sertifikat kompetensi relevan (diverifikasi)", checked: false, notes: "KTPA, ATPA, SKA" },
+  { id: "chk-7", name: "Rencana survei dan bukti akses lokasi", checked: false, notes: "Izin survei lapangan" },
+  { id: "chk-8", name: "Penawaran vendor / laboratorium", checked: false, notes: "Mitra uji sampel" },
+  { id: "chk-9", name: "Berita acara kick-off dan notulen", checked: false, notes: "Kick-off meeting" },
+  { id: "chk-10", name: "Laporan kemajuan dan berita acara serah terima", checked: false, notes: "Draft BAST akhir" },
 ]
 
 type TargetedTab = "manpower" | "technical" | "schedule" | "rab"
@@ -107,27 +147,76 @@ export function ProjectPlanningForm({
   const [tabNotices, setTabNotices] = useState<Record<string, { type: "success" | "error"; message: string }>>({})
 
   // Form states
+  const [jobType, setJobType] = useState("AMDAL")
+  const [durationPlan, setDurationPlan] = useState("28 minggu")
   const [workDetails, setWorkDetails] = useState(project.work_details || "")
   const [startsOn, setStartsOn] = useState(project.starts_on || "")
   const [endsOn, setEndsOn] = useState(project.ends_on || "")
+
+  const [deliverables, setDeliverables] = useState<DeliverableItem[]>([
+    {
+      id: "deliv-1",
+      stage: "Kick-off, penapisan dan rencana kerja",
+      deliverable: "Notulen kick-off, daftar data, rencana kerja",
+      acceptance_criteria: "Persetujuan review internal / klien",
+    },
+    {
+      id: "deliv-2",
+      stage: "Pengumpulan data dan rencana survei",
+      deliverable: "Laporan kerja, data pendukung dan bukti review tahap 2",
+      acceptance_criteria: "Persetujuan review internal / klien",
+    },
+    {
+      id: "deliv-3",
+      stage: "Survei rona awal, sampling dan analisis",
+      deliverable: "Laporan kerja, data pendukung dan bukti review tahap 3",
+      acceptance_criteria: "Persetujuan review internal / klien",
+    },
+    {
+      id: "deliv-4",
+      stage: "Analisis dampak dan rencana pengelolaan",
+      deliverable: "Laporan kerja, data pendukung dan bukti review tahap 4",
+      acceptance_criteria: "Persetujuan review internal / klien",
+    },
+    {
+      id: "deliv-5",
+      stage: "Konsultasi dan review dokumen",
+      deliverable: "Laporan kerja, data pendukung dan bukti review tahap 5",
+      acceptance_criteria: "Persetujuan review internal / klien",
+    },
+    {
+      id: "deliv-6",
+      stage: "Revisi, finalisasi dan serah terima",
+      deliverable: "Dokumen AMDAL final, daftar revisi, berita acara serah terima (draft)",
+      acceptance_criteria: "Persetujuan review internal / klien",
+    },
+  ])
+
+  const [checklist, setChecklist] = useState<SupportingDocumentItem[]>(defaultChecklist)
+
   const [manpower, setManpower] = useState<ManpowerItem[]>(
     project.manpower?.length > 0
       ? project.manpower
-      : [{ id: "mp-1", name: "", role: "Project Manager / Team Leader", certification: "", duration: "1 Bulan" }]
+      : [{ id: "mp-1", name: "", role: "Manajer proyek", certification: "", duration: "28 minggu" }]
   )
+
   const [schedule, setSchedule] = useState<ScheduleItem[]>(
     project.timesheet_schedule?.length > 0
       ? project.timesheet_schedule
-      : [{ id: "sch-1", phase: "Persiapan & Pengumpulan Data Sekunder", start_date: "", end_date: "", pic: "" }]
+      : [{ id: "sch-1", phase: "Kick-off, penapisan dan rencana kerja", start_date: "", end_date: "", pic: "" }]
   )
+
   const [rab, setRab] = useState<RabItem[]>(
     project.rab_breakdown?.length > 0 ? project.rab_breakdown : []
   )
+
   const initialBreakdownSum = (project.rab_breakdown || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0)
   const [directRabTotal, setDirectRabTotal] = useState<number>(
     project.rab_total && Number(project.rab_total) > 0 ? Number(project.rab_total) : initialBreakdownSum
   )
-  const [showDetailedBreakdown, setShowDetailedBreakdown] = useState<boolean>(Boolean(project.rab_breakdown && project.rab_breakdown.length > 0))
+  const [showDetailedBreakdown, setShowDetailedBreakdown] = useState<boolean>(
+    Boolean(project.rab_breakdown && project.rab_breakdown.length > 0)
+  )
   const [attachments, setAttachments] = useState<string[]>(project.attachment_ids || [])
 
   // Calculations
@@ -285,7 +374,7 @@ export function ProjectPlanningForm({
 
       const extracted = result.extracted || {}
 
-      // 2. Isi HANYA pada bagian yang ditargetkan (tidak menyentuh form lain)
+      // 2. Isi HANYA pada bagian yang ditargetkan (Auto-Expand / Mengganti row dummy dengan jumlah personil aktual)
       if (currentTarget === "manpower") {
         if (Array.isArray(extracted.manpower) && extracted.manpower.length > 0) {
           const newMp: ManpowerItem[] = extracted.manpower.map((m: any, idx: number) => ({
@@ -293,47 +382,47 @@ export function ProjectPlanningForm({
             name: m.name || "",
             role: m.role || "Tenaga Ahli",
             certification: m.certification || "",
-            duration: m.duration || "1 Bulan",
+            duration: m.duration || "28 minggu",
           }))
-          setManpower((prev) => {
-            const isInitial = prev.length === 1 && !prev[0].name && !prev[0].certification
-            return isInitial ? newMp : [...prev, ...newMp]
-          })
+          // Otomatis menambah/mengganti menjadi seluruh personil yang terbaca (misal 7, 10, atau lebih)
+          setManpower(newMp)
           setTabNotices((prev) => ({
             ...prev,
             manpower: {
               type: "success",
-              message: `Berhasil mengekstrak ${newMp.length} personil SDM dari "${file.name}". Berkas otomatis tersimpan di Lampiran Dokumen. Silakan periksa atau sesuaikan jika diperlukan.`,
+              message: `Berhasil mengekstrak & mendaftarkan seluruh ${newMp.length} personil tim SDM secara otomatis dari "${file.name}". Seluruh kolom nama, peran, sertifikasi, dan durasi telah terisi. Berkas tersimpan di Lampiran.`,
             },
           }))
         } else {
           setTabNotices((prev) => ({
             ...prev,
             manpower: {
-              type: "success",
-              message: `Berkas "${file.name}" tersimpan di Lampiran. Teks personil tidak terbaca spesifik, silakan lengkapi tabel personil.`,
+              type: "error",
+              message: `Berkas "${file.name}" tersimpan di Lampiran, namun daftar personil tidak terdeteksi. Silakan tambah personil secara manual.`,
             },
           }))
         }
       } else if (currentTarget === "technical") {
-        let updatedFields = 0
-        if (extracted.work_details) {
-          setWorkDetails(extracted.work_details)
-          updatedFields++
-        }
-        if (extracted.starts_on) {
-          setStartsOn(extracted.starts_on)
-          updatedFields++
-        }
-        if (extracted.ends_on) {
-          setEndsOn(extracted.ends_on)
-          updatedFields++
+        if (extracted.starts_on) setStartsOn(extracted.starts_on)
+        if (extracted.ends_on) setEndsOn(extracted.ends_on)
+        if (extracted.duration_plan) setDurationPlan(extracted.duration_plan)
+        if (extracted.job_type) setJobType(extracted.job_type)
+        if (extracted.work_details) setWorkDetails(extracted.work_details)
+        if (Array.isArray(extracted.deliverables) && extracted.deliverables.length > 0) {
+          setDeliverables(
+            extracted.deliverables.map((d: any, idx: number) => ({
+              id: `deliv-${Date.now()}-${idx}`,
+              stage: d.stage || "",
+              deliverable: d.deliverable || "",
+              acceptance_criteria: d.acceptance_criteria || "Persetujuan review internal / klien",
+            }))
+          )
         }
         setTabNotices((prev) => ({
           ...prev,
           technical: {
             type: "success",
-            message: `Rincian teknis & lingkup kerja berhasil diekstrak dari "${file.name}". Berkas otomatis tersimpan di Lampiran Dokumen. Silakan periksa atau sesuaikan isian di bawah.`,
+            message: `Rincian teknis, jadwal kick-off, dan ${extracted.deliverables?.length || 0} tahapan deliverable berhasil diekstrak dari "${file.name}". Berkas tersimpan di Lampiran.`,
           },
         }))
       } else if (currentTarget === "schedule") {
@@ -345,27 +434,28 @@ export function ProjectPlanningForm({
             end_date: s.end_date || "",
             pic: s.pic || "",
           }))
-          setSchedule((prev) => {
-            const isInitial = prev.length === 1 && !prev[0].phase && !prev[0].pic
-            return isInitial ? newSch : [...prev, ...newSch]
-          })
+          // Otomatis mereplace/mengisi seluruh tahapan jadwal yang terbaca
+          setSchedule(newSch)
           setTabNotices((prev) => ({
             ...prev,
             schedule: {
               type: "success",
-              message: `Berhasil mengekstrak ${newSch.length} tahapan jadwal dari "${file.name}". Berkas otomatis tersimpan di Lampiran Dokumen. Silakan periksa atau sesuaikan tanggal pelaksanaan.`,
+              message: `Berhasil mengekstrak & mengisi ${newSch.length} tahapan jadwal pelaksanaan dari "${file.name}". Tanggal dan PIC terisi otomatis. Berkas tersimpan di Lampiran.`,
             },
           }))
         } else {
           setTabNotices((prev) => ({
             ...prev,
             schedule: {
-              type: "success",
-              message: `Berkas "${file.name}" tersimpan di Lampiran. Tahapan jadwal tidak terbaca otomatis, silakan lengkapi secara manual.`,
+              type: "error",
+              message: `Berkas "${file.name}" tersimpan di Lampiran, namun tahapan jadwal tidak terbaca terstruktur. Silakan lengkapi secara manual.`,
             },
           }))
         }
       } else if (currentTarget === "rab") {
+        if (extracted.rab_total && extracted.rab_total > 0) {
+          setDirectRabTotal(extracted.rab_total)
+        }
         if (Array.isArray(extracted.rab_breakdown) && extracted.rab_breakdown.length > 0) {
           const newRab: RabItem[] = extracted.rab_breakdown.map((r: any, idx: number) => {
             const vol = Number(r.volume) || 1
@@ -373,33 +463,34 @@ export function ProjectPlanningForm({
             return {
               id: `rab-${Date.now()}-${idx}`,
               category: r.category || "operasional",
-              description: r.description || "Pos Biaya Proyek",
+              description: r.description || "Pos Biaya",
               volume: vol,
-              unit: r.unit || "Paket",
+              unit: r.unit || "paket",
               unit_price: price,
               total: Number(r.total) || Math.round(vol * price),
+              proportion: r.proportion || "",
             }
           })
-          setRab((prev) => {
-            const isInitial = prev.length === 1 && !prev[0].description && prev[0].unit_price === 0
-            return isInitial ? newRab : [...prev, ...newRab]
-          })
-          setTabNotices((prev) => ({
-            ...prev,
-            rab: {
-              type: "success",
-              message: `Berhasil membaca ${newRab.length} pos anggaran RAB dari "${file.name}". Berkas otomatis tersimpan di Lampiran Dokumen. Silakan periksa volume dan harga satuan.`,
-            },
-          }))
-        } else {
-          setTabNotices((prev) => ({
-            ...prev,
-            rab: {
-              type: "success",
-              message: `Berkas "${file.name}" tersimpan di Lampiran. Pos biaya tidak terbaca terstruktur, silakan lengkapi tabel RAB.`,
-            },
-          }))
+          setRab(newRab)
+          setShowDetailedBreakdown(true)
         }
+        if (Array.isArray(extracted.supporting_documents_checklist) && extracted.supporting_documents_checklist.length > 0) {
+          setChecklist((prev) =>
+            prev.map((item) => {
+              const found = extracted.supporting_documents_checklist.find(
+                (c: any) => c.name?.toLowerCase().includes(item.name.toLowerCase().slice(0, 10))
+              )
+              return found ? { ...item, checked: true, notes: found.notes || item.notes } : item
+            })
+          )
+        }
+        setTabNotices((prev) => ({
+          ...prev,
+          rab: {
+            type: "success",
+            message: `Berhasil membaca pagu RAB${extracted.rab_breakdown?.length ? ` dan ${extracted.rab_breakdown.length} komponen rincian biaya` : ""} dari "${file.name}". Berkas tersimpan di Lampiran.`,
+          },
+        }))
       }
     } catch (err) {
       setTabNotices((prev) => ({
@@ -419,24 +510,52 @@ export function ProjectPlanningForm({
   function addManpower() {
     setManpower([
       ...manpower,
-      { id: `mp-${Date.now()}`, name: "", role: "Tenaga Ahli", certification: "", duration: "" },
+      {
+        id: `mp-${Date.now()}`,
+        name: "",
+        role: "Tenaga Ahli",
+        certification: "",
+        duration: durationPlan || "1 Bulan",
+      },
     ])
   }
   function removeManpower(id: string) {
+    if (manpower.length <= 1) return
     setManpower(manpower.filter((m) => m.id !== id))
   }
   function updateManpower(id: string, field: keyof ManpowerItem, value: string) {
     setManpower(manpower.map((m) => (m.id === id ? { ...m, [field]: value } : m)))
   }
 
+  // Handlers for Deliverables
+  function addDeliverable() {
+    setDeliverables([
+      ...deliverables,
+      {
+        id: `deliv-${Date.now()}`,
+        stage: "",
+        deliverable: "",
+        acceptance_criteria: "Persetujuan review internal / klien",
+      },
+    ])
+  }
+  function removeDeliverable(id: string) {
+    if (deliverables.length <= 1) return
+    setDeliverables(deliverables.filter((d) => d.id !== id))
+  }
+  function updateDeliverable(id: string, field: keyof DeliverableItem, value: string) {
+    setDeliverables(deliverables.map((d) => (d.id === id ? { ...d, [field]: value } : d)))
+  }
+
   // Handlers for Schedule
   function addSchedule() {
     setSchedule([
       ...schedule,
-      { id: `sch-${Date.now()}`, phase: "", start_date: "", end_date: "", pic: "" },
+      { id: `sch-${Date.now()}`, phase: "", start_date: startsOn || "", end_date: endsOn || "", pic: "" },
     ])
   }
   function removeSchedule(id: string) {
+    if (schedule.length <= 1) return
     setSchedule(schedule.filter((s) => s.id !== id))
   }
   function updateSchedule(id: string, field: keyof ScheduleItem, value: string) {
@@ -447,7 +566,7 @@ export function ProjectPlanningForm({
   function addRab() {
     setRab([
       ...rab,
-      { id: `rab-${Date.now()}`, category: "non_personil", description: "", volume: 1, unit: "Paket", unit_price: 0, total: 0 },
+      { id: `rab-${Date.now()}`, category: "Survei lapangan dan sampling", description: "", volume: 1, unit: "paket", unit_price: 0, total: 0 },
     ])
   }
   function removeRab(id: string) {
@@ -468,7 +587,27 @@ export function ProjectPlanningForm({
     )
   }
 
+  function toggleChecklist(id: string) {
+    setChecklist(checklist.map((c) => (c.id === id ? { ...c, checked: !c.checked } : c)))
+  }
+
   const busy = disabled || isPending || uploadBusy || activeOcrLoading !== null
+
+  // Serialized work details combining job type, duration, deliverables, and description
+  const serializedWorkDetails = workDetails
+    ? workDetails
+    : [
+        `Jenis Pekerjaan: ${jobType}`,
+        `Durasi Rencana: ${durationPlan}`,
+        deliverables.length > 0
+          ? `\nDeliverables Terukur:\n` +
+            deliverables
+              .map((d, i) => `${i + 1}. ${d.stage} -> ${d.deliverable} (${d.acceptance_criteria || "Persetujuan klien"})`)
+              .join("\n")
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
 
   return (
     <div className="space-y-6">
@@ -498,7 +637,9 @@ export function ProjectPlanningForm({
         <Card className="p-4">
           <p className="text-xs font-medium text-muted">Total Rencana Anggaran (RAB)</p>
           <p className="mt-1 text-xl font-bold text-brand">{rupiah(rabTotal)}</p>
-          <p className="mt-1 text-xs text-muted">{rab.length} pos rincian anggaran</p>
+          <p className="mt-1 text-xs text-muted">
+            {rab.length > 0 ? `${rab.length} pos komponen anggaran` : "Pagu anggaran langsung"}
+          </p>
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium text-muted">Estimasi Gross Margin</p>
@@ -533,7 +674,7 @@ export function ProjectPlanningForm({
           }`}
         >
           <FileText className="size-4" />
-          2. Rincian Teknis & Deliverables
+          2. Rincian Teknis & Deliverables ({deliverables.length})
         </button>
         <button
           type="button"
@@ -553,7 +694,7 @@ export function ProjectPlanningForm({
           }`}
         >
           <Calculator className="size-4" />
-          4. Berkas & Pagu RAB ({attachments.length})
+          4. Berkas & Pagu RAB ({rab.length || (directRabTotal > 0 ? 1 : 0)})
         </button>
         <button
           type="button"
@@ -581,7 +722,7 @@ export function ProjectPlanningForm({
       <form action={formAction} className="space-y-6">
         <input type="hidden" name="id" value={project.id} />
         <input type="hidden" name="version" value={project.version} />
-        <input type="hidden" name="work_details" value={workDetails} />
+        <input type="hidden" name="work_details" value={serializedWorkDetails} />
         <input type="hidden" name="starts_on" value={startsOn} />
         <input type="hidden" name="ends_on" value={endsOn} />
         <input type="hidden" name="manpower" value={JSON.stringify(manpower)} />
@@ -596,9 +737,9 @@ export function ProjectPlanningForm({
           <Card className="p-5 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="font-semibold text-ink">Alokasi Tim SDM / Man Power Proyek</h3>
+                <h3 className="font-semibold text-ink text-base">01 Tim SDM Manpower</h3>
                 <p className="text-xs text-muted mt-1">
-                  Daftarkan Project Manager, Tenaga Ahli, dan tim pendukung lapangan.
+                  Daftarkan Project Manager, Ketua Tim, Tenaga Ahli, dan tim pendukung sesuai lampiran proyek.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -615,7 +756,7 @@ export function ProjectPlanningForm({
                     </>
                   ) : (
                     <>
-                      <Sparkles className="size-3.5 text-indigo-600" /> Upload Berkas Tim SDM (OCR)
+                      <Sparkles className="size-3.5 text-indigo-600" /> Upload Berkas Tim SDM (Auto-Extract OCR)
                     </>
                   )}
                 </Button>
@@ -647,25 +788,29 @@ export function ProjectPlanningForm({
               <table className="w-full text-left text-sm">
                 <thead className="bg-canvas text-muted text-xs">
                   <tr>
-                    <th className="px-3 py-2">Nama Personil</th>
-                    <th className="px-3 py-2">Peran / Jabatan Proyek</th>
-                    <th className="px-3 py-2">Sertifikasi / Keahlian</th>
-                    <th className="px-3 py-2">Durasi Penugasan</th>
+                    <th className="px-3 py-2 w-10 text-center">No</th>
+                    <th className="px-3 py-2">Nama</th>
+                    <th className="px-3 py-2">Peran / Jabatan proyek</th>
+                    <th className="px-3 py-2">Sertifikasi dan keahlian</th>
+                    <th className="px-3 py-2">Durasi keterlibatan</th>
                     <th className="px-3 py-2 text-right w-12"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {manpower.map((item) => (
+                  {manpower.map((item, index) => (
                     <tr key={item.id}>
+                      <td className="px-3 py-2 text-center text-xs font-semibold text-muted">
+                        {index + 1}
+                      </td>
                       <td className="px-3 py-2">
                         <input
                           type="text"
                           required
                           value={item.name}
                           disabled={busy}
-                          placeholder="e.g. Ir. Ahmad Syahid"
+                          placeholder="e.g. Personel Dummy 01 / Ir. Ahmad Syahid"
                           onChange={(e) => updateManpower(item.id, "name", e.target.value)}
-                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs font-medium text-ink"
+                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs font-medium text-ink bg-white"
                         />
                       </td>
                       <td className="px-3 py-2">
@@ -674,9 +819,9 @@ export function ProjectPlanningForm({
                           required
                           value={item.role}
                           disabled={busy}
-                          placeholder="e.g. Ahli Lingkungan / AMDAL"
+                          placeholder="e.g. Manajer proyek / Ketua tim AMDAL"
                           onChange={(e) => updateManpower(item.id, "role", e.target.value)}
-                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs"
+                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white"
                         />
                       </td>
                       <td className="px-3 py-2">
@@ -684,9 +829,9 @@ export function ProjectPlanningForm({
                           type="text"
                           value={item.certification || ""}
                           disabled={busy}
-                          placeholder="e.g. KTPA, ATPA, SKA"
+                          placeholder="e.g. Pengendalian proyek AMDAL (verifikasi sertifikat)"
                           onChange={(e) => updateManpower(item.id, "certification", e.target.value)}
-                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs"
+                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white"
                         />
                       </td>
                       <td className="px-3 py-2">
@@ -694,9 +839,9 @@ export function ProjectPlanningForm({
                           type="text"
                           value={item.duration || ""}
                           disabled={busy}
-                          placeholder="e.g. 2 Bulan, 10 Hari Lapangan"
+                          placeholder="e.g. 28 minggu (alokasi parsial)"
                           onChange={(e) => updateManpower(item.id, "duration", e.target.value)}
-                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs"
+                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white"
                         />
                       </td>
                       <td className="px-3 py-2 text-right">
@@ -705,6 +850,7 @@ export function ProjectPlanningForm({
                           onClick={() => removeManpower(item.id)}
                           disabled={busy || manpower.length <= 1}
                           className="text-red-500 hover:text-red-700 disabled:opacity-40"
+                          title="Hapus baris personil"
                         >
                           <Trash2 className="size-4 inline" />
                         </button>
@@ -714,17 +860,21 @@ export function ProjectPlanningForm({
                 </tbody>
               </table>
             </div>
+
+            <p className="text-[11px] text-muted italic pt-2">
+              * Lampirkan CV, sertifikat yang relevan, surat penugasan, dan persetujuan ketersediaan tenaga ahli sebelum proyek disetujui (ACC) Direktur Utama.
+            </p>
           </Card>
         )}
 
         {/* TAB 2: TEKNIS & DELIVERABLES */}
         {activeTab === "teknis" && (
-          <Card className="p-5 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <Card className="p-5 space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
               <div>
-                <h3 className="font-semibold text-ink">Rincian Teknis & Deliverables Pekerjaan</h3>
-                <p className="text-xs text-muted mt-1">
-                  Jelaskan lingkup detail pengerjaan, metode teknis, logistik/alat yang diperlukan, dan dokumen hasil akhir proyek.
+                <h3 className="font-semibold text-ink text-base">02 Rincian Teknis Deliverables</h3>
+                <p className="text-xs text-muted mt-0.5">
+                  Tentukan parameter durasi, jenis pekerjaan, dan deliverables terukur yang wajib diserahkan.
                 </p>
               </div>
               <Button
@@ -736,11 +886,11 @@ export function ProjectPlanningForm({
               >
                 {activeOcrLoading === "technical" ? (
                   <>
-                    <Loader2 className="size-3.5 animate-spin text-indigo-600" /> Membaca Dokumen KAK...
+                    <Loader2 className="size-3.5 animate-spin text-indigo-600" /> Membaca Dokumen Teknis...
                   </>
                 ) : (
                   <>
-                    <Sparkles className="size-3.5 text-indigo-600" /> Upload Dokumen Teknis / KAK (OCR)
+                    <Sparkles className="size-3.5 text-indigo-600" /> Upload Berkas Teknis / KAK (Auto-Extract OCR)
                   </>
                 )}
               </Button>
@@ -764,37 +914,136 @@ export function ProjectPlanningForm({
               </div>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="font-medium text-slate-700">Tanggal Rencana Mulai (Kick-off)</span>
+            {/* Parameter Isian (Sesuai Halaman 2 PDF) */}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 rounded-xl border border-line bg-canvas/60 p-4">
+              <label className="block text-xs">
+                <span className="font-semibold text-slate-700">Tanggal Mulai (Kick-off)</span>
                 <input
                   type="date"
                   value={startsOn}
                   disabled={busy}
                   onChange={(e) => setStartsOn(e.target.value)}
-                  className="mt-1 block w-full rounded-lg border border-line px-3 py-2 text-sm"
+                  className="mt-1 block w-full rounded-lg border border-line bg-white px-3 py-1.5 text-xs"
                 />
               </label>
-              <label className="block text-sm">
-                <span className="font-medium text-slate-700">Target Tanggal Selesai</span>
+              <label className="block text-xs">
+                <span className="font-semibold text-slate-700">Target Selesai</span>
                 <input
                   type="date"
                   value={endsOn}
                   disabled={busy}
                   onChange={(e) => setEndsOn(e.target.value)}
-                  className="mt-1 block w-full rounded-lg border border-line px-3 py-2 text-sm"
+                  className="mt-1 block w-full rounded-lg border border-line bg-white px-3 py-1.5 text-xs"
+                />
+              </label>
+              <label className="block text-xs">
+                <span className="font-semibold text-slate-700">Durasi Rencana</span>
+                <input
+                  type="text"
+                  value={durationPlan}
+                  disabled={busy}
+                  placeholder="Contoh: 28 minggu"
+                  onChange={(e) => setDurationPlan(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-line bg-white px-3 py-1.5 text-xs"
+                />
+              </label>
+              <label className="block text-xs">
+                <span className="font-semibold text-slate-700">Jenis Pekerjaan</span>
+                <input
+                  type="text"
+                  value={jobType}
+                  disabled={busy}
+                  placeholder="Contoh: AMDAL / UKL-UPL"
+                  onChange={(e) => setJobType(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-bold"
                 />
               </label>
             </div>
 
-            <label className="block text-sm">
-              <span className="font-medium text-slate-700">Deskripsi Lingkup Pekerjaan, Metodologi, dan Dokumen Laporan</span>
+            {/* Tabel Rincian Teknis & Deliverables Terukur */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-muted">
+                  Tabel Deliverables Terukur & Kriteria Penerimaan
+                </h4>
+                <Button type="button" onClick={addDeliverable} disabled={busy} variant="secondary" className="gap-1 text-xs">
+                  <Plus className="size-3.5" /> Tambah Tahapan Deliverable
+                </Button>
+              </div>
+
+              <div className="overflow-x-auto rounded-lg border border-line">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-canvas text-muted text-xs">
+                    <tr>
+                      <th className="px-3 py-2 w-10 text-center">No</th>
+                      <th className="px-3 py-2">Rincian teknis / tahapan</th>
+                      <th className="px-3 py-2">Deliverable terukur</th>
+                      <th className="px-3 py-2">Kriteria penerimaan</th>
+                      <th className="px-3 py-2 text-right w-12"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {deliverables.map((item, idx) => (
+                      <tr key={item.id}>
+                        <td className="px-3 py-2 text-center text-xs font-semibold text-muted">
+                          {idx + 1}
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            required
+                            value={item.stage}
+                            disabled={busy}
+                            placeholder="e.g. Kick-off, penapisan dan rencana kerja"
+                            onChange={(e) => updateDeliverable(item.id, "stage", e.target.value)}
+                            className="w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white font-medium"
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            required
+                            value={item.deliverable}
+                            disabled={busy}
+                            placeholder="e.g. Notulen kick-off, daftar data, rencana kerja"
+                            onChange={(e) => updateDeliverable(item.id, "deliverable", e.target.value)}
+                            className="w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white"
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            value={item.acceptance_criteria || ""}
+                            disabled={busy}
+                            placeholder="e.g. Persetujuan review internal / klien"
+                            onChange={(e) => updateDeliverable(item.id, "acceptance_criteria", e.target.value)}
+                            className="w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white"
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <button
+                            type="button"
+                            onClick={() => removeDeliverable(item.id)}
+                            disabled={busy || deliverables.length <= 1}
+                            className="text-red-500 hover:text-red-700 disabled:opacity-40"
+                          >
+                            <Trash2 className="size-4 inline" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <label className="block text-sm pt-2">
+              <span className="font-semibold text-slate-700 text-xs">Catatan Ruang Lingkup & Metodologi Tambahan (Opsional)</span>
               <textarea
-                required
-                rows={9}
+                rows={4}
                 value={workDetails}
                 disabled={busy}
-                placeholder="Tuliskan ruang lingkup detail pengerjaan, metodologi, standar baku mutu, serta dokumen hasil akhir yang diserahkan ke klien..."
+                placeholder="Tambahkan catatan khusus mengenai ruang lingkup sampling, konsultasi dinas, perizinan, atau standar teknis..."
                 onChange={(e) => setWorkDetails(e.target.value)}
                 className="mt-1 block w-full rounded-lg border border-line p-3 text-xs leading-relaxed"
               />
@@ -804,12 +1053,12 @@ export function ProjectPlanningForm({
 
         {/* TAB 3: JADWAL & TIMESHEET */}
         {activeTab === "jadwal" && (
-          <Card className="p-5 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <Card className="p-5 space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
               <div>
-                <h3 className="font-semibold text-ink">Jadwal & Timesheet Pelaksanaan</h3>
-                <p className="text-xs text-muted mt-1">
-                  Uraikan tahapan pengerjaan proyek dari kick-off hingga penyerahan laporan akhir.
+                <h3 className="font-semibold text-ink text-base">03 Jadwal Timesheet</h3>
+                <p className="text-xs text-muted mt-0.5">
+                  Susun jadwal tahapan pengerjaan proyek dari kick-off hingga penyerahan laporan akhir dan tentukan penanggung jawabnya.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -822,11 +1071,11 @@ export function ProjectPlanningForm({
                 >
                   {activeOcrLoading === "schedule" ? (
                     <>
-                      <Loader2 className="size-3.5 animate-spin text-indigo-600" /> Membaca Jadwal / Kurva S...
+                      <Loader2 className="size-3.5 animate-spin text-indigo-600" /> Membaca Jadwal...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="size-3.5 text-indigo-600" /> Upload Jadwal / Kurva S (OCR)
+                      <Sparkles className="size-3.5 text-indigo-600" /> Upload Jadwal / Timesheet (Auto-Extract OCR)
                     </>
                   )}
                 </Button>
@@ -854,29 +1103,33 @@ export function ProjectPlanningForm({
               </div>
             )}
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg border border-line">
               <table className="w-full text-left text-sm">
                 <thead className="bg-canvas text-muted text-xs">
                   <tr>
-                    <th className="px-3 py-2">Tahapan Pengerjaan</th>
-                    <th className="px-3 py-2">Mulai</th>
-                    <th className="px-3 py-2">Target Selesai</th>
-                    <th className="px-3 py-2">Penanggung Jawab (PIC)</th>
+                    <th className="px-3 py-2 w-10 text-center">No</th>
+                    <th className="px-3 py-2">Tahapan pengerjaan</th>
+                    <th className="px-3 py-2 w-40">Mulai</th>
+                    <th className="px-3 py-2 w-40">Target selesai</th>
+                    <th className="px-3 py-2">PIC (mengacu manpower)</th>
                     <th className="px-3 py-2 text-right w-12"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {schedule.map((item) => (
+                  {schedule.map((item, idx) => (
                     <tr key={item.id}>
+                      <td className="px-3 py-2 text-center text-xs font-semibold text-muted">
+                        {idx + 1}
+                      </td>
                       <td className="px-3 py-2">
                         <input
                           type="text"
                           required
                           value={item.phase}
                           disabled={busy}
-                          placeholder="e.g. Sampling Uji Emisi & Air"
+                          placeholder="e.g. Kick-off, penapisan dan rencana kerja"
                           onChange={(e) => updateSchedule(item.id, "phase", e.target.value)}
-                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs font-medium text-ink"
+                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs font-medium text-ink bg-white"
                         />
                       </td>
                       <td className="px-3 py-2">
@@ -885,7 +1138,7 @@ export function ProjectPlanningForm({
                           value={item.start_date}
                           disabled={busy}
                           onChange={(e) => updateSchedule(item.id, "start_date", e.target.value)}
-                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs"
+                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white"
                         />
                       </td>
                       <td className="px-3 py-2">
@@ -894,7 +1147,7 @@ export function ProjectPlanningForm({
                           value={item.end_date}
                           disabled={busy}
                           onChange={(e) => updateSchedule(item.id, "end_date", e.target.value)}
-                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs"
+                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white"
                         />
                       </td>
                       <td className="px-3 py-2">
@@ -902,9 +1155,9 @@ export function ProjectPlanningForm({
                           type="text"
                           value={item.pic}
                           disabled={busy}
-                          placeholder="e.g. Budi (Surveyor)"
+                          placeholder="e.g. Manajer proyek / Personel Dummy 01"
                           onChange={(e) => updateSchedule(item.id, "pic", e.target.value)}
-                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs"
+                          className="w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white"
                         />
                       </td>
                       <td className="px-3 py-2 text-right">
@@ -922,17 +1175,28 @@ export function ProjectPlanningForm({
                 </tbody>
               </table>
             </div>
+
+            {/* Template Timesheet Pelaksanaan Info Box (Sesuai Halaman 3 PDF) */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                <Clock className="size-4 text-brand" />
+                <span>TEMPLATE LOG TIMESHEET — DIISI SAAT PELAKSANAAN</span>
+              </div>
+              <p className="text-[11px] text-muted leading-relaxed">
+                Log timesheet harian (Tanggal, Nama / PIC, Tahapan / kegiatan, Jam kerja, Output / bukti) akan otomatis aktif bagi tim personil di Portal Lapangan setelah proyek disetujui Direktur Utama.
+              </p>
+            </div>
           </Card>
         )}
 
-        {/* TAB 4: RENCANA ANGGARAN BIAYA (RAB) */}
+        {/* TAB 4: RENCANA ANGGARAN BIAYA (RAB) & BERKAS */}
         {activeTab === "rab" && (
           <Card className="p-5 space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
               <div>
-                <h3 className="font-bold text-ink text-base">Dokumen & Pagu Rencana Anggaran Biaya (RAB)</h3>
+                <h3 className="font-bold text-ink text-base">04 Berkas dan Pagu RAB</h3>
                 <p className="text-xs text-muted mt-1 max-w-2xl">
-                  Cukup unggah berkas dokumen RAB resmi (PDF / Excel / Scan) dan tentukan Total Pagu Anggaran RAB. Pagu ini akan otomatis menjadi batas acuan serapan biaya proyek yang di-ACC Direktur Utama.
+                  Unggah dokumen RAB resmi, tentukan Total Pagu Anggaran RAB, dan periksa checklist berkas pendukung komersial.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -983,7 +1247,7 @@ export function ProjectPlanningForm({
                 <div>
                   <h4 className="text-sm font-bold text-blue-950">1. Unggah Berkas Dokumen RAB Proyek (Utama)</h4>
                   <p className="text-xs text-blue-800 mt-0.5">
-                    Unggah file lembar kerja RAB resmi (Excel .xlsx, .xls, PDF, atau scan bertandatangan). Berkas ini akan otomatis terlampir sebagai dasar verifikasi Direktur Utama.
+                    Unggah file lembar kerja RAB resmi (Excel .xlsx, .xls, PDF, atau scan bertandatangan). Berkas ini otomatis terlampir sebagai dasar verifikasi Direktur Utama.
                   </p>
                 </div>
               </div>
@@ -1004,7 +1268,7 @@ export function ProjectPlanningForm({
                 <div>
                   <h4 className="text-sm font-bold text-ink">2. Total Nominal Pagu Anggaran RAB (Rp)</h4>
                   <p className="text-xs text-muted mt-0.5">
-                    Tentukan total pagu biaya yang disepakati untuk proyek ini. Angka ini yang akan otomatis dipotong oleh realisasi pembelian vendor dan kasbon SPPD lapangan.
+                    Tentukan total pagu biaya yang disetujui. Pagu ini menjadi batas pemotongan anggaran pembelian vendor dan kasbon operasional.
                   </p>
                 </div>
                 <span className="rounded-full bg-emerald-100 px-3 py-1 font-mono text-xs font-bold text-emerald-900">
@@ -1021,12 +1285,12 @@ export function ProjectPlanningForm({
                     onValueChange={(val: string) => setDirectRabTotal(Number(val) || 0)}
                     disabled={busy || (rab.length > 0 && breakdownSum > 0)}
                     min="1000"
-                    placeholder="Contoh: 50.000.000"
+                    placeholder="Contoh: 1.896.000.000"
                     className="mt-1 block w-full rounded-lg border border-line bg-white px-3 py-2 text-sm font-bold text-ink"
                   />
                   {rab.length > 0 && breakdownSum > 0 && (
                     <span className="mt-1 block text-[11px] text-brand">
-                      * Dihitung otomatis dari subtotal rincian pos biaya di bawah.
+                      * Dihitung otomatis dari subtotal rincian pos komponen anggaran di bawah.
                     </span>
                   )}
                 </label>
@@ -1047,15 +1311,15 @@ export function ProjectPlanningForm({
               </div>
             </div>
 
-            {/* Section 3: Rincian Pos Biaya RAB (Opsional) */}
+            {/* Section 3: Rincian Komponen Pos Biaya RAB */}
             <div className="rounded-xl border border-line p-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-muted">
-                    3. Rincian Pos Biaya Detail (Opsional)
+                    3. Komponen Pos Anggaran RAB (Sesuai Lampiran)
                   </h4>
                   <p className="text-xs text-muted mt-0.5">
-                    Jika ingin merincikan pos personil, uji lab sampel, dll ke dalam sistem secara detail, Anda dapat menambahkannya di bawah ini.
+                    Rincian pos komponen biaya (Tenaga ahli, survei lapangan, uji laboratorium, perjalanan dinas, overhead, dll).
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1065,11 +1329,11 @@ export function ProjectPlanningForm({
                     onClick={() => setShowDetailedBreakdown(!showDetailedBreakdown)}
                     className="text-xs text-brand font-semibold"
                   >
-                    {showDetailedBreakdown ? "Sembunyikan Rincian Pos ▲" : "Tampilkan Rincian Pos Detail ▼"}
+                    {showDetailedBreakdown ? "Sembunyikan Komponen ▲" : "Tampilkan Komponen Detail ▼"}
                   </Button>
                   {showDetailedBreakdown && (
                     <Button type="button" onClick={addRab} disabled={busy} variant="secondary" className="gap-1 text-xs">
-                      <Plus className="size-3.5" /> Tambah Pos Biaya
+                      <Plus className="size-3.5" /> Tambah Komponen
                     </Button>
                   )}
                 </div>
@@ -1080,12 +1344,12 @@ export function ProjectPlanningForm({
                   <table className="w-full text-left text-sm">
                     <thead className="bg-canvas text-muted text-xs">
                       <tr>
-                        <th className="px-2 py-2">Kategori</th>
-                        <th className="px-2 py-2">Uraian Kebutuhan</th>
+                        <th className="px-2 py-2">Komponen RAB</th>
+                        <th className="px-2 py-2">Uraian / Keterangan</th>
                         <th className="px-2 py-2 w-20">Volume</th>
                         <th className="px-2 py-2 w-24">Satuan</th>
-                        <th className="px-2 py-2 w-32">Harga Satuan (Rp)</th>
-                        <th className="px-2 py-2 w-36 text-right">Subtotal</th>
+                        <th className="px-2 py-2 w-36">Pagu Anggaran (Rp)</th>
+                        <th className="px-2 py-2 w-32 text-right">Subtotal</th>
                         <th className="px-2 py-2 text-right w-10"></th>
                       </tr>
                     </thead>
@@ -1093,7 +1357,7 @@ export function ProjectPlanningForm({
                       {rab.length === 0 ? (
                         <tr>
                           <td colSpan={7} className="px-3 py-4 text-center text-xs text-muted">
-                            Belum ada pos biaya rinci. Cukup isi Total Pagu RAB di atas dan unggah dokumen berkas RAB.
+                            Belum ada pos biaya rinci. Cukup isi Total Pagu RAB di atas atau unggah dokumen berkas RAB untuk ekstrak otomatis.
                           </td>
                         </tr>
                       ) : (
@@ -1104,13 +1368,16 @@ export function ProjectPlanningForm({
                                 value={item.category}
                                 disabled={busy}
                                 onChange={(e) => updateRab(item.id, "category", e.target.value)}
-                                className="w-full rounded border border-line px-2 py-1.5 text-xs"
+                                className="w-full rounded border border-line px-2 py-1.5 text-xs bg-white font-medium"
                               >
                                 {rabCategories.map((c) => (
                                   <option key={c.value} value={c.value}>
                                     {c.label}
                                   </option>
                                 ))}
+                                {!rabCategories.some((c) => c.value === item.category) && (
+                                  <option value={item.category}>{item.category}</option>
+                                )}
                               </select>
                             </td>
                             <td className="px-2 py-2">
@@ -1118,9 +1385,9 @@ export function ProjectPlanningForm({
                                 type="text"
                                 value={item.description}
                                 disabled={busy}
-                                placeholder="e.g. Sampling Parameter Air Limbah"
+                                placeholder="e.g. Sampling Uji Kualitas Udara & Air"
                                 onChange={(e) => updateRab(item.id, "description", e.target.value)}
-                                className="w-full rounded border border-line px-2 py-1.5 text-xs"
+                                className="w-full rounded border border-line px-2 py-1.5 text-xs bg-white"
                               />
                             </td>
                             <td className="px-2 py-2">
@@ -1131,7 +1398,7 @@ export function ProjectPlanningForm({
                                 value={item.volume}
                                 disabled={busy}
                                 onChange={(e) => updateRab(item.id, "volume", e.target.value)}
-                                className="w-full rounded border border-line px-2 py-1.5 text-xs"
+                                className="w-full rounded border border-line px-2 py-1.5 text-xs bg-white"
                               />
                             </td>
                             <td className="px-2 py-2">
@@ -1139,9 +1406,9 @@ export function ProjectPlanningForm({
                                 type="text"
                                 value={item.unit}
                                 disabled={busy}
-                                placeholder="e.g. Titik, OB, Hari"
+                                placeholder="e.g. paket, titik, OB"
                                 onChange={(e) => updateRab(item.id, "unit", e.target.value)}
-                                className="w-full rounded border border-line px-2 py-1.5 text-xs"
+                                className="w-full rounded border border-line px-2 py-1.5 text-xs bg-white"
                               />
                             </td>
                             <td className="px-2 py-2">
@@ -1150,10 +1417,10 @@ export function ProjectPlanningForm({
                                 value={item.unit_price ? String(item.unit_price) : ""}
                                 disabled={busy}
                                 onValueChange={(val: string) => updateRab(item.id, "unit_price", Number(val) || 0)}
-                                className="w-full rounded border border-line px-2 py-1.5 text-xs"
+                                className="w-full rounded border border-line px-2 py-1.5 text-xs bg-white font-mono font-medium"
                               />
                             </td>
-                            <td className="px-2 py-2 text-right font-medium text-slate-800 text-xs">
+                            <td className="px-2 py-2 text-right font-bold text-slate-900 text-xs font-mono">
                               {rupiah(item.total)}
                             </td>
                             <td className="px-2 py-2 text-right">
@@ -1174,9 +1441,9 @@ export function ProjectPlanningForm({
                       <tfoot className="border-t-2 border-slate-300 font-semibold text-slate-800">
                         <tr>
                           <td colSpan={5} className="px-3 py-3 text-right">
-                            Subtotal Pos Biaya:
+                            Total Pagu Komponen:
                           </td>
-                          <td className="px-2 py-3 text-right text-brand">{rupiah(breakdownSum)}</td>
+                          <td className="px-2 py-3 text-right text-brand font-bold font-mono">{rupiah(breakdownSum)}</td>
                           <td></td>
                         </tr>
                       </tfoot>
@@ -1185,6 +1452,45 @@ export function ProjectPlanningForm({
                 </div>
               )}
             </div>
+
+            {/* Section 4: CHECKLIST BERKAS PENDUKUNG (Sesuai Halaman 4 PDF) */}
+            <div className="rounded-xl border border-line bg-canvas/40 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted">
+                    4. Checklist Berkas Pendukung (Pra-Eksekusi Proyek)
+                  </h4>
+                  <p className="text-xs text-muted mt-0.5">
+                    Centang berkas resmi yang telah tersedia sebelum diajukan ke Direktur Utama.
+                  </p>
+                </div>
+                <span className="text-xs font-semibold text-brand">
+                  {checklist.filter((c) => c.checked).length} dari {checklist.length} Lengkap
+                </span>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2 pt-1">
+                {checklist.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => toggleChecklist(item.id)}
+                    className={`flex items-start gap-2.5 rounded-lg border p-2.5 cursor-pointer text-xs transition ${
+                      item.checked
+                        ? "border-emerald-300 bg-emerald-50/70 text-emerald-950 font-medium"
+                        : "border-line bg-white text-muted hover:border-slate-300"
+                    }`}
+                  >
+                    <span className="mt-0.5 shrink-0 text-emerald-600">
+                      {item.checked ? <CheckSquare className="size-4" /> : <Square className="size-4 text-slate-300" />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className={item.checked ? "text-ink font-semibold" : "text-slate-600"}>{item.name}</p>
+                      {item.notes && <p className="text-[10px] text-muted">{item.notes}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </Card>
         )}
 
@@ -1192,7 +1498,7 @@ export function ProjectPlanningForm({
         {activeTab === "lampiran" && (
           <Card className="p-5 space-y-5">
             <div>
-              <h3 className="font-semibold text-ink">Lampiran Dokumen Kelengkapan Proyek</h3>
+              <h3 className="font-semibold text-ink text-base">05 Lampiran Dokumen Kelengkapan Proyek</h3>
               <p className="text-xs text-muted mt-1">
                 Seluruh dokumen yang diunggah dari tab SDM, Teknis, Jadwal, dan RAB otomatis terkumpul di sini sebagai berkas lampiran resmi proyek. Anda juga dapat mengunggah dokumen pendukung lainnya secara manual.
               </p>
@@ -1214,10 +1520,9 @@ export function ProjectPlanningForm({
           <Card className="p-5 space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
               <div>
-                <h3 className="font-semibold text-ink">6. Rencana Termin Pembayaran & Penagihan Proyek</h3>
+                <h3 className="font-semibold text-ink text-base">06 Rencana Termin Pembayaran & Penagihan Proyek</h3>
                 <p className="text-xs text-muted mt-1">
-                  Bagi nilai kontrak SPK ({rupiah(contractAmount)}) ke dalam beberapa tahapan termin pembayaran berdasarkan
-                  capaian pengerjaan di lapangan.
+                  Bagi nilai kontrak SPK ({rupiah(contractAmount)}) ke dalam beberapa tahapan termin pembayaran berdasarkan capaian pengerjaan di lapangan.
                 </p>
               </div>
 
