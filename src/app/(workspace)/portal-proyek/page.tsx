@@ -31,13 +31,14 @@ export default async function ProjectPortalPage({
     w.actorRole === "manager" ||
     w.workAssignments.some((a) => ["branch_manager", "admin", "project_manager"].includes(a.job_role))
 
-  const [projectResult, branches, profiles, members, setupProjects, orgUsersRes] = await Promise.all([
+  const [projectResult, branches, profiles, members, setupProjects, orgUsersRes, clientCandidatesRes] = await Promise.all([
     w.supabase.rpc("list_portal_projects", { p_org: w.organizationId }),
     w.supabase.from("business_units").select("id,name").eq("organization_id", w.organizationId).in("kind", ["branch", "center"]),
     w.supabase.from("person_profiles").select("user_id,relationship_status").eq("organization_id", w.organizationId).in("relationship_status", ["client", "consultant", "vendor"]),
     w.supabase.from("project_memberships").select("project_id,user_id,member_type,can_submit,is_active").eq("organization_id", w.organizationId),
     canManage ? w.supabase.from("crm_projects").select("id,code,name,status").eq("organization_id", w.organizationId).order("code") : Promise.resolve({ data: [], error: null }),
     w.supabase.rpc("list_organization_users", { p_org: w.organizationId }),
+    w.supabase.rpc("list_portal_client_candidates", { p_org: w.organizationId }),
   ])
 
   const userMap = new Map<string, { email: string; fullName: string }>()
@@ -49,6 +50,23 @@ export default async function ProjectPortalPage({
       })
     }
   }
+
+  const clientList = (Array.isArray(clientCandidatesRes.data) && clientCandidatesRes.data.length > 0)
+    ? (clientCandidatesRes.data as any[]).map((c) => ({
+        user_id: c.user_id,
+        relationship_status: c.relationship_status || "client",
+        email: c.email || "",
+        fullName: c.full_name || "",
+      }))
+    : (profiles.data ?? []).map((p) => {
+        const info = userMap.get(p.user_id)
+        return {
+          user_id: p.user_id,
+          relationship_status: p.relationship_status,
+          email: info?.email || "",
+          fullName: info?.fullName || "",
+        }
+      })
 
   const missing = [projectResult.error, branches.error, profiles.error, members.error].some(isProcurementMissing)
   if (!missing && [projectResult.error, branches.error, profiles.error, members.error, setupProjects.error].some(Boolean)) {
@@ -132,25 +150,15 @@ export default async function ProjectPortalPage({
         <ProcurementUnavailable />
       ) : (
         <>
-          {/* Setup Cabang & Delegasi Akses Klien Portal 2 Arah */}
+          {/* Delegasi Akses Klien Portal 2 Arah */}
           {canManage && (
-            <div className="grid gap-6 lg:grid-cols-2">
-              <Card className="p-5">
-                <h2 className="font-semibold text-sm">Tetapkan Cabang Proyek</h2>
-                <p className="mt-1 text-xs text-muted">
-                  Pilih proyek dari CRM dan tetapkan cabang operasionalnya sebelum memulai portal.
-                </p>
-                {((setupProjects.data ?? []).filter((p) => !projects.some((scoped) => scoped.id === p.id))).length === 0 ? (
-                  <div className="mt-4 rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-xs text-emerald-900 space-y-1">
-                    <div className="flex items-center gap-2 font-bold text-emerald-800">
-                      <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
-                      <span>Semua Proyek Sudah Dialokasikan ke Cabang</span>
-                    </div>
-                    <p className="text-[11px] text-emerald-700 leading-relaxed">
-                      Seluruh proyek yang diterbitkan dari SPK resmi sudah otomatis teralokasi ke cabang operasionalnya masing-masing. Tidak ada proyek yang menggantung.
-                    </p>
-                  </div>
-                ) : (
+            <div className={((setupProjects.data ?? []).filter((p) => !projects.some((scoped) => scoped.id === p.id))).length > 0 ? "grid gap-6 lg:grid-cols-2" : "w-full"}>
+              {((setupProjects.data ?? []).filter((p) => !projects.some((scoped) => scoped.id === p.id))).length > 0 && (
+                <Card className="p-5">
+                  <h2 className="font-semibold text-sm">Tetapkan Cabang Proyek</h2>
+                  <p className="mt-1 text-xs text-muted">
+                    Pilih proyek dari CRM dan tetapkan cabang operasionalnya sebelum memulai portal.
+                  </p>
                   <form action={configurePortalProject} className="mt-4 space-y-3">
                     <fieldset disabled={w.isReadOnlyPreview} className="space-y-3">
                       <label className={label}>
@@ -180,8 +188,8 @@ export default async function ProjectPortalPage({
                       <SubmitButton>Tetapkan cabang</SubmitButton>
                     </fieldset>
                   </form>
-                )}
-              </Card>
+                </Card>
+              )}
 
               <Card className="p-5">
                 <h2 className="font-semibold text-sm">Akses Pihak Eksternal (Klien / Konsultan)</h2>
@@ -220,14 +228,13 @@ export default async function ProjectPortalPage({
                     <label className={label}>
                       Akun pengguna
                       <select name="user_id" required className={input}>
-                        <option value="">Pilih akun</option>
-                        {profiles.data?.map((p) => {
-                          const info = userMap.get(p.user_id)
-                          const labelText = info?.email
-                            ? `${relationshipLabels[p.relationship_status] ?? p.relationship_status} · ${info.email}${info.fullName ? ` (${info.fullName})` : ""}`
-                            : `${relationshipLabels[p.relationship_status] ?? p.relationship_status} · ${p.user_id.slice(0, 8)}...`
+                        <option value="">Pilih akun klien / pihak eksternal</option>
+                        {clientList.map((c) => {
+                          const labelText = c.email
+                            ? `${relationshipLabels[c.relationship_status] ?? c.relationship_status} · ${c.email}${c.fullName ? ` (${c.fullName})` : ""}`
+                            : `${relationshipLabels[c.relationship_status] ?? c.relationship_status} · ${c.fullName || c.user_id.slice(0, 8)}`
                           return (
-                            <option key={p.user_id} value={p.user_id}>
+                            <option key={c.user_id} value={c.user_id}>
                               {labelText}
                             </option>
                           )
@@ -243,11 +250,11 @@ export default async function ProjectPortalPage({
                       </select>
                     </label>
                     <label className="flex items-center gap-2 text-xs sm:col-span-2">
-                      <input name="can_submit" type="checkbox" className="rounded border-line" />
-                      <span>Boleh mengirimkan permintaan data / instruksi / respons</span>
+                      <input name="can_submit" type="checkbox" defaultChecked className="rounded border-line" />
+                      <span>Boleh mengirimkan permintaan data / instruksi / respons (Akses 2 Arah Aktif)</span>
                     </label>
                     <div className="sm:col-span-2">
-                      <SubmitButton disabled={!profiles.data?.length || !projects.length}>
+                      <SubmitButton disabled={!clientList.length || !projects.length}>
                         Simpan akses proyek
                       </SubmitButton>
                     </div>
