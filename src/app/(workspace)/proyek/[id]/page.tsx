@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   ShieldCheck,
   AlertCircle,
+  Users,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { requireWorkspace } from "@/lib/auth/context"
@@ -18,6 +19,7 @@ import { ProjectDirectorConsole, type AttachmentItem, type DirectorInsight } fro
 import { ProjectCostingCard, type ProjectCostingData } from "@/components/project/project-costing-card"
 import { loadOrganizationActorDirectory, buildWorkflowAuditSummary } from "@/lib/audit-trail"
 import { AuditWorkflowTimeline } from "@/components/procurement/audit-workflow-timeline"
+import { provisionProjectClientAction } from "../actions"
 
 export default async function ProjectDetailPage({
   params,
@@ -62,8 +64,8 @@ export default async function ProjectDetailPage({
   const sphAttIds = Array.isArray(sphRes.data?.attachment_ids) ? (sphRes.data.attachment_ids as string[]) : []
   const allAttachmentIds = Array.from(new Set([...projectAttIds, ...spkAttIds, ...sphAttIds]))
 
-  // Load procurement events, attachments, and real-time costing
-  const [eventsRes, attachmentsRes, costingRes, actorDir] = await Promise.all([
+  // Load procurement events, attachments, costing, actor directory, and client portal access
+  const [eventsRes, attachmentsRes, costingRes, actorDir, clientMembershipRes, orgUsersRes] = await Promise.all([
     supabase
       .from("procurement_events")
       .select("*")
@@ -82,10 +84,20 @@ export default async function ProjectDetailPage({
       p_project_id: id,
     }),
     loadOrganizationActorDirectory(supabase, organizationId, user),
+    supabase
+      .from("project_memberships")
+      .select("user_id, member_type, can_submit, is_active, created_at")
+      .eq("organization_id", organizationId)
+      .eq("project_id", id)
+      .eq("member_type", "client")
+      .maybeSingle(),
+    supabase.rpc("list_organization_users", { p_org: organizationId }),
   ])
   const events = eventsRes.data
   const attachmentsData = attachmentsRes.data
   const costingData = (costingRes.data && !(costingRes.data as any).error) ? (costingRes.data as ProjectCostingData) : null
+  const clientMembership = clientMembershipRes.data
+  const clientUser = (orgUsersRes.data as any[])?.find((u) => u.user_id === clientMembership?.user_id)
 
   const projectAttachments: AttachmentItem[] = (attachmentsData ?? []).map((a: any) => {
     let sourceLabel = "Lampiran Proyek & RAB"
@@ -252,6 +264,96 @@ export default async function ProjectDetailPage({
           </div>
         </Card>
       )}
+
+      {/* KARTU AKSES PORTAL KLIEN 2 ARAH (PERMINTAAN DATA, AMDALNET & MOM) */}
+      <Card className="p-5 border-brand/20 bg-gradient-to-r from-teal-50/40 via-white to-blue-50/30 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-600/10 text-teal-700">
+              <Users className="size-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900">
+                  Portal Kolaborasi Klien 2 Arah (Permintaan Data & MoM)
+                </h3>
+                {clientMembership?.is_active ? (
+                  <span className="rounded-full bg-emerald-100 border border-emerald-300 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                    ✓ Aktif 2 Arah
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                    Belum Terhubung
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted mt-0.5">
+                Klien dapat mengunggah berkas pendukung (Amdalnet), membaca notulensi rapat resmi (MoM), serta tanya-jawab 2 arah bersama PIC Proyek.
+              </p>
+            </div>
+          </div>
+
+          <Link
+            href={`/portal-proyek?project=${project.id}`}
+            className="rounded-lg bg-teal-700 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 transition"
+          >
+            Buka Portal Proyek →
+          </Link>
+        </div>
+
+        {clientMembership ? (
+          <div className="mt-2 rounded-lg bg-white/90 p-3 border border-slate-200/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div>
+              <p className="font-semibold text-slate-900">
+                Akun Klien Terhubung: <span className="text-teal-700 font-bold">{clientUser?.email || "Akun Klien"}</span>
+                {clientUser?.full_name ? ` (${clientUser.full_name})` : ""}
+              </p>
+              <p className="text-[11px] text-muted mt-0.5">
+                Izin Interaksi: <strong>Dua Arah</strong> (Dapat mengirim permintaan data, merespons instruksi, dan menulis komentar MoM)
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-slate-100 px-2.5 py-1 text-[11px] font-mono text-slate-600">
+                Kredensial Default: KlienGSP2026!
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-2 rounded-lg bg-white/90 p-4 border border-amber-200">
+            <p className="text-xs font-semibold text-slate-800 mb-2">
+              ⚡ Buat atau Hubungkan Akun Klien Otomatis untuk Proyek Ini:
+            </p>
+            <form action={provisionProjectClientAction} className="flex flex-wrap items-center gap-3">
+              <input type="hidden" name="project_id" value={project.id} />
+              <input
+                type="email"
+                name="client_email"
+                required
+                defaultValue={project.client?.email || ""}
+                placeholder="Email Klien (misal: bara@bara.test)"
+                className="h-8 rounded border border-line px-3 text-xs flex-1 min-w-[220px]"
+              />
+              <input
+                type="text"
+                name="client_name"
+                defaultValue={project.client?.name || ""}
+                placeholder="Nama Klien / PIC"
+                className="h-8 rounded border border-line px-3 text-xs w-48"
+              />
+              <button
+                type="submit"
+                disabled={isReadOnlyPreview}
+                className="h-8 rounded bg-teal-700 px-4 text-xs font-semibold text-white hover:bg-teal-800 transition disabled:opacity-50"
+              >
+                + Buat & Aktifkan Akun Klien
+              </button>
+            </form>
+            <p className="text-[11px] text-muted mt-2">
+              Sistem akan otomatis membuat akun di database, menghubungkannya ke proyek ini, dan memberikan akses interaksi 2 arah tanpa perlu query SQL manual.
+            </p>
+          </div>
+        )}
+      </Card>
 
       {/* JIKA STATUS DRAFT / REVISI: Mode Pengisian Cabang */}
       {canEdit && (

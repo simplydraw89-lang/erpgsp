@@ -4,7 +4,7 @@ import { requireWorkspace } from "@/lib/auth/context"
 import { SubmitButton } from "@/components/procurement/submit-button"
 import { ProcurementMessage, ProcurementUnavailable } from "@/components/procurement/section-nav"
 import { isProcurementMissing, procurementInput as input, procurementLabel as label, relationshipLabels } from "@/lib/procurement-ui"
-import { savePortalEntry, setPortalAccess, configurePortalProject } from "./actions"
+import { savePortalEntry, setPortalAccess, configurePortalProject, provisionPortalClientAction } from "./actions"
 import { ProjectPortalView, type PortalEntryItem } from "@/components/project/project-portal-view"
 
 type PortalProject = {
@@ -25,13 +25,17 @@ export default async function ProjectPortalPage({
   const q = await searchParams
   const w = await requireWorkspace()
   const owner = w.actorRole === "owner"
+  const canManage =
+    owner ||
+    w.actorRole === "manager" ||
+    w.workAssignments.some((a) => ["branch_manager", "admin", "project_manager"].includes(a.job_role))
 
   const [projectResult, branches, profiles, members, setupProjects, orgUsersRes] = await Promise.all([
     w.supabase.rpc("list_portal_projects", { p_org: w.organizationId }),
     w.supabase.from("business_units").select("id,name").eq("organization_id", w.organizationId).in("kind", ["branch", "center"]),
     w.supabase.from("person_profiles").select("user_id,relationship_status").eq("organization_id", w.organizationId).in("relationship_status", ["client", "consultant", "vendor"]),
     w.supabase.from("project_memberships").select("project_id,user_id,member_type,can_submit,is_active").eq("organization_id", w.organizationId),
-    owner ? w.supabase.from("crm_projects").select("id,code,name,status").eq("organization_id", w.organizationId).order("code") : Promise.resolve({ data: [], error: null }),
+    canManage ? w.supabase.from("crm_projects").select("id,code,name,status").eq("organization_id", w.organizationId).order("code") : Promise.resolve({ data: [], error: null }),
     w.supabase.rpc("list_organization_users", { p_org: w.organizationId }),
   ])
 
@@ -127,8 +131,8 @@ export default async function ProjectPortalPage({
         <ProcurementUnavailable />
       ) : (
         <>
-          {/* Owner Project Branch Setup & Access Delegation */}
-          {owner && (
+          {/* Setup Cabang & Delegasi Akses Klien Portal 2 Arah */}
+          {canManage && (
             <div className="grid gap-6 lg:grid-cols-2">
               <Card className="p-5">
                 <h2 className="font-semibold text-sm">Tetapkan Cabang Proyek</h2>
@@ -231,6 +235,51 @@ export default async function ProjectPortalPage({
                     </div>
                   </fieldset>
                 </form>
+
+                {/* Form Buat / Hubungkan Akun Klien Otomatis */}
+                <div className="mt-5 border-t border-line/60 pt-4">
+                  <h3 className="text-xs font-bold text-slate-800">
+                    ⚡ Buat Akun Klien Otomatis & Aktifkan Akses 2 Arah (Tanpa SQL)
+                  </h3>
+                  <p className="mt-0.5 text-[11px] text-muted">
+                    Sistem otomatis mendaftarkan kredensial login klien dan memberikan izin interaksi 2 arah untuk proyek yang dipilih.
+                  </p>
+                  <form action={provisionPortalClientAction} className="mt-3 space-y-2.5">
+                    <fieldset disabled={w.isReadOnlyPreview} className="space-y-2.5">
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <select name="project_id" required className="h-8 rounded border border-line bg-white px-2 text-xs">
+                          <option value="">Pilih proyek</option>
+                          {projects.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.code} · {p.name}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="email"
+                          name="client_email"
+                          required
+                          placeholder="Email Klien (mis: bara@bara.test)"
+                          className="h-8 rounded border border-line px-2.5 text-xs"
+                        />
+                        <input
+                          type="text"
+                          name="client_name"
+                          placeholder="Nama Klien / PIC"
+                          className="h-8 rounded border border-line px-2.5 text-xs"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[10px] text-muted font-mono">
+                          Password default: <strong className="text-slate-700">KlienGSP2026!</strong>
+                        </span>
+                        <SubmitButton disabled={!projects.length}>
+                          + Buat & Hubungkan Akun Klien
+                        </SubmitButton>
+                      </div>
+                    </fieldset>
+                  </form>
+                </div>
               </Card>
             </div>
           )}

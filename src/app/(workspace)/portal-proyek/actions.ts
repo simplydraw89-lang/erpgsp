@@ -119,7 +119,7 @@ export async function savePortalComment(data: FormData) {
 export async function setPortalAccess(data: FormData) {
   const w = await requireWorkspace()
   const project = text(data, "project_id")
-  if (w.actorRole !== "owner" || w.isReadOnlyPreview) finish(project, "error", "Hanya Super Admin yang dapat mengatur akses proyek eksternal.")
+  if (w.isReadOnlyPreview) finish(project, "error", "Aksi dinonaktifkan dalam mode pratinjau.")
   const { error } = await w.supabase.rpc("set_project_portal_access", {
     p_org: w.organizationId,
     p_project: project,
@@ -132,6 +132,38 @@ export async function setPortalAccess(data: FormData) {
   if (error) finish(project, "error", error.message)
   revalidatePath(path)
   finish(project, "notice", text(data, "active") === "false" ? "Akses proyek dicabut." : "Akses proyek tersimpan.")
+}
+
+export async function provisionPortalClientAction(data: FormData) {
+  const w = await requireWorkspace()
+  const project = text(data, "project_id")
+  if (w.isReadOnlyPreview) finish(project, "error", "Aksi dinonaktifkan dalam mode pratinjau.")
+
+  const email = text(data, "client_email")
+  const name = text(data, "client_name")
+  const password = text(data, "client_password") || "KlienGSP2026!"
+
+  if (!project) finish("", "error", "Pilih proyek terlebih dahulu.")
+  if (!email) finish(project, "error", "Email klien wajib diisi.")
+
+  const { data: res, error } = await w.supabase.rpc("auto_provision_project_client", {
+    p_project_id: project,
+    p_email: email,
+    p_client_name: name || null,
+    p_password: password,
+  })
+
+  if (error) finish(project, "error", error.message || "Gagal mengaktifkan akun klien.")
+
+  revalidatePath(path)
+  revalidatePath(`/proyek/${project}`)
+
+  const result = res as any
+  const noticeMsg = result?.is_new_user
+    ? `Akun klien baru (${result?.email}) berhasil dibuat & diberikan hak interaksi 2 arah untuk proyek ini! Password: ${result?.default_password}`
+    : `Akun klien (${result?.email}) berhasil dihubungkan ke proyek ini dengan hak interaksi 2 arah aktif.`
+
+  finish(project, "notice", noticeMsg)
 }
 
 export async function configurePortalProject(data: FormData) {

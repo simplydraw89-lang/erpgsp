@@ -207,3 +207,42 @@ export async function addProjectDirectorCommentAction(prevState: { error?: strin
   revalidatePath("/proyek")
   redirect(`/proyek/${id}?notice=${encodeURIComponent("Catatan arahan direksi berhasil disampaikan ke tim proyek.")}`)
 }
+
+export async function provisionProjectClientAction(formData: FormData) {
+  const { supabase, isReadOnlyPreview } = await requireWorkspace()
+  const projectId = String(formData.get("project_id") || "").trim()
+
+  if (isReadOnlyPreview) {
+    redirect(`/proyek/${projectId}?error=${encodeURIComponent("Aksi dinonaktifkan dalam mode pratinjau.")}`)
+  }
+
+  const email = String(formData.get("client_email") || "").trim()
+  const name = String(formData.get("client_name") || "").trim()
+  const password = String(formData.get("client_password") || "KlienGSP2026!").trim()
+
+  if (!projectId) {
+    redirect("/proyek?error=ID Proyek tidak valid.")
+  }
+
+  const { data, error } = await supabase.rpc("auto_provision_project_client", {
+    p_project_id: projectId,
+    p_email: email || null,
+    p_client_name: name || null,
+    p_password: password || "KlienGSP2026!",
+  })
+
+  if (error) {
+    redirect(`/proyek/${projectId}?error=${encodeURIComponent(error.message || "Gagal mengaktifkan akun klien.")}`)
+  }
+
+  revalidatePath(`/proyek/${projectId}`)
+  revalidatePath("/proyek")
+  revalidatePath("/portal-proyek")
+
+  const res = data as any
+  const noticeMsg = res?.is_new_user
+    ? `Akun klien baru (${res?.email}) berhasil dibuat & terhubung ke portal proyek 2 arah! Password awal: ${res?.default_password}`
+    : `Akun klien (${res?.email}) berhasil dihubungkan ke portal proyek dengan hak interaksi 2 arah aktif!`
+
+  redirect(`/proyek/${projectId}?notice=${encodeURIComponent(noticeMsg)}`)
+}
