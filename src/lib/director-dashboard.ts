@@ -647,13 +647,6 @@ export async function loadSphConversionSummary(
 ): Promise<SphConversionSummary> {
   const currentYear = new Date().getFullYear()
 
-  // Baseline data historis 3 tahun dari laporan eksekutif (2022, 2023, 2024)
-  const baselineYears: Record<number, { penawaran: number; deal: number; penawaranCount: number; dealCount: number }> = {
-    2022: { penawaran: 4760000000, deal: 3400000000, penawaranCount: 14, dealCount: 10 },
-    2023: { penawaran: 41032650000, deal: 6823000000, penawaranCount: 48, dealCount: 8 },
-    2024: { penawaran: 71878103000, deal: 16157800000, penawaranCount: 89, dealCount: 20 },
-  }
-
   const [branchesRes, salesDocsRes] = await Promise.all([
     supabase
       .from("business_units")
@@ -671,12 +664,9 @@ export async function loadSphConversionSummary(
   const branchesList = branchesRes.data ?? []
   const docs = salesDocsRes.data ?? []
 
-  const targetYears = [2022, 2023, 2024]
-  if (!targetYears.includes(currentYear)) {
-    targetYears.push(currentYear)
-  }
+  const targetYears = [currentYear - 3, currentYear - 2, currentYear - 1, currentYear]
 
-  // 1. Consolidated (All Branches)
+  // 1. Consolidated (All Branches) - Murni dari database (0 jika belum ada transaksi)
   const yearlyData: SphConversionYearly[] = targetYears.map((yr) => {
     const yrSph = docs.filter((s) => {
       const d = new Date(s.created_at).getFullYear()
@@ -691,19 +681,13 @@ export async function loadSphConversionSummary(
       return d === yr && s.kind === "sph" && s.status === "accepted"
     })
 
-    const dbPenawaran = yrSph.reduce((sum, s) => sum + (Number(s.amount) || 0), 0)
-    const dbDeal = Math.max(
+    const penawaranNominal = yrSph.reduce((sum, s) => sum + (Number(s.amount) || 0), 0)
+    const dealNominal = Math.max(
       yrSpk.reduce((sum, s) => sum + (Number(s.amount) || 0), 0),
       yrAcceptedSph.reduce((sum, s) => sum + (Number(s.amount) || 0), 0)
     )
-
-    const base = baselineYears[yr]
-    const penawaranNominal = dbPenawaran > 0 ? dbPenawaran : (base ? base.penawaran : 0)
-    const dealNominal = dbDeal > 0 ? dbDeal : (base ? base.deal : 0)
-    const penawaranCount = yrSph.length > 0 ? yrSph.length : (base ? base.penawaranCount : 0)
-    const dealCount = Math.max(yrSpk.length, yrAcceptedSph.length) > 0 
-      ? Math.max(yrSpk.length, yrAcceptedSph.length) 
-      : (base ? base.dealCount : 0)
+    const penawaranCount = yrSph.length
+    const dealCount = Math.max(yrSpk.length, yrAcceptedSph.length)
 
     const percentageDeal = penawaranNominal > 0 ? (dealNominal / penawaranNominal) * 100 : 0
     const percentageCount = penawaranCount > 0 ? (dealCount / penawaranCount) * 100 : 0
@@ -719,19 +703,8 @@ export async function loadSphConversionSummary(
     }
   })
 
-  // 2. Per Branch breakdown
-  // Distribution ratios for baseline years when historical DB entries don't exist per branch
-  const branchRatios: Record<string, number> = {
-    SBY: 0.45,
-    JKT: 0.35,
-    JOG: 0.20,
-    PUSAT: 0.00,
-  }
-
+  // 2. Per Branch breakdown - Murni dari database (0 jika belum ada transaksi)
   const branches: BranchConversionStat[] = branchesList.map((b) => {
-    const bCode = (b.code ?? "").toUpperCase()
-    const ratio = branchRatios[bCode] ?? (1 / Math.max(branchesList.length, 1))
-
     const branchYearly: SphConversionYearly[] = targetYears.map((yr) => {
       const bSph = docs.filter((s) => {
         const d = new Date(s.created_at).getFullYear()
@@ -746,19 +719,13 @@ export async function loadSphConversionSummary(
         return d === yr && s.kind === "sph" && s.status === "accepted" && s.branch_id === b.id
       })
 
-      const dbPenawaran = bSph.reduce((sum, s) => sum + (Number(s.amount) || 0), 0)
-      const dbDeal = Math.max(
+      const penawaranNominal = bSph.reduce((sum, s) => sum + (Number(s.amount) || 0), 0)
+      const dealNominal = Math.max(
         bSpk.reduce((sum, s) => sum + (Number(s.amount) || 0), 0),
         bAcceptedSph.reduce((sum, s) => sum + (Number(s.amount) || 0), 0)
       )
-
-      const base = baselineYears[yr]
-      const penawaranNominal = dbPenawaran > 0 ? dbPenawaran : (base ? Math.round(base.penawaran * ratio) : 0)
-      const dealNominal = dbDeal > 0 ? dbDeal : (base ? Math.round(base.deal * ratio) : 0)
-      const penawaranCount = bSph.length > 0 ? bSph.length : (base ? Math.round(base.penawaranCount * ratio) : 0)
-      const dealCount = Math.max(bSpk.length, bAcceptedSph.length) > 0
-        ? Math.max(bSpk.length, bAcceptedSph.length)
-        : (base ? Math.round(base.dealCount * ratio) : 0)
+      const penawaranCount = bSph.length
+      const dealCount = Math.max(bSpk.length, bAcceptedSph.length)
 
       const percentageDeal = penawaranNominal > 0 ? (dealNominal / penawaranNominal) * 100 : 0
       const percentageCount = penawaranCount > 0 ? (dealCount / penawaranCount) * 100 : 0

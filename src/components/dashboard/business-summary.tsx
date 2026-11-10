@@ -58,7 +58,7 @@ export function BusinessSummary({ summary, queueOnly = false }: {
           : summary.branches.length ? <div className="overflow-x-auto"><table className="w-full text-left text-xs">
             <caption className="sr-only">Ringkasan utang dan pembayaran cabang yang boleh diakses</caption>
             <thead className="bg-canvas"><tr><th scope="col" className="p-3">Cabang</th><th scope="col" className="p-3 text-right">Belum dibayar</th><th scope="col" className="p-3 text-right">Dibayar</th></tr></thead>
-            <tbody>{summary.branches.map(branch => <tr key={branch.branch_id} className="border-t border-line"><th scope="row" className="p-3 font-medium">{branch.branch_name}</th><td className="p-3 text-right">{money(branch.unpaid_amount)}</td><td className="p-3 text-right">{money(branch.paid_amount)}</td></tr>)}</tbody>
+            <tbody>{summary.branches.map(branch => <tr key={branch.branch_id} className="border-t border-line transition-colors hover:bg-slate-50"><th scope="row" className="p-3 font-medium"><Link href="/pengajuan/pembelian" className="block text-ink hover:text-brand hover:underline">{branch.branch_name}</Link></th><td className="p-3 text-right"><Link href="/pengajuan/pembelian" className="block">{money(branch.unpaid_amount)}</Link></td><td className="p-3 text-right"><Link href="/pengajuan/pembelian" className="block">{money(branch.paid_amount)}</Link></td></tr>)}</tbody>
           </table></div> : <p className="px-5 pb-5 text-sm text-muted">Belum ada laporan pembelian dalam cakupan akses Anda.</p>}
       </Card>}
     </div>
