@@ -320,8 +320,8 @@ export default async function ProjectDetailPage({
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="rounded bg-slate-100 px-2.5 py-1 text-[11px] font-mono text-slate-600">
-                Kredensial Default: KlienGSP2026!
+              <span className="rounded bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[11px] font-medium text-emerald-800">
+                🔒 Kata Sandi Privat: Klien mengatur mandiri via Forgot Password / Tautan Email
               </span>
             </div>
           </div>
@@ -356,7 +356,7 @@ export default async function ProjectDetailPage({
               </button>
             </form>
             <p className="text-[11px] text-muted mt-2">
-              Setiap proyek memiliki akun klien masing-masing. Sistem otomatis membuat akun baru di database dan mengunci hak interaksi 2 arah hanya untuk proyek ini tanpa perlu query SQL manual.
+              Sistem menghubungkan akses 2 arah untuk proyek ini. Klien dapat langsung membuat kata sandi pribadinya secara mandiri melalui menu <strong>Forgot Password</strong> di halaman login tanpa password bawaan.
             </p>
           </div>
         )}

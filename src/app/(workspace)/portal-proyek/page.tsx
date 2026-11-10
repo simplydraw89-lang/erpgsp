@@ -1,11 +1,12 @@
 import Link from "next/link"
-import { CheckCircle2 } from "lucide-react"
+import { headers } from "next/headers"
+import { CheckCircle2, KeyRound, Mail, Sparkles } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { requireWorkspace } from "@/lib/auth/context"
 import { SubmitButton } from "@/components/procurement/submit-button"
 import { ProcurementMessage, ProcurementUnavailable } from "@/components/procurement/section-nav"
 import { isProcurementMissing, procurementInput as input, procurementLabel as label, relationshipLabels } from "@/lib/procurement-ui"
-import { savePortalEntry, setPortalAccess, configurePortalProject, provisionPortalClientAction } from "./actions"
+import { savePortalEntry, setPortalAccess, configurePortalProject, provisionPortalClientAction, sendClientPasswordResetAction } from "./actions"
 import { ProjectPortalView, type PortalEntryItem } from "@/components/project/project-portal-view"
 
 type PortalProject = {
@@ -25,6 +26,11 @@ export default async function ProjectPortalPage({
 }) {
   const q = await searchParams
   const w = await requireWorkspace()
+  const headerList = await headers()
+  const host = headerList.get("host") || "localhost:3000"
+  const proto = headerList.get("x-forwarded-proto") || "http"
+  const origin = `${proto}://${host}`
+
   const owner = w.actorRole === "owner"
   const canManage =
     owner ||
@@ -386,16 +392,60 @@ export default async function ProjectPortalPage({
                         />
                       </div>
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-[10px] text-muted font-mono">
-                          Password default: <strong className="text-slate-700">KlienGSP2026!</strong>
-                        </span>
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                          <span className="inline-block size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          <span>Privat & Aman: Klien mengatur kata sandi secara mandiri via email (<strong>Forgot Password</strong> di halaman login).</span>
+                        </div>
+                        <input type="hidden" name="origin" value={origin} />
                         <SubmitButton disabled={!projects.length}>
-                          + Buat & Hubungkan Akun Klien
+                          + Hubungkan & Kirim Akses Klien
                         </SubmitButton>
                       </div>
                     </fieldset>
                   </form>
                 </div>
+
+                {/* Fitur Kirim Tautan Setup Password Klien Secara Mandiri */}
+                {clientList.length > 0 && (
+                  <div className="mt-4 rounded-xl border border-slate-200/90 bg-slate-50/70 p-3.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <KeyRound className="size-3.5 text-teal-700 shrink-0" />
+                        <span className="text-xs font-bold text-slate-800">Akses Mandiri & Setup Password Klien</span>
+                      </div>
+                      <span className="rounded bg-emerald-100 text-emerald-800 text-[10px] font-semibold px-2 py-0.5">
+                        Tanpa Password Bawaan
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Klien dapat membuat atau mengganti kata sandi kapan saja secara mandiri via menu <strong>"Forgot Password"</strong> di halaman login. Anda juga dapat mengirimkan tautan pembuatan kata sandi langsung ke email klien:
+                    </p>
+                    <div className="divide-y divide-slate-200/80 pt-1">
+                      {clientList.map((c) => (
+                        <div key={c.user_id} className="flex flex-wrap items-center justify-between gap-2 py-1.5 text-xs">
+                          <div>
+                            <span className="font-semibold text-slate-900">{c.email || c.user_id.slice(0, 8)}</span>
+                            {c.fullName && <span className="text-slate-500 ml-1">({c.fullName})</span>}
+                          </div>
+                          {c.email && (
+                            <form action={sendClientPasswordResetAction} className="inline-flex">
+                              <input type="hidden" name="project_id" value={project?.id || ""} />
+                              <input type="hidden" name="email" value={c.email} />
+                              <input type="hidden" name="origin" value={origin} />
+                              <button
+                                type="submit"
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 hover:text-brand shadow-sm transition active:scale-95"
+                              >
+                                <Mail className="size-3 text-slate-500" />
+                                <span>Kirim Tautan Buat Kata Sandi</span>
+                              </button>
+                            </form>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </Card>
             </div>
           )}

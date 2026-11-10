@@ -65,13 +65,13 @@ export function ForgotPasswordForm() {
           </div>
 
           <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
-            Reset Password
+            Reset & Setup Password
           </h1>
           <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-            Recover Your Account
+            Akses Pengguna & Klien Proyek
           </p>
           <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
-            Masukkan email terdaftar Anda untuk menerima tautan pembuatan kata sandi baru.
+            Masukkan email terdaftar Anda (termasuk akun baru klien proyek) untuk menerima tautan pembuatan kata sandi privat langsung di email Anda.
           </p>
         </div>
 

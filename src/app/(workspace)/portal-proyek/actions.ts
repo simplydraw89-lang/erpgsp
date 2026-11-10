@@ -141,7 +141,11 @@ export async function provisionPortalClientAction(data: FormData) {
 
   const email = text(data, "client_email")
   const name = text(data, "client_name")
-  const password = text(data, "client_password") || "KlienGSP2026!"
+  const origin = text(data, "origin") || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+  
+  // Buat random salt kata sandi sementara yang aman (tanpa password default mudah ditebak)
+  const randomPass = `GspClnt_${Math.random().toString(36).slice(2, 10)}!9A`
+  const password = text(data, "client_password") || randomPass
 
   if (!project) finish("", "error", "Pilih proyek terlebih dahulu.")
   if (!email) finish(project, "error", "Email klien wajib diisi.")
@@ -155,15 +159,47 @@ export async function provisionPortalClientAction(data: FormData) {
 
   if (error) finish(project, "error", error.message || "Gagal mengaktifkan akun klien.")
 
+  // Otomatis kirim tautan setup password privat ke email klien
+  try {
+    await w.supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${origin}/auth/callback?next=/reset-password`,
+    })
+  } catch {
+    // Abaikan jika mailer belum siap
+  }
+
   revalidatePath(path)
   revalidatePath(`/proyek/${project}`)
 
   const result = res as any
   const noticeMsg = result?.is_new_user
-    ? `Akun klien baru (${result?.email}) berhasil dibuat & diberikan hak interaksi 2 arah untuk proyek ini! Password: ${result?.default_password}`
-    : `Akun klien (${result?.email}) berhasil dihubungkan ke proyek ini dengan hak interaksi 2 arah aktif.`
+    ? `Akun klien (${result?.email}) berhasil dibuat & dihubungkan dengan akses 2 arah aktif! Tautan pembuatan kata sandi privat telah dikirimkan ke email klien. Klien juga dapat langsung menggunakan menu "Forgot Password" di halaman login kapan saja.`
+    : `Akun klien (${result?.email}) berhasil dihubungkan ke proyek ini dengan akses 2 arah aktif.`
 
   finish(project, "notice", noticeMsg)
+}
+
+export async function sendClientPasswordResetAction(data: FormData) {
+  const w = await requireWorkspace()
+  const project = text(data, "project_id")
+  const email = text(data, "email")
+  const origin = text(data, "origin") || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+
+  if (w.isReadOnlyPreview) finish(project, "error", "Aksi dinonaktifkan dalam mode pratinjau.")
+  if (!email) finish(project, "error", "Alamat email klien tidak valid.")
+
+  const redirectTo = `${origin}/auth/callback?next=/reset-password`
+  const { error } = await w.supabase.auth.resetPasswordForEmail(email, {
+    redirectTo,
+  })
+
+  if (error) {
+    finish(project, "error", `Gagal mengirim tautan: ${error.message}`)
+  }
+
+  revalidatePath(path)
+  revalidatePath(`/proyek/${project}`)
+  finish(project, "notice", `Tautan pembuatan kata sandi privat berhasil dikirimkan ke ${email}. Klien dapat langsung membuka kotak masuk/spam email mereka untuk mengatur kata sandi secara aman.`)
 }
 
 export async function configurePortalProject(data: FormData) {

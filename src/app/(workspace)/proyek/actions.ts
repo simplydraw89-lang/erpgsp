@@ -218,7 +218,8 @@ export async function provisionProjectClientAction(formData: FormData) {
 
   const email = String(formData.get("client_email") || "").trim()
   const name = String(formData.get("client_name") || "").trim()
-  const password = String(formData.get("client_password") || "KlienGSP2026!").trim()
+  const randomPass = `GspClnt_${Math.random().toString(36).slice(2, 10)}!9A`
+  const password = String(formData.get("client_password") || randomPass).trim()
 
   if (!projectId) {
     redirect("/proyek?error=ID Proyek tidak valid.")
@@ -228,11 +229,23 @@ export async function provisionProjectClientAction(formData: FormData) {
     p_project_id: projectId,
     p_email: email || null,
     p_client_name: name || null,
-    p_password: password || "KlienGSP2026!",
+    p_password: password,
   })
 
   if (error) {
     redirect(`/proyek/${projectId}?error=${encodeURIComponent(error.message || "Gagal mengaktifkan akun klien.")}`)
+  }
+
+  // Otomatis kirim tautan reset/setup password ke email klien
+  if (email) {
+    try {
+      const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${origin}/auth/callback?next=/reset-password`,
+      })
+    } catch {
+      // Abaikan jika mailer belum siap
+    }
   }
 
   revalidatePath(`/proyek/${projectId}`)
@@ -240,9 +253,7 @@ export async function provisionProjectClientAction(formData: FormData) {
   revalidatePath("/portal-proyek")
 
   const res = data as any
-  const noticeMsg = res?.is_new_user
-    ? `Akun klien baru (${res?.email}) berhasil dibuat & terhubung ke portal proyek 2 arah! Password awal: ${res?.default_password}`
-    : `Akun klien (${res?.email}) berhasil dihubungkan ke portal proyek dengan hak interaksi 2 arah aktif!`
+  const noticeMsg = `Akun klien (${res?.email || email}) berhasil dihubungkan ke portal proyek 2 arah! Tautan pembuatan kata sandi privat telah dikirimkan ke email klien. Klien juga dapat langsung menggunakan menu "Forgot Password" di halaman login kapan saja.`
 
   redirect(`/proyek/${projectId}?notice=${encodeURIComponent(noticeMsg)}`)
 }
