@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { CheckCircle2 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { requireWorkspace } from "@/lib/auth/context"
 import { SubmitButton } from "@/components/procurement/submit-button"
@@ -139,35 +140,47 @@ export default async function ProjectPortalPage({
                 <p className="mt-1 text-xs text-muted">
                   Pilih proyek dari CRM dan tetapkan cabang operasionalnya sebelum memulai portal.
                 </p>
-                <form action={configurePortalProject} className="mt-4 space-y-3">
-                  <fieldset disabled={w.isReadOnlyPreview} className="space-y-3">
-                    <label className={label}>
-                      Proyek belum dialokasikan
-                      <select name="project_id" required className={input}>
-                        <option value="">Pilih proyek</option>
-                        {(setupProjects.data ?? [])
-                          .filter((p) => !projects.some((scoped) => scoped.id === p.id))
-                          .map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.code} · {p.name}
+                {((setupProjects.data ?? []).filter((p) => !projects.some((scoped) => scoped.id === p.id))).length === 0 ? (
+                  <div className="mt-4 rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-xs text-emerald-900 space-y-1">
+                    <div className="flex items-center gap-2 font-bold text-emerald-800">
+                      <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
+                      <span>Semua Proyek Sudah Dialokasikan ke Cabang</span>
+                    </div>
+                    <p className="text-[11px] text-emerald-700 leading-relaxed">
+                      Seluruh proyek yang diterbitkan dari SPK resmi sudah otomatis teralokasi ke cabang operasionalnya masing-masing. Tidak ada proyek yang menggantung.
+                    </p>
+                  </div>
+                ) : (
+                  <form action={configurePortalProject} className="mt-4 space-y-3">
+                    <fieldset disabled={w.isReadOnlyPreview} className="space-y-3">
+                      <label className={label}>
+                        Proyek belum dialokasikan
+                        <select name="project_id" required className={input}>
+                          <option value="">Pilih proyek</option>
+                          {(setupProjects.data ?? [])
+                            .filter((p) => !projects.some((scoped) => scoped.id === p.id))
+                            .map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.code} · {p.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <label className={label}>
+                        Cabang operasional
+                        <select name="branch_id" required className={input}>
+                          <option value="">Pilih cabang</option>
+                          {branches.data?.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.name}
                             </option>
                           ))}
-                      </select>
-                    </label>
-                    <label className={label}>
-                      Cabang operasional
-                      <select name="branch_id" required className={input}>
-                        <option value="">Pilih cabang</option>
-                        {branches.data?.map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {b.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <SubmitButton>Tetapkan cabang</SubmitButton>
-                  </fieldset>
-                </form>
+                        </select>
+                      </label>
+                      <SubmitButton>Tetapkan cabang</SubmitButton>
+                    </fieldset>
+                  </form>
+                )}
               </Card>
 
               <Card className="p-5">
@@ -175,6 +188,11 @@ export default async function ProjectPortalPage({
                 <p className="mt-1 text-xs text-muted">
                   Berikan izin akses portal proyek kepada akun pengguna eksternal.
                 </p>
+                {(!profiles.data?.length) && (
+                  <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-blue-900 mt-3">
+                    ℹ️ Belum ada akun klien terdaftar dalam sistem. Gunakan form kilat di bawah ini untuk langsung membuat akun baru klien dan mengaktifkan akses 2 arah secara instan.
+                  </div>
+                )}
                 <form action={setPortalAccess} className="mt-4 space-y-3">
                   <fieldset disabled={w.isReadOnlyPreview} className="grid gap-3 sm:grid-cols-2">
                     <label className={label}>
@@ -247,7 +265,7 @@ export default async function ProjectPortalPage({
                   <form action={provisionPortalClientAction} className="mt-3 space-y-2.5">
                     <fieldset disabled={w.isReadOnlyPreview} className="space-y-2.5">
                       <div className="grid gap-2 sm:grid-cols-3">
-                        <select name="project_id" required className="h-8 rounded border border-line bg-white px-2 text-xs">
+                        <select name="project_id" defaultValue={project?.id || ""} required className="h-8 rounded border border-line bg-white px-2 text-xs">
                           <option value="">Pilih proyek</option>
                           {projects.map((p) => (
                             <option key={p.id} value={p.id}>
