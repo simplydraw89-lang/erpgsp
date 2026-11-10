@@ -53,11 +53,6 @@ set journal_id = null,
     project_id = null;
 update public.accounting_journals set reversal_of = null;
 update public.accounting_journal_lines set project_id = null;
-update public.payment_records
-set cash_advance_id = null,
-    cash_advance_settlement_id = null,
-    document_id = null;
-update public.approval_requests set document_id = null;
 
 do $$
 begin
