@@ -21,6 +21,24 @@ export function LoginForm({ initialError }: { initialError?: string }) {
   const [isNavigating, startNavigation] = useTransition()
   const busy = isSubmitting || isNavigating || isGoogleLoading
 
+  async function recordLoginAttempt(payload: {
+    email: string
+    status: "success" | "failed"
+    method: string
+    failureReason?: string
+  }) {
+    try {
+      await fetch("/api/security/login-attempt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      })
+    } catch {
+      // Abaikan kegagalan telemetri agar tidak mengganggu proses login
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (busy) return
@@ -29,8 +47,15 @@ export function LoginForm({ initialError }: { initialError?: string }) {
 
     const cleanEmail = email.trim()
     const cleanPassword = password
+    const loginMethod = cleanEmail.toLowerCase() === "demo@gsp.test" ? "demo_button" : "password"
 
     if (!cleanEmail.includes("@")) {
+      void recordLoginAttempt({
+        email: cleanEmail || "(tanpa-email)",
+        status: "failed",
+        method: loginMethod,
+        failureReason: "Format bukan alamat email valid",
+      })
       setErrorMessage("Gunakan alamat email lengkap (contoh: nama@perusahaan.com), bukan hanya username.")
       setIsSubmitting(false)
       return
@@ -43,6 +68,12 @@ export function LoginForm({ initialError }: { initialError?: string }) {
         password: cleanPassword,
       })
       if (error) {
+        void recordLoginAttempt({
+          email: cleanEmail,
+          status: "failed",
+          method: loginMethod,
+          failureReason: error.message,
+        })
         let msg = error.message
         if (msg.toLowerCase().includes("invalid login credentials")) {
           msg = "Email atau kata sandi tidak cocok. Pastikan akun sudah terdaftar di Supabase Auth dan kata sandi sesuai."
@@ -52,11 +83,22 @@ export function LoginForm({ initialError }: { initialError?: string }) {
         setErrorMessage(msg)
         return
       }
+      void recordLoginAttempt({
+        email: cleanEmail,
+        status: "success",
+        method: loginMethod,
+      })
       startNavigation(() => {
         router.replace("/dashboard")
         router.refresh()
       })
     } catch (error) {
+      void recordLoginAttempt({
+        email: cleanEmail,
+        status: "failed",
+        method: loginMethod,
+        failureReason: error instanceof Error ? error.message : "Login exception",
+      })
       setErrorMessage(
         error instanceof Error ? error.message : "Login tidak dapat diproses."
       )

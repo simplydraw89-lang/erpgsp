@@ -113,6 +113,7 @@ export const requireWorkspace = cache(async function requireWorkspace() {
     supabase,
     user,
     actorRole,
+    isSuperAdmin: actorRole === "owner" && !viewAs.isActive && !isDemoAccount,
     role: navigationRoles[0] ?? "staff" as OrganizationRole,
     navigationRoles,
     roleLabel: displayRoleLabel,
