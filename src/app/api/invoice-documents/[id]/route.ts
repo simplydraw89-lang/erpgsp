@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { extractDocument } from "../extract"
+import { isReadOnlyDemoUser } from "@/lib/auth/context"
 import { readViewAsState } from "@/lib/auth/view-as"
 import { isSameOrigin } from "@/lib/auth/same-origin"
 
@@ -15,7 +16,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { data: attachment } = await supabase.from("procurement_attachments").select("storage_path,organization_id,byte_size,content_type").eq("id", id).maybeSingle()
   if (!attachment) return Response.json({ error: "Lampiran tidak ditemukan atau tidak dapat diakses." }, { status: 404 })
   const preview = await readViewAsState(supabase, user.id, attachment.organization_id)
-  if (preview.isActive || preview.isInvalid) return Response.json({ error: "Pembacaan dinonaktifkan dalam mode pratinjau." }, { status: 403 })
+  if (preview.isActive || preview.isInvalid || isReadOnlyDemoUser(user)) return Response.json({ error: "Pembacaan dinonaktifkan dalam mode pratinjau." }, { status: 403 })
   if (Number(attachment.byte_size) > 10 * 1024 * 1024) return Response.json({ error: "Dokumen maksimal 10 MB." }, { status: 413 })
   const { data: file, error: downloadError } = await supabase.storage.from("procurement-documents").download(attachment.storage_path)
   if (downloadError || !file) return Response.json({ error: "Dokumen belum dapat dibaca." }, { status: 400 })

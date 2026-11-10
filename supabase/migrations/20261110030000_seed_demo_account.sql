@@ -13,7 +13,7 @@ do $$
 declare
   v_org_id uuid;
   v_demo_id uuid;
-  v_password text := 'demo123'; -- Password standar minimal 6 karakter sesuai ketentuan Supabase Auth
+  v_password text := 'GspPreview!2026#ReadOnly'; -- Kata sandi kuat unik (tidak ada di database HaveIBeenPwned)
 begin
   -- Ambil ID organisasi utama PT. Global Solusi Prima
   select id into v_org_id from public.organizations limit 1;

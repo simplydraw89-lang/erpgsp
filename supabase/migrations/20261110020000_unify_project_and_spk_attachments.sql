@@ -188,7 +188,7 @@ declare
   v_attachments uuid[];
 begin
   select * into d from public.sales_documents where id = p_id for update;
-  if d.id is null or d.kind <> 'spk' or not gsp_private.spk_reviewer(d.organization_id) then
+  if d.id is null or d.kind <> 'spk' or not gsp_private.can_review_spk(d) then
     raise exception 'Akses verifikasi SPK ditolak.' using errcode = '42501';
   end if;
   if d.version is distinct from p_version then
@@ -205,7 +205,7 @@ begin
     select * into b from public.business_units where id = d.branch_id;
     select * into c from public.sales_clients where id = d.client_id;
 
-    v_proj_code := gsp_private.generate_document_code(
+    v_proj_code := gsp_private.generate_document_number(
       d.organization_id, 'prj', current_date, c.name, b.code, null
     );
 
@@ -221,6 +221,12 @@ begin
       'Diterbitkan dari SPK ' || coalesce(d.document_number, 'SPK') || ' atas SPH No. ' || coalesce(d.sph_number::text, '-'),
       v_attachments
     ) returning id into v_proj_id;
+
+    insert into public.project_access_scopes(
+      organization_id, project_id, branch_id
+    ) values (
+      d.organization_id, v_proj_id, d.branch_id
+    ) on conflict do nothing;
 
     update public.sales_documents
     set status = v_next_status,

@@ -8,6 +8,22 @@ import { navigationForJobs } from "@/lib/auth/job-access"
 export type OrganizationRole =
   "owner" | "director" | "manager" | "finance" | "hr" | "operations" | "auditor" | "staff"
 
+const DEMO_EMAILS = new Set(["demo@gsp.test", "tamu@gsp.test", "guest@gsp.test"])
+
+export function isReadOnlyDemoUser(
+  user: { email?: string | null; user_metadata?: unknown },
+  actorRole?: string | null,
+): boolean {
+  const cleanEmail = (user.email ?? "").trim().toLowerCase()
+  return (
+    DEMO_EMAILS.has(cleanEmail) ||
+    cleanEmail.startsWith("demo@") ||
+    cleanEmail.endsWith(".demo") ||
+    Boolean((user.user_metadata as Record<string, unknown> | null)?.is_demo === true) ||
+    actorRole === "auditor"
+  )
+}
+
 export const requireWorkspace = cache(async function requireWorkspace() {
   const supabase = await createClient()
   const {
@@ -87,10 +103,7 @@ export const requireWorkspace = cache(async function requireWorkspace() {
   }
 
   // Deteksi akun demo / tamu / auditor agar otomatis terkunci dalam mode Read-Only permanen
-  const isDemoAccount =
-    Boolean(user.email && (user.email.toLowerCase().includes("demo") || user.email.toLowerCase().includes("tamu") || user.email.toLowerCase().includes("guest"))) ||
-    Boolean((user.user_metadata as any)?.is_demo === true) ||
-    Boolean(actorRole === "auditor")
+  const isDemoAccount = isReadOnlyDemoUser(user, actorRole)
 
   if (isDemoAccount) {
     displayRoleLabel = displayRoleLabel ? `${displayRoleLabel} (Demo / Hanya Lihat)` : "Eksekutif (Demo / Hanya Lihat)"

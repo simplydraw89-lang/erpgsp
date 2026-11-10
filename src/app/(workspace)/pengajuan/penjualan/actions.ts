@@ -296,79 +296,7 @@ export async function createSalesInvoiceAction(data: FormData) {
   let finalInvoiceId = rpcInvId as string | undefined
 
   if (rpcErr) {
-    const { data: client } = await context.supabase
-      .from("sales_clients")
-      .select("name")
-      .eq("id", project.client_id)
-      .single()
-
-    const { data: branch } = await context.supabase
-      .from("business_units")
-      .select("code")
-      .eq("id", project.branch_id)
-      .single()
-
-    const clientSlug = (client?.name || "CLIENT").replace(/[^a-zA-Z0-9]/g, "-").toUpperCase().slice(0, 15)
-    const branchCode = (branch?.code || "JKT").toUpperCase()
-    const now = new Date()
-    const mmyy = `${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getFullYear()).slice(2)}`
-    const fallbackInvNum = `INV/${clientSlug}/${branchCode}/${mmyy}.${String(Date.now()).slice(-4)}`
-
-    const vat = Math.round(amount * 0.11)
-    const wht = Math.round(amount * 0.02)
-    const total = amount + vat
-    const net = total - wht
-
-    const { data: insertedInv } = await context.supabase.from("sales_invoices").insert({
-      organization_id: context.organizationId,
-      branch_id: project.branch_id,
-      project_id: project.id,
-      spk_id: project.spk_id,
-      client_id: project.client_id,
-      invoice_number: fallbackInvNum,
-      term_name: termName,
-      term_index: termIndex,
-      percentage: percentage,
-      invoice_date: invoiceDate,
-      due_date: dueDate,
-      amount: amount,
-      vat_rate: 11.0,
-      vat_amount: vat,
-      wht_rate: 2.0,
-      wht_amount: wht,
-      total_amount: total,
-      net_receivable: net,
-      status: "unpaid",
-      notes: notes,
-      created_by: context.user.id,
-    }).select("id").single()
-
-    if (insertedInv?.id) {
-      finalInvoiceId = insertedInv.id
-    }
-
-    const existingTerms = Array.isArray(project.payment_terms) ? project.payment_terms : []
-    const updatedTerms = existingTerms.map((t: any) => {
-      if (t.index === termIndex || t.name === termName) {
-        return {
-          ...t,
-          status: "invoiced",
-          invoice_id: finalInvoiceId,
-          invoice_number: fallbackInvNum,
-          invoice_date: invoiceDate,
-          due_date: dueDate,
-          vat_amount: vat,
-          wht_amount: wht,
-          total_amount: total,
-        }
-      }
-      return t
-    })
-
-    await context.supabase
-      .from("crm_projects")
-      .update({ payment_terms: updatedTerms })
-      .eq("id", projectId)
+    finish(path, "error", rpcErr.message || "Gagal menerbitkan invoice penagihan.")
   }
 
   // Otomatis posting jurnal akuntansi piutang penjualan
@@ -409,52 +337,7 @@ export async function recordInvoicePaymentAction(data: FormData) {
   })
 
   if (rpcErr) {
-    const now = new Date()
-    const mmyy = `${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getFullYear()).slice(2)}`
-    const fallbackKwtNum = `KWT/GSP-PUSAT/${mmyy}.${String(Date.now()).slice(-4)}`
-
-    await context.supabase
-      .from("sales_invoices")
-      .update({
-        status: "paid",
-        paid_amount: paidAmount,
-        paid_at: paidAt,
-        payment_method: paymentMethod,
-        bank_name: bankName,
-        bank_reference: bankReference,
-        receipt_number: fallbackKwtNum,
-        wht_proof_number: whtProofNumber || null,
-        notes: notes,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", invoiceId)
-
-    if (projectId) {
-      const { data: project } = await context.supabase
-        .from("crm_projects")
-        .select("payment_terms")
-        .eq("id", projectId)
-        .single()
-
-      if (project && Array.isArray(project.payment_terms)) {
-        const updatedTerms = project.payment_terms.map((t: any) => {
-          if (t.invoice_id === invoiceId || t.status === "invoiced") {
-            return {
-              ...t,
-              status: "paid",
-              receipt_number: fallbackKwtNum,
-              paid_amount: paidAmount,
-              paid_at: paidAt,
-            }
-          }
-          return t
-        })
-        await context.supabase
-          .from("crm_projects")
-          .update({ payment_terms: updatedTerms })
-          .eq("id", projectId)
-      }
-    }
+    finish(path, "error", rpcErr.message || "Gagal mencatat penerimaan pembayaran invoice.")
   }
 
   // Otomatis posting jurnal akuntansi penerimaan kas & uang muka PPh 23

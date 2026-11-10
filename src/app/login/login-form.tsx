@@ -145,7 +145,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
             type={showPassword ? "text" : "password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
+            autoComplete={email.trim().toLowerCase() === "demo@gsp.test" ? "off" : "current-password"}
             placeholder="Password"
             className="h-11 w-full rounded-xl border border-slate-200/90 bg-slate-50/70 pl-10 pr-10 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 disabled:bg-slate-100"
           />
@@ -241,22 +241,24 @@ export function LoginForm({ initialError }: { initialError?: string }) {
         <span className="text-xs font-semibold">Google</span>
       </Button>
 
-      {/* Akses Cepat Tamu / Akun Demo (Hanya Lihat) */}
-      <div className="mt-4 pt-3.5 border-t border-slate-100 flex flex-col items-center gap-1.5 text-center">
-        <p className="text-[11px] text-slate-400 font-medium">Ingin melihat pratinjau sistem?</p>
-        <button
-          type="button"
-          onClick={() => {
-            setEmail("demo@gsp.test")
-            setPassword("demo123")
-            setErrorMessage("")
-          }}
-          disabled={busy}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 active:scale-95"
-        >
-          <span>Gunakan Akun Demo (demo@gsp.test)</span>
-        </button>
-      </div>
+      {/* Akses Cepat Tamu / Akun Demo (Hanya Lihat - Dikunci di Aplikasi & RLS Database) */}
+      {process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN !== "false" && (
+        <div className="mt-4 pt-3.5 border-t border-slate-100 flex flex-col items-center gap-1.5 text-center">
+          <p className="text-[11px] text-slate-400 font-medium">Ingin melihat pratinjau sistem (Hanya Lihat)?</p>
+          <button
+            type="button"
+            onClick={() => {
+              setEmail("demo@gsp.test")
+              setPassword("GspPreview!2026#ReadOnly")
+              setErrorMessage("")
+            }}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 active:scale-95"
+          >
+            <span>Gunakan Akun Demo (Read-Only)</span>
+          </button>
+        </div>
+      )}
     </div>
   )
 }

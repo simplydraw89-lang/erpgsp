@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { createClient } from "@/lib/supabase/server"
+import { isReadOnlyDemoUser } from "@/lib/auth/context"
 import { readViewAsState } from "@/lib/auth/view-as"
 import { isSameOrigin } from "@/lib/auth/same-origin"
 import { extractDocument } from "./extract"
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
     if (salesPermission.error || !salesPermission.data) return Response.json({ error: "Unggah dokumen penjualan hanya untuk peran yang berwenang pada cabang ini." }, { status: 403 })
   }
   const viewAs = await readViewAsState(supabase, user.id, branch.organization_id)
-  if (viewAs.isActive || viewAs.isInvalid) return Response.json({ error: "Unggah dinonaktifkan dalam mode pratinjau." }, { status: 403 })
+  if (viewAs.isActive || viewAs.isInvalid || isReadOnlyDemoUser(user)) return Response.json({ error: "Unggah dinonaktifkan dalam mode pratinjau." }, { status: 403 })
   const bytes = Buffer.from(await file.arrayBuffer())
   const extension = bytes.subarray(0, 5).toString() === "%PDF-" ? "pdf" : bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) ? "png" : bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 ? "jpg" : null
   if (!extension) return Response.json({ error: "Isi berkas harus PDF, PNG, atau JPEG." }, { status: 400 })

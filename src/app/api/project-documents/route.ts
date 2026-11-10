@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { createClient } from "@/lib/supabase/server"
+import { isReadOnlyDemoUser } from "@/lib/auth/context"
 import { readViewAsState } from "@/lib/auth/view-as"
 import { isSameOrigin } from "@/lib/auth/same-origin"
 import { extractProjectPlanningDocument, type ProjectOcrTarget } from "./extract"
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
   }
 
   const viewAs = await readViewAsState(supabase, user.id, branch.organization_id)
-  if (viewAs.isActive || viewAs.isInvalid) {
+  if (viewAs.isActive || viewAs.isInvalid || isReadOnlyDemoUser(user)) {
     return Response.json({ error: "Unggah dinonaktifkan dalam mode pratinjau." }, { status: 403 })
   }
 
