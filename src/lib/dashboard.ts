@@ -1,5 +1,10 @@
 export const workspaceTimeZone = "Asia/Bangkok"
 
+function isPhoneNumber(val: string): boolean {
+  const cleaned = val.replace(/[\s\-+()]/g, "")
+  return cleaned.length >= 6 && /^\d+$/.test(cleaned)
+}
+
 export function getPersonalGreeting(name: string, now = new Date()) {
   const hour = Number(
     new Intl.DateTimeFormat("en-GB", {
@@ -16,7 +21,12 @@ export function getPersonalGreeting(name: string, now = new Date()) {
         : hour < 18
           ? "Selamat sore"
           : "Selamat malam"
-  const firstName = name.trim().split(/\s+/)[0] || "Pengguna"
+
+  let firstName = name.trim()
+  if (!name.startsWith("PT.") && !name.startsWith("CV.") && !name.startsWith("PT ") && !name.startsWith("CV ")) {
+    firstName = name.trim().split(/\s+/)[0] || "Pengguna"
+  }
+
   return {
     greeting,
     firstName,
@@ -34,10 +44,27 @@ export function getDisplayName(user: {
   email?: string
   user_metadata?: Record<string, unknown>
 }) {
-  const full = user.user_metadata?.full_name ?? user.user_metadata?.name
-  return typeof full === "string" && full.trim()
-    ? full.trim()
-    : user.email?.split("@")[0] || "Pengguna"
+  const meta = user.user_metadata || {}
+  const candidates = [
+    meta.company_name,
+    meta.client_name,
+    meta.full_name,
+    meta.name,
+  ]
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) {
+      const trimmed = c.trim()
+      if (!isPhoneNumber(trimmed)) {
+        return trimmed
+      }
+    }
+  }
+
+  const emailPrefix = user.email?.split("@")[0] || ""
+  if (emailPrefix) {
+    return emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1)
+  }
+  return "Pengguna"
 }
 
 export function calendarDate(now = new Date()) {

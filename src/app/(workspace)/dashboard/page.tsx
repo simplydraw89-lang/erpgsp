@@ -1,5 +1,5 @@
 import { requireWorkspace } from "@/lib/auth/context"
-import { calendarDate,calendarDay, daysUntil, workspaceTimeZone } from "@/lib/dashboard"
+import { calendarDate, calendarDay, daysUntil, workspaceTimeZone } from "@/lib/dashboard"
 import { isWorkflowMissing, labels, recordSpecs } from "@/lib/workflow"
 import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import { ApplicationGrid } from "@/components/dashboard/application-grid"
@@ -7,9 +7,11 @@ import { BusinessSummary } from "@/components/dashboard/business-summary"
 import { loadBusinessSummary } from "@/lib/business-summary"
 import { SphConversionChart } from "@/components/dashboard/sph-conversion-chart"
 import { loadSphConversionSummary } from "@/lib/director-dashboard"
+import { ClientPortalDashboard } from "@/components/project/client-portal-dashboard"
 
 export default async function DashboardPage() {
   const { supabase, organizationId, user, role, navigationRoles, relationshipStatus, actorRole, workAssignments } = await requireWorkspace()
+  
   const isExecutive =
     role === "owner" ||
     role === "director" ||
@@ -18,13 +20,88 @@ export default async function DashboardPage() {
     workAssignments?.some((j: any) =>
       ["president", "finance_director", "technical_director"].includes(j.job_role)
     )
-  if (!navigationRoles.length) return <div className="space-y-6">
-    <section className="portal-summary"><h1 className="text-xl font-semibold">Ruang pribadi & proyek Anda</h1>
-      <p className="mt-2 text-sm text-slate-600">Hubungan dengan perusahaan: {relationshipStatus === "client" ? "Klien" : relationshipStatus === "vendor" ? "Vendor" : "Konsultan / tenaga ahli"}.</p>
-      <p className="mt-2 text-sm text-slate-600">Informasi tersedia sesuai penugasan proyek aktif dan dokumen yang dibagikan perusahaan.</p>
-      <Link href="/portal-proyek" className="mt-4 inline-block text-sm font-semibold text-brand">Buka portal proyek →</Link>
-    </section><ApplicationGrid role={role} navigationRoles={navigationRoles} />
-  </div>
+
+  // JIKA PENGGUNA ADALAH KLIEN: Tampilkan Dashboard Terpadu 1 Halaman (Laporan, Progress Visual, & Ruang Kolaborasi 2 Arah)
+  if (!navigationRoles.length || relationshipStatus === "client") {
+    const [portalProjectsRes, clientInfoRes] = await Promise.all([
+      supabase.rpc("list_portal_projects", { p_org: organizationId }),
+      supabase.from("sales_clients").select("id, name, email, contact").eq("organization_id", organizationId).limit(1).maybeSingle(),
+    ])
+
+    const projects = (Array.isArray(portalProjectsRes.data) ? portalProjectsRes.data : []) as any[]
+    const activeProject = projects[0]
+
+    let portalEntries: any[] = []
+    let projectAttachments: any[] = []
+
+    if (activeProject) {
+      const [entriesRes, commentsRes, projectDataRes] = await Promise.all([
+        supabase
+          .from("project_portal_entries")
+          .select("id, kind, audience, title, body, created_by, created_at, attachment_ids, metadata")
+          .eq("organization_id", organizationId)
+          .eq("project_id", activeProject.id)
+          .order("created_at", { ascending: false })
+          .limit(100),
+        supabase
+          .from("project_portal_comments")
+          .select("id, entry_id, user_id, sender_name, sender_role, message, created_at")
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("crm_projects")
+          .select("id, code, name, status, start_date, target_end_date, attachment_ids")
+          .eq("id", activeProject.id)
+          .maybeSingle(),
+      ])
+
+      const rawEntries = (entriesRes.data ?? []) as any[]
+      const comments = (commentsRes.data ?? []) as any[]
+      const commentsByEntry: Record<string, any[]> = {}
+      for (const c of comments) {
+        if (!commentsByEntry[c.entry_id]) commentsByEntry[c.entry_id] = []
+        commentsByEntry[c.entry_id].push(c)
+      }
+
+      portalEntries = rawEntries.map((e) => ({
+        ...e,
+        comments: commentsByEntry[e.id] ?? [],
+      }))
+
+      const attIds = Array.isArray(projectDataRes.data?.attachment_ids) ? (projectDataRes.data?.attachment_ids as string[]) : []
+      if (attIds.length > 0) {
+        const { data: attData } = await supabase
+          .from("procurement_attachments")
+          .select("id, file_name, content_type, byte_size")
+          .in("id", attIds)
+        projectAttachments = attData ?? []
+      }
+    }
+
+    const clientCompany = clientInfoRes.data?.name || "PT. Bara Prima Mandiri"
+
+    return (
+      <ClientPortalDashboard
+        project={
+          activeProject
+            ? {
+                id: activeProject.id,
+                code: activeProject.code,
+                name: activeProject.name,
+                status: activeProject.status,
+                branch_name: activeProject.branch_name,
+                start_date: activeProject.start_date,
+                target_end_date: activeProject.target_end_date,
+              }
+            : null
+        }
+        clientCompany={clientCompany}
+        entries={portalEntries}
+        projectAttachments={projectAttachments}
+        canSubmit={Boolean(activeProject?.can_submit ?? true)}
+      />
+    )
+  }
+
   const businessSummaryPromise = loadBusinessSummary(supabase, organizationId)
   const sphConversionPromise = isExecutive ? loadSphConversionSummary(supabase, organizationId) : Promise.resolve(null)
   const today = calendarDate()

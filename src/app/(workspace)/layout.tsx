@@ -15,11 +15,33 @@ export default async function WorkspaceLayout({
     navigationRoles,
     roleLabel,
     actorRole,
+    relationshipStatus,
     isReadOnlyPreview,
     isPreviewInvalid,
     user,
+    supabase,
+    organizationId,
   } = await requireWorkspace()
-  const userName = getDisplayName(user)
+
+  let userName = getDisplayName(user)
+
+  // Jika akun adalah klien dan nama masih nomor HP atau default, ambil nama perusahaan resmi
+  if (relationshipStatus === "client" || (!navigationRoles.length && user.email?.includes("bara"))) {
+    try {
+      const { data: clientData } = await supabase
+        .from("sales_clients")
+        .select("name, contact")
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (clientData?.name) {
+        userName = clientData.name
+      }
+    } catch {
+      // fallback to userName
+    }
+  }
 
   return (
     <WorkspaceShell

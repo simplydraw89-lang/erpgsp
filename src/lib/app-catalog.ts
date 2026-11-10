@@ -223,7 +223,7 @@ export const applicationGroups = [
         name: "Struktur & akses",
         href: "/struktur-akses",
         icon: UsersRound,
-        roles: everyone,
+        roles: ["owner", "director"],
         description: "Pusat, cabang, status individu dan penugasan pekerjaan",
       },
       {
@@ -258,7 +258,7 @@ export function getApplicationGroups(role: OrganizationRole | OrganizationRole[]
     .map((group) => ({
       ...group,
       apps: group.apps.filter((app) =>
-        portalOnly ? ["/portal-proyek", "/struktur-akses"].includes(app.href)
+        portalOnly ? ["/portal-proyek"].includes(app.href)
           : roles.some(role => (app.roles as readonly string[]).includes(role)),
       ),
     }))
