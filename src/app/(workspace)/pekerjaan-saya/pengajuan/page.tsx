@@ -6,7 +6,7 @@ import { requireWorkspace } from "@/lib/auth/context"
 import { loadMySubmissions } from "@/lib/my-submissions"
 import { labels } from "@/lib/workflow"
 import { purchaseStatusLabels, formatDateID } from "@/lib/procurement-ui"
-import { sphStatusLabels } from "@/lib/sales"
+import { sphStatusLabels, spkStatusLabels, projectStatusLabels } from "@/lib/sales"
 
 export default async function MySubmissionsPage({
   searchParams,
@@ -54,6 +54,8 @@ export default async function MySubmissionsPage({
   
   const statusLabel = (row: typeof rows[number]) => {
     if (row.kind === "SPH") return sphStatusLabels[row.status] ?? row.status
+    if (row.kind === "SPK") return spkStatusLabels[row.status] ?? row.status
+    if (row.kind === "Proyek") return projectStatusLabels[row.status] ?? row.status
     return statuses[row.status] ?? row.status
   }
 
@@ -85,6 +87,7 @@ export default async function MySubmissionsPage({
               { value: "Pembelian", label: "Pembelian" },
               { value: "SPH", label: "SPH (Penawaran)" },
               { value: "SPK", label: "SPK (Perintah Kerja)" },
+              { value: "Proyek", label: "Proyek & RAB" },
               { value: "Usulan vendor", label: "Usulan Vendor" },
               { value: "Klien", label: "Klien" },
             ],

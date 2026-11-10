@@ -100,10 +100,10 @@ export type SalesNotifications = {
 }
 
 export const projectStatusLabels: Record<string, string> = {
-  draft: "Draft Perencanaan",
+  draft: "SPK Disetujui Dirut — Wajib Lengkapi Dokumen & RAB Proyek",
   director_review: "Menunggu Persetujuan Direktur Utama",
   active: "Proyek Aktif & Berjalan",
-  revision_requested: "Perlu Revisi Dokumen & RAB",
+  revision_requested: "Perlu Revisi Dokumen & RAB Proyek",
   rejected: "Ditolak Direktur Utama",
   completed: "Pekerjaan Selesai",
 }

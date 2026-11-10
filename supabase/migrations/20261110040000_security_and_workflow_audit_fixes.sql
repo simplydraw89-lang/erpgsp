@@ -253,7 +253,26 @@ begin
 
     perform gsp_private.procurement_log(
       d.organization_id, d.branch_id, d.id, 'spk', 'approved', p_note,
-      jsonb_build_object('project_id', v_proj_id, 'project_code', v_proj_code, 'status', v_next_status)
+      jsonb_build_object(
+        'project_id', v_proj_id,
+        'project_code', v_proj_code,
+        'status', v_next_status,
+        'notified_roles', array['Admin Cabang', 'Manager Cabang'],
+        'branch_name', coalesce(b.name, 'Cabang')
+      )
+    );
+
+    perform gsp_private.procurement_log(
+      d.organization_id, d.branch_id, v_proj_id, 'project', 'project_created_from_spk',
+      coalesce(nullif(btrim(p_note), ''), 'SPK disetujui Direktur Utama. Menunggu kelengkapan dokumen & RAB dari Admin Cabang dan Manager Cabang ' || coalesce(b.name, '')),
+      jsonb_build_object(
+        'spk_id', d.id,
+        'spk_number', d.document_number,
+        'project_code', v_proj_code,
+        'status', 'draft',
+        'assigned_to_roles', array['Admin Cabang', 'Manager Cabang'],
+        'branch_name', coalesce(b.name, 'Cabang')
+      )
     );
 
     return v_proj_id;
@@ -1434,6 +1453,198 @@ begin
     p_org, p_branch, p_id, p_type, p_action, auth.uid(), p_note, v_enriched
   );
 end;
+$$;
+
+-- ============================================================================
+-- 16. NOTIFIKASI & REMINDER OTOMATIS KE ADMIN CABANG & MANAGER CABANG SAAT SPK DI-ACC DIRUT
+-- ============================================================================
+create or replace function gsp_private.api_sph_review_queue(p_org uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(jsonb_agg(q order by q.submitted_at asc), '[]'::jsonb)
+  from (
+    -- Antrean SPH (Manager Cabang / Direktur Keuangan / Accounting / Finance)
+    select
+      d.id,
+      'sph'::text as kind,
+      coalesce(d.document_number, 'SPH No. ' || d.sph_number::text) || ' • ' || d.title as title,
+      d.status,
+      d.branch_id,
+      coalesce(d.amount, 0) as amount,
+      d.created_at as submitted_at
+    from public.sales_documents d
+    where d.organization_id = p_org
+      and d.kind = 'sph'
+      and d.status in ('branch_review', 'director_review', 'accounting_review', 'finance_review')
+      and gsp_private.can_review_sph(d)
+
+    union all
+
+    -- Antrean SPK (Khusus Direktur Utama / Super Admin)
+    select
+      d.id,
+      'spk'::text as kind,
+      coalesce(d.document_number, 'SPK') || ' • ' || d.title as title,
+      d.status,
+      d.branch_id,
+      coalesce(d.amount, 0) as amount,
+      d.created_at as submitted_at
+    from public.sales_documents d
+    where d.organization_id = p_org
+      and d.kind = 'spk'
+      and d.status = 'director_review'
+      and gsp_private.can_review_spk(d)
+
+    union all
+
+    -- Antrean Proyek & Pagu RAB (Direktur Utama & Direksi untuk director_review,
+    -- SERTA Admin Cabang & Manager Cabang untuk draft / revision_requested setelah SPK di-ACC Dirut)
+    select
+      p.id,
+      'project'::text as kind,
+      coalesce(p.code, 'PRJ') || ' • ' || p.name || coalesce(' (' || b.name || ')', '') as title,
+      p.approval_status as status,
+      p.branch_id,
+      coalesce(p.contract_amount, 0) as amount,
+      coalesce(p.submitted_at, p.created_at) as submitted_at
+    from public.crm_projects p
+    left join public.business_units b on b.id = p.branch_id
+    where p.organization_id = p_org
+      and (
+        (
+          p.approval_status = 'director_review'
+          and (gsp_private.can_decide_project(p) or gsp_private.can_review_project(p))
+        )
+        or (
+          p.approval_status in ('draft', 'revision_requested')
+          and (
+            gsp_private.has_job(p.organization_id, p.branch_id, array['admin', 'branch_manager'])
+            or gsp_private.is_superadmin(p.organization_id)
+          )
+        )
+      )
+  ) q;
+$$;
+
+create or replace function gsp_private.api_sales_notifications(p_org uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+ with items as (
+  -- SPH (Persetujuan ke Direktur Keuangan & Tindak Lanjut Cabang)
+  select d.id, 'sph'::text as kind, d.sph_number, d.document_number, d.status, d.review_note, d.created_at,
+   case when gsp_private.can_review_sph(d) then 'approval' else 'follow_up' end category,
+   case when gsp_private.can_review_sph(d) then 'Persetujuan SPH Direktur Keuangan' else 'SPH perlu tindak lanjut' end label
+  from public.sales_documents d
+  where d.organization_id = p_org
+    and d.kind = 'sph'
+    and gsp_private.sales_internal_member(p_org)
+    and (
+      gsp_private.can_review_sph(d)
+      or (
+        (d.created_by = auth.uid() or gsp_private.has_job(d.organization_id, d.branch_id, array['admin', 'branch_manager']))
+        and gsp_private.sph_opener(d)
+        and d.status in ('revision_requested', 'rejected', 'ready')
+        and not exists(select 1 from public.sales_documents s where s.kind = 'spk' and s.accepted_sph_id = d.id)
+      )
+    )
+
+  union all
+
+  -- SPK (Persetujuan LANGSUNG ke Direktur Utama & Reminder ke Admin Cabang + Manager Cabang)
+  select d.id, 'spk'::text as kind, d.sph_number, d.document_number, d.status, d.review_note, d.created_at,
+   case when gsp_private.can_review_spk(d) then 'approval' else 'follow_up' end category,
+   case when gsp_private.can_review_spk(d) then 'Persetujuan SPK Direktur Utama'
+        when d.status = 'revision_requested' then 'SPK perlu revisi (' || coalesce(b.name, 'Cabang') || ')'
+        when d.status = 'ready' then 'SPK Disetujui Dirut: Segera Lengkapi Dokumen & RAB Proyek (' || coalesce(b.name, 'Cabang') || ')'
+        else 'SPK perlu tindak lanjut' end label
+  from public.sales_documents d
+  left join public.business_units b on b.id = d.branch_id
+  where d.organization_id = p_org
+    and d.kind = 'spk'
+    and gsp_private.sales_internal_member(p_org)
+    and (
+      gsp_private.can_review_spk(d)
+      or (
+        (d.created_by = auth.uid() or gsp_private.has_job(d.organization_id, d.branch_id, array['admin', 'branch_manager']))
+        and (
+          d.status in ('revision_requested', 'rejected')
+          or (
+            d.status = 'ready'
+            and exists (
+              select 1 from public.crm_projects p
+              where (p.id = d.project_id or p.spk_id = d.id)
+                and p.approval_status in ('draft', 'revision_requested')
+            )
+          )
+        )
+      )
+    )
+
+  union all
+
+  -- Proyek (Persetujuan Perencanaan & Pagu RAB ke Direktur Utama / Arahan Direksi,
+  -- SERTA Notifikasi & Reminder ke Admin Cabang + Manager Cabang saat SPK disetujui Dirut)
+  select
+    p.id,
+    'project'::text as kind,
+    null::integer as sph_number,
+    p.code as document_number,
+    p.approval_status as status,
+    coalesce(
+      nullif(btrim(p.review_note), ''),
+      case
+        when p.approval_status = 'draft' then
+          'SPK telah di-ACC Direktur Utama. Admin Cabang & Manager Cabang ' || coalesce(b.name, '') || ' wajib segera membuat dan mengajukan kelengkapan dokumen, RAB, jadwal, serta tim SDM proyek "' || p.name || '".'
+        else p.review_note
+      end
+    ) as review_note,
+    coalesce(p.submitted_at, p.created_at) as created_at,
+    case when p.approval_status = 'director_review' and (gsp_private.can_decide_project(p) or gsp_private.can_review_project(p)) then 'approval' else 'follow_up' end category,
+    case when p.approval_status = 'director_review' and gsp_private.can_decide_project(p) then 'Persetujuan Perencanaan Proyek & RAB (Direktur Utama)'
+         when p.approval_status = 'director_review' and gsp_private.can_review_project(p) then 'Pemeriksaan Perencanaan Proyek & RAB (Direksi)'
+         when p.approval_status = 'draft' then '⚡ SPK Disetujui Dirut — Segera Lengkapi Dokumen & RAB Proyek (' || coalesce(b.name, 'Cabang') || ')'
+         when p.approval_status = 'revision_requested' then '⚠️ Revisi Dokumen & RAB Proyek (' || coalesce(b.name, 'Cabang') || ')'
+         when p.approval_status = 'active' then 'Proyek telah di-ACC Direktur Utama (Siap Eksekusi)'
+         when p.approval_status = 'rejected' then 'Pengajuan Proyek ditolak Direktur Utama'
+         else 'Proyek perlu tindak lanjut' end label
+  from public.crm_projects p
+  left join public.business_units b on b.id = p.branch_id
+  where p.organization_id = p_org
+    and (
+      (p.approval_status = 'director_review' and (gsp_private.can_decide_project(p) or gsp_private.can_review_project(p)))
+      or (
+        p.approval_status in ('draft', 'revision_requested')
+        and (
+          gsp_private.has_job(p.organization_id, p.branch_id, array['admin', 'branch_manager'])
+          or p.created_by = auth.uid()
+          or gsp_private.is_superadmin(p.organization_id)
+        )
+      )
+      or (
+        p.approval_status in ('active', 'rejected')
+        and (
+          p.created_by = auth.uid()
+          or gsp_private.has_job(p.organization_id, p.branch_id, array['admin', 'branch_manager', 'project_manager'])
+          or gsp_private.is_superadmin(p.organization_id)
+          or gsp_private.can_access_business(p.organization_id, p.branch_id, 'operations')
+          or gsp_private.can_access_business(p.organization_id, p.branch_id, 'sales')
+        )
+      )
+    )
+ )
+ select jsonb_build_object(
+   'total', count(*),
+   'items', coalesce((select jsonb_agg(x order by x.created_at desc) from (select * from items order by created_at desc limit 100) x), '[]')
+ )
+ from items;
 $$;
 
 notify pgrst, 'reload schema';

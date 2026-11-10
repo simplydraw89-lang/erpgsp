@@ -94,9 +94,53 @@ export async function loadMySubmissions(supabase: SupabaseClient, organizationId
       kind: source.table === "sales_documents" ? String(row.kind).toUpperCase() : source.label,
       status: source.status ? String(row[source.status]) : "registered",
       createdAt: String(row.created_at),
-      href: source.table === "sales_documents" ? (row.kind === "spk" ? "/pengajuan/penjualan/spk" : `/pengajuan/penjualan/sph/${row.id}`) : source.path(String(row.id))
+      href: source.table === "sales_documents" ? (row.kind === "spk" ? `/pengajuan/penjualan/spk/${row.id}` : `/pengajuan/penjualan/sph/${row.id}`) : source.path(String(row.id))
     }))
   }))
 
-  return [...purchases, ...vendors, ...others.flat()].sort((a,b) => b.createdAt.localeCompare(a.createdAt))
+  // 4. Proyek Cabang (khusus Admin Cabang & Manager Cabang pada cabang terkait atau pembuat proyek)
+  const { data: assignments } = await supabase
+    .from("work_assignments")
+    .select("branch_id, job_role")
+    .eq("organization_id", organizationId)
+    .eq("user_id", userId)
+
+  const branchRoleIds = Array.from(
+    new Set(
+      (assignments ?? [])
+        .filter(a => a.branch_id && ["admin", "branch_manager", "project_manager"].includes(a.job_role))
+        .map(a => String(a.branch_id))
+    )
+  )
+
+  let projectQuery = supabase
+    .from("crm_projects")
+    .select("id, code, name, branch_id, approval_status, status, created_at, created_by, client:sales_clients(name)")
+    .eq("organization_id", organizationId)
+    .order("created_at", { ascending: false })
+    .limit(50)
+
+  if (branchRoleIds.length > 0) {
+    projectQuery = projectQuery.or(`created_by.eq.${userId},branch_id.in.(${branchRoleIds.join(",")})`)
+  } else {
+    projectQuery = projectQuery.eq("created_by", userId)
+  }
+
+  const projectRes = await projectQuery
+  const projects = ((projectRes.data ?? []) as any[]).map(row => ({
+    id: String(row.id),
+    purchaseId: null,
+    source: "crm_projects",
+    title: `${row.code || "PRJ"} • ${row.name || "Proyek"}`,
+    branchId: String(row.branch_id || ""),
+    branchName: branchMap.get(String(row.branch_id)) || "-",
+    vendorName: row.client?.name || "-",
+    invoiceNumber: String(row.code || "-"),
+    kind: "Proyek",
+    status: String(row.approval_status || row.status || "draft"),
+    createdAt: String(row.created_at),
+    href: `/proyek/${row.id}`,
+  }))
+
+  return [...purchases, ...vendors, ...others.flat(), ...projects].sort((a,b) => b.createdAt.localeCompare(a.createdAt))
 }
