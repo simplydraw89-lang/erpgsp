@@ -8,6 +8,7 @@ export type ExtractedInvoice = {
   invoice_number?: string
   invoice_date?: string
   due_date?: string
+  branch_hint?: string
   vendor_name?: string
   vendor_address?: string
   vendor_npwp?: string

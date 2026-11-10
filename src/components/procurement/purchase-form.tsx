@@ -91,43 +91,97 @@ export function PurchaseForm({ branches, vendors, accounts, projects, purchase, 
     })
   }
 
+  function guessAccountForDescription(desc: string): string {
+    if (!accounts.length) return ""
+    const lower = (desc || "").toLowerCase()
+    const keywordRules: Array<{ pattern: RegExp; matchAccount: RegExp }> = [
+      { pattern: /\b(survei|survey|lapangan|mobilisasi|sampling|laboratorium|uji\s+lab|teknis|tenaga\s+ahli|konsultan|subkon|proyek)\b/i, matchAccount: /\b(proyek|lapangan|survei|konsultan|tenaga\s+ahli|beban\s+pokok|hpp|operasional|jasa)\b/i },
+      { pattern: /\b(sewa|rental|kendaraan|gedung|kantor|alat)\b/i, matchAccount: /\b(sewa|kendaraan|peralatan|gedung)\b/i },
+      { pattern: /\b(atk|alat\s+tulis|cetak|fotokopi|dokumen|laporan|kertas)\b/i, matchAccount: /\b(atk|alat\s+tulis|cetak|administrasi|perlengkapan)\b/i },
+      { pattern: /\b(tiket|hotel|penginapan|perjalanan|dinas|akomodasi|transport)\b/i, matchAccount: /\b(perjalanan|dinas|transport|akomodasi)\b/i },
+      { pattern: /\b(listrik|air|internet|telepon|komunikasi)\b/i, matchAccount: /\b(listrik|air|internet|telepon|utilitas)\b/i },
+    ]
+    for (const rule of keywordRules) {
+      if (rule.pattern.test(lower)) {
+        const found = accounts.find(a => rule.matchAccount.test(a.name))
+        if (found) return found.id
+      }
+    }
+    const defaultExpense = accounts.find(a => a.account_type === "expense") ?? accounts[0]
+    return defaultExpense?.id ?? ""
+  }
+
   function handleExtracted(data: ExtractedInvoice) {
     if (data.invoice_number) setInvoiceNumber(data.invoice_number)
     if (data.invoice_date) setInvoiceDate(data.invoice_date)
     if (data.due_date) setRequestedPaymentDate(data.due_date)
-    if (data.tax_invoice_number) setTaxInvoiceNumber(data.tax_invoice_number)
-    if (data.tax_invoice_date) setTaxInvoiceDate(data.tax_invoice_date)
+    setTaxInvoiceNumber(data.tax_invoice_number ?? "")
+    setTaxInvoiceDate(data.tax_invoice_date ?? "")
     if (data.vat_mode) setVat(data.vat_mode)
     if (data.withholding_code) {
       setPph(data.withholding_code)
       if (data.withholding_rate !== undefined) setRate(data.withholding_rate)
     }
 
+    let activeBranch = branch
+    if (!purchase && data.branch_hint) {
+      const hintLower = data.branch_hint.toLowerCase()
+      const matchedBranch = branches.find(
+        b =>
+          b.name.toLowerCase().includes(hintLower) ||
+          (hintLower.includes("jogja") && b.name.toLowerCase().includes("jogja")) ||
+          (hintLower.includes("yogya") && b.name.toLowerCase().includes("jogja"))
+      )
+      if (matchedBranch && matchedBranch.id !== branch) {
+        activeBranch = matchedBranch.id
+        setBranch(matchedBranch.id)
+      }
+    }
+
     if (data.vendor_name) {
       setVendorName(data.vendor_name)
       setNewVendorName(data.vendor_name)
-      // Auto-match vendor in current branch
       const extractedNorm = cleanOrgName(data.vendor_name)
       if (extractedNorm) {
         const match = vendors.find(v => {
-          if (v.branch_id && v.branch_id !== branch && v.status !== "approved") return false
+          if (v.branch_id && v.branch_id !== activeBranch && v.status !== "approved") return false
           const vNorm = cleanOrgName(v.name)
           return vNorm === extractedNorm || vNorm.includes(extractedNorm) || extractedNorm.includes(vNorm)
         })
         if (match) {
           setVendorId(match.id)
           setShowProposeVendor(false)
-          if (!data.vendor_address && match.address) { setVendorAddress(match.address); setNewVendorAddress(match.address); }
+          const resolvedAddr = data.vendor_address || match.address || ""
+          setVendorAddress(resolvedAddr)
+          setNewVendorAddress(resolvedAddr)
+          setVendorNpwp(data.vendor_npwp || match.npwp || "")
+          setVendorBankOwner(data.bank_owner || match.bank_owner || data.vendor_name)
+          setVendorBankAccount(data.bank_account || match.bank_account || "")
         } else {
+          setVendorId("")
           setShowProposeVendor(true)
+          setVendorAddress(data.vendor_address ?? "")
+          setNewVendorAddress(data.vendor_address ?? "")
+          setVendorNpwp(data.vendor_npwp ?? "")
+          setVendorBankOwner(data.bank_owner || data.vendor_name)
+          setVendorBankAccount(data.bank_account ?? "")
         }
       }
+    } else {
+      if (data.vendor_address) { setVendorAddress(data.vendor_address); setNewVendorAddress(data.vendor_address) }
+      if (data.vendor_npwp) setVendorNpwp(data.vendor_npwp)
+      if (data.bank_owner) setVendorBankOwner(data.bank_owner)
+      if (data.bank_account) setVendorBankAccount(data.bank_account)
     }
-    if (data.vendor_address) { setVendorAddress(data.vendor_address); setNewVendorAddress(data.vendor_address); }
-    if (data.vendor_npwp) setVendorNpwp(data.vendor_npwp)
-    if (data.bank_owner) setVendorBankOwner(data.bank_owner)
-    if (data.bank_account) setVendorBankAccount(data.bank_account)
-    if (data.lines?.length) setLines(data.lines.map(row => ({ ...row, account_id: "" })))
+
+    if (data.lines?.length) {
+      setLines(
+        data.lines.map(row => ({
+          ...row,
+          account_id: guessAccountForDescription(row.description),
+        }))
+      )
+    }
   }
 
   return <form action={accountingReview ? reviewPurchase : savePurchase} className="space-y-6">

@@ -40,11 +40,14 @@ export type ExtractedProjectPlanning = {
 }
 
 async function extractPdfText(bytes: Buffer) {
+  // @ts-expect-error pdfjs-dist worker module does not expose a TypeScript declaration file
+  await import("pdfjs-dist/legacy/build/pdf.worker.mjs")
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs")
-  pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(
-    path.join(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs")
-  ).href
-  const task = pdfjs.getDocument({ data: new Uint8Array(bytes), verbosity: 0 })
+  const task = pdfjs.getDocument({
+    data: new Uint8Array(bytes),
+    verbosity: 0,
+    useSystemFonts: true,
+  })
   try {
     const doc = await task.promise
     const pages: string[] = []
@@ -194,21 +197,33 @@ async function extractWithGeminiProject(
     "gemini-2.0-flash",
   ].filter((m): m is string => Boolean(m))
 
+  const isVertexKey = apiKey.startsWith("AQ.")
+
   for (const modelName of [...new Set(candidateModels)]) {
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
-        {
+    const endpoints = isVertexKey
+      ? [
+          `https://aiplatform.googleapis.com/v1/publishers/google/models/${modelName}:generateContent?key=${apiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+        ]
+      : [
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+          `https://aiplatform.googleapis.com/v1/publishers/google/models/${modelName}:generateContent?key=${apiKey}`,
+        ]
+
+    for (const url of endpoints) {
+      try {
+        const response = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [
               {
+                role: "user",
                 parts: [
                   { text: prompt },
                   {
-                    inline_data: {
-                      mime_type: mimeType,
+                    inlineData: {
+                      mimeType,
                       data: base64Data,
                     },
                   },
@@ -216,72 +231,72 @@ async function extractWithGeminiProject(
               },
             ],
             generationConfig: {
-              response_mime_type: "application/json",
+              responseMimeType: "application/json",
               temperature: 0.1,
             },
           }),
+        })
+
+        if (!response.ok) {
+          continue
         }
-      )
 
-      if (!response.ok) {
-        continue
+        const data = await response.json()
+        const content = data?.candidates?.[0]?.content?.parts?.[0]?.text
+        if (!content) continue
+
+        const cleaned = content.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim()
+        const parsed = JSON.parse(cleaned)
+
+        return {
+          title: parsed.title ? String(parsed.title).trim() : undefined,
+          meeting_date: parsed.meeting_date ? String(parsed.meeting_date).trim() : undefined,
+          agreed_points: Array.isArray(parsed.agreed_points) ? parsed.agreed_points.map((p: any) => String(p).trim()).filter(Boolean) : undefined,
+          action_items: Array.isArray(parsed.action_items) ? parsed.action_items.map((a: any) => ({
+            task: String(a.task || "").trim(),
+            pic: a.pic ? String(a.pic).trim() : undefined,
+            deadline: a.deadline ? String(a.deadline).trim() : undefined,
+          })) : undefined,
+          work_details: parsed.work_details || undefined,
+          starts_on: parsed.starts_on || undefined,
+          ends_on: parsed.ends_on || undefined,
+          manpower: Array.isArray(parsed.manpower)
+            ? parsed.manpower.map((m: any) => ({
+                name: String(m.name || "").trim(),
+                role: String(m.role || "").trim(),
+                certification: m.certification ? String(m.certification).trim() : undefined,
+                duration: m.duration ? String(m.duration).trim() : undefined,
+              }))
+            : undefined,
+          timesheet_schedule: Array.isArray(parsed.timesheet_schedule)
+            ? parsed.timesheet_schedule.map((s: any) => ({
+                phase: String(s.phase || "").trim(),
+                start_date: s.start_date ? String(s.start_date).trim() : "",
+                end_date: s.end_date ? String(s.end_date).trim() : "",
+                pic: s.pic ? String(s.pic).trim() : "",
+              }))
+            : undefined,
+          rab_breakdown: Array.isArray(parsed.rab_breakdown)
+            ? parsed.rab_breakdown.map((r: any) => {
+                const vol = Number(r.volume) || 1
+                const price = Number(r.unit_price) || 0
+                const validCategories = ["personil", "non_personil", "lab_sampling", "operasional", "sidang_perizinan"]
+                const cat = validCategories.includes(r.category) ? r.category : "operasional"
+                return {
+                  category: cat as any,
+                  description: String(r.description || "").trim(),
+                  volume: vol,
+                  unit: String(r.unit || "Paket").trim(),
+                  unit_price: price,
+                  total: Number(r.total) || Math.round(vol * price),
+                }
+              })
+            : undefined,
+          summary: parsed.summary || "Dokumen berhasil dianalisis dengan AI Gemini Vision.",
+        }
+      } catch {
+        // Coba endpoint/model berikutnya
       }
-
-      const data = await response.json()
-      const content = data?.candidates?.[0]?.content?.parts?.[0]?.text
-      if (!content) continue
-
-      const cleaned = content.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim()
-      const parsed = JSON.parse(cleaned)
-
-      return {
-        title: parsed.title ? String(parsed.title).trim() : undefined,
-        meeting_date: parsed.meeting_date ? String(parsed.meeting_date).trim() : undefined,
-        agreed_points: Array.isArray(parsed.agreed_points) ? parsed.agreed_points.map((p: any) => String(p).trim()).filter(Boolean) : undefined,
-        action_items: Array.isArray(parsed.action_items) ? parsed.action_items.map((a: any) => ({
-          task: String(a.task || "").trim(),
-          pic: a.pic ? String(a.pic).trim() : undefined,
-          deadline: a.deadline ? String(a.deadline).trim() : undefined,
-        })) : undefined,
-        work_details: parsed.work_details || undefined,
-        starts_on: parsed.starts_on || undefined,
-        ends_on: parsed.ends_on || undefined,
-        manpower: Array.isArray(parsed.manpower)
-          ? parsed.manpower.map((m: any) => ({
-              name: String(m.name || "").trim(),
-              role: String(m.role || "").trim(),
-              certification: m.certification ? String(m.certification).trim() : undefined,
-              duration: m.duration ? String(m.duration).trim() : undefined,
-            }))
-          : undefined,
-        timesheet_schedule: Array.isArray(parsed.timesheet_schedule)
-          ? parsed.timesheet_schedule.map((s: any) => ({
-              phase: String(s.phase || "").trim(),
-              start_date: s.start_date ? String(s.start_date).trim() : "",
-              end_date: s.end_date ? String(s.end_date).trim() : "",
-              pic: s.pic ? String(s.pic).trim() : "",
-            }))
-          : undefined,
-        rab_breakdown: Array.isArray(parsed.rab_breakdown)
-          ? parsed.rab_breakdown.map((r: any) => {
-              const vol = Number(r.volume) || 1
-              const price = Number(r.unit_price) || 0
-              const validCategories = ["personil", "non_personil", "lab_sampling", "operasional", "sidang_perizinan"]
-              const cat = validCategories.includes(r.category) ? r.category : "operasional"
-              return {
-                category: cat as any,
-                description: String(r.description || "").trim(),
-                volume: vol,
-                unit: String(r.unit || "Paket").trim(),
-                unit_price: price,
-                total: Number(r.total) || Math.round(vol * price),
-              }
-            })
-          : undefined,
-        summary: parsed.summary || "Dokumen berhasil dianalisis dengan AI Gemini Vision.",
-      }
-    } catch {
-      // Coba model berikutnya
     }
   }
 

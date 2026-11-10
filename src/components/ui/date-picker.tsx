@@ -16,11 +16,27 @@ interface DatePickerProps {
   id?: string
 }
 
-// Convert YYYY-MM-DD to DD/MM/YYYY
+// Normalize any date string (YYYY-MM-DD, DD-MM-YYYY, DD/MM/YYYY) into YYYY-MM-DD
+function normalizeToIso(raw: string | null | undefined): string {
+  if (!raw) return ""
+  const clean = raw.trim().slice(0, 10)
+  const parts = clean.split(/[-/.]/)
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      return `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`
+    }
+    if (parts[2].length === 4) {
+      return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`
+    }
+  }
+  return clean
+}
+
+// Convert YYYY-MM-DD (or DD-MM-YYYY) to DD/MM/YYYY
 function toDisplay(iso: string | null | undefined): string {
   if (!iso) return ""
-  const clean = iso.slice(0, 10)
-  const parts = clean.split("-")
+  const norm = normalizeToIso(iso)
+  const parts = norm.split("-")
   if (parts.length === 3 && parts[0].length === 4) {
     return `${parts[2]}/${parts[1]}/${parts[0]}`
   }
@@ -53,15 +69,16 @@ export function DatePicker({
   id,
 }: DatePickerProps) {
   const isControlled = value !== undefined
-  const initialIso = isControlled ? (value ?? "") : defaultValue
+  const initialIso = normalizeToIso(isControlled ? (value ?? "") : defaultValue)
   const [internalIso, setInternalIso] = useState<string>(initialIso)
   const [displayValue, setDisplayValue] = useState<string>(toDisplay(initialIso))
   const hiddenDateRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (isControlled) {
-      setInternalIso(value ?? "")
-      setDisplayValue(toDisplay(value ?? ""))
+      const norm = normalizeToIso(value ?? "")
+      setInternalIso(norm)
+      setDisplayValue(toDisplay(norm))
     }
   }, [value, isControlled])
 
