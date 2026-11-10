@@ -1,6 +1,8 @@
-import React from "react"
+"use client"
+
+import React, { useState, useMemo } from "react"
 import { Card } from "@/components/ui/card"
-import type { WorkflowAuditSummary } from "@/lib/audit-trail"
+import type { WorkflowAuditSummary, EnrichedAuditStep } from "@/lib/audit-trail"
 import {
   Clock,
   UserCheck,
@@ -14,6 +16,10 @@ import {
   Send,
   XCircle,
   Sparkles,
+  ChevronDown,
+  ChevronUp,
+  LayoutList,
+  Eye,
 } from "lucide-react"
 
 const BADGE_STYLES: Record<
@@ -40,6 +46,22 @@ const DOT_STYLES: Record<
   indigo: "bg-indigo-600 ring-indigo-100",
 }
 
+type TimelineGroupItem =
+  | { type: "single"; step: EnrichedAuditStep }
+  | {
+      type: "group"
+      groupId: string
+      actorName: string
+      actorRole: string
+      actorBranch: string
+      actorEmail: string
+      startStepNumber: number
+      endStepNumber: number
+      latestCreatedAt: string
+      steps: EnrichedAuditStep[]
+      totalDurationLabel?: string
+    }
+
 export function AuditWorkflowTimeline({
   summary,
   title = "Log Audit, Posisi Dokumen & KPI Waktu Pengerjaan",
@@ -48,6 +70,76 @@ export function AuditWorkflowTimeline({
   title?: string
 }) {
   const { creator, currentHolder, metrics, steps, actorKpiList, isCompleted, isRevisionOrRejected } = summary
+
+  const [isCompactMode, setIsCompactMode] = useState(true)
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+
+  function toggleGroup(groupId: string) {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [groupId]: !prev[groupId],
+    }))
+  }
+
+  // Kelompokkan pembaruan draft yang berurutan jika dalam mode ringkas
+  const timelineItems: TimelineGroupItem[] = useMemo(() => {
+    if (!isCompactMode) {
+      return steps.map((step) => ({ type: "single", step }))
+    }
+
+    const items: TimelineGroupItem[] = []
+    let currentDraftGroup: EnrichedAuditStep[] = []
+
+    function flushDraftGroup() {
+      if (currentDraftGroup.length === 0) return
+      if (currentDraftGroup.length === 1) {
+        items.push({ type: "single", step: currentDraftGroup[0] })
+      } else {
+        const first = currentDraftGroup[0]
+        const last = currentDraftGroup[currentDraftGroup.length - 1]
+        items.push({
+          type: "group",
+          groupId: `draft-group-${first.id}`,
+          actorName: last.actor.fullName,
+          actorRole: last.actor.roleLabel,
+          actorBranch: last.actor.branchName,
+          actorEmail: last.actor.email,
+          startStepNumber: first.stepNumber,
+          endStepNumber: last.stepNumber,
+          latestCreatedAt: last.createdAtFormatted,
+          steps: [...currentDraftGroup],
+          totalDurationLabel: last.durationFromPrevLabel || undefined,
+        })
+      }
+      currentDraftGroup = []
+    }
+
+    for (const step of steps) {
+      const isDraftUpdate =
+        step.actionBadge.label === "Update Draft" ||
+        step.action === "draft_updated" ||
+        step.action === "planning_updated" ||
+        step.action === "updated"
+
+      // Hanya grup jika aktornya sama persis
+      const prevInGroup = currentDraftGroup[currentDraftGroup.length - 1]
+      const sameActor = !prevInGroup || prevInGroup.actor.userId === step.actor.userId
+
+      if (isDraftUpdate && sameActor) {
+        currentDraftGroup.push(step)
+      } else {
+        flushDraftGroup()
+        if (isDraftUpdate) {
+          currentDraftGroup.push(step)
+        } else {
+          items.push({ type: "single", step })
+        }
+      }
+    }
+
+    flushDraftGroup()
+    return items
+  }, [steps, isCompactMode])
 
   return (
     <Card className="overflow-hidden border border-line bg-white shadow-sm">
@@ -261,143 +353,303 @@ export function AuditWorkflowTimeline({
 
         {/* TIMELINE KRONOLOGIS LOG AUDIT */}
         <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4">
-            Kronologi Lengkap Riwayat Tindakan & Disposisi ({steps.length} Tahap Tercatat)
-          </h3>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                Kronologi Riwayat Tindakan & Disposisi ({steps.length} Tahap Tercatat)
+              </h3>
+              <p className="text-[11px] text-muted mt-0.5">
+                {isCompactMode
+                  ? "Tampilan Ringkas aktif: pembaruan draft berulang dirangkum agar mudah dibaca."
+                  : "Tampilan Lengkap aktif: menampilkan seluruh rincian per tahap."}
+              </p>
+            </div>
+
+            {/* TOGGLE MODE TAMPILAN RINGKAS VS RINCI */}
+            <div className="flex items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setIsCompactMode(true)}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1 transition ${
+                  isCompactMode
+                    ? "bg-white text-brand shadow-xs font-bold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <LayoutList className="size-3.5" />
+                Mode Ringkas
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCompactMode(false)}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1 transition ${
+                  !isCompactMode
+                    ? "bg-white text-brand shadow-xs font-bold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <Eye className="size-3.5" />
+                Mode Detail
+              </button>
+            </div>
+          </div>
 
           {steps.length === 0 ? (
             <p className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-xs text-muted">
               Belum ada riwayat aktivitas tercatat untuk dokumen ini.
             </p>
           ) : (
-            <ol className="relative border-l-2 border-slate-200 ml-3 space-y-5">
-              {steps.map((step) => (
-                <li key={step.id} className="ml-5 relative">
-                  {/* Titik Indikator Timeline */}
-                  <span
-                    className={`absolute -left-[27px] top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full ring-4 ${
-                      DOT_STYLES[step.actionBadge.tone]
-                    }`}
-                  />
+            <ol className="relative border-l-2 border-slate-200 ml-3 space-y-4">
+              {timelineItems.map((item, itemIdx) => {
+                // 1. TAMPILAN KELOMPOK PEMBARUAN DRAFT (GROUPED)
+                if (item.type === "group") {
+                  const isExpanded = Boolean(expandedGroups[item.groupId])
+                  return (
+                    <li key={item.groupId} className="ml-5 relative">
+                      <span className="absolute -left-[27px] top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-blue-500 ring-4 ring-blue-100" />
+                      <div className="rounded-xl border border-blue-200/80 bg-blue-50/40 p-3 text-xs space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded bg-blue-100 px-2 py-0.5 font-mono text-[11px] font-bold text-blue-900">
+                              Tahap #{item.startStepNumber} – #{item.endStepNumber}
+                            </span>
+                            <span className="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-white px-2.5 py-0.5 text-[11px] font-bold text-blue-900">
+                              Pembaruan Draft ({item.steps.length}x tersimpan)
+                            </span>
+                            {item.totalDurationLabel && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-white border border-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                                <Timer className="size-3 text-brand" />
+                                {item.totalDurationLabel}
+                              </span>
+                            )}
+                          </div>
+                          <time className="font-mono text-[11px] text-slate-500">
+                            {item.latestCreatedAt}
+                          </time>
+                        </div>
 
-                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs space-y-2.5">
-                    {/* Baris Atas: Nomor Tahap, Badge Aksi, Durasi SLA, dan Waktu Presisi */}
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-slate-700">
-                          Tahap #{step.stepNumber}
-                        </span>
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold ${
-                            BADGE_STYLES[step.actionBadge.tone]
-                          }`}
-                        >
-                          {step.actionBadge.label}
-                        </span>
-                        {step.durationFromPrevLabel && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
-                            <Timer className="size-3 text-brand" />
-                            {step.durationContextLabel || "Durasi respons"}:{" "}
-                            <strong className="text-ink">{step.durationFromPrevLabel}</strong>
-                          </span>
-                        )}
-                      </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-slate-800 leading-relaxed">
+                            Draft & lampiran diperbarui {item.steps.length} kali oleh{" "}
+                            <strong className="text-slate-900">{item.actorName}</strong>{" "}
+                            <span className="text-slate-500">({item.actorRole} · {item.actorBranch})</span>
+                          </p>
 
-                      <time className="font-mono text-xs font-medium text-slate-500">
-                        {step.createdAtFormatted}
-                      </time>
-                    </div>
-
-                    {/* Judul Tindakan */}
-                    <p className="text-sm font-bold text-ink">{step.actionTitle}</p>
-
-                    {/* Kotak Detail User Eksekutor & Tujuan Disposisi / Pengembalian Revisi */}
-                    <div className="grid gap-2.5 rounded-lg bg-slate-50 p-3 text-xs sm:grid-cols-2 border border-slate-200/80">
-                      <div>
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 block">
-                          Dilakukan Oleh (Eksekutor):
-                        </span>
-                        <p className="font-bold text-slate-900 mt-0.5">
-                          {step.actor.fullName}
-                        </p>
-                        <p className="text-brand font-medium">
-                          {step.actor.roleLabel} · {step.actor.branchName}
-                        </p>
-                        {step.actor.email && (
-                          <p className="font-mono text-[11px] text-slate-500">{step.actor.email}</p>
-                        )}
-                      </div>
-
-                      {step.routedTo && (
-                        <div
-                          className={`rounded-md p-2 border ${
-                            step.routedTo.isRevisionReturn
-                              ? "bg-amber-50/90 border-amber-200 text-amber-950"
-                              : "bg-white border-slate-200/80 text-slate-800"
-                          }`}
-                        >
-                          <span className="text-[11px] font-semibold uppercase tracking-wide flex items-center gap-1 text-slate-600">
-                            {step.routedTo.isRevisionReturn ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleGroup(item.groupId)}
+                            className="inline-flex items-center gap-1 rounded border border-blue-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-900 hover:bg-blue-50 transition"
+                          >
+                            {isExpanded ? (
                               <>
-                                <RotateCcw className="size-3 text-amber-700" />
-                                <span className="text-amber-900 font-bold">{step.routedTo.label}:</span>
+                                <ChevronUp className="size-3" /> Sembunyikan Rincian
                               </>
                             ) : (
                               <>
-                                <ArrowRight className="size-3 text-brand" />
-                                <span>{step.routedTo.label}:</span>
+                                <ChevronDown className="size-3" /> Lihat Rincian ({item.steps.length} kali edit)
                               </>
                             )}
+                          </button>
+                        </div>
+
+                        {/* SUB-LIST JIKA DI-EXPAND */}
+                        {isExpanded && (
+                          <div className="mt-2.5 space-y-1.5 border-t border-blue-200/60 pt-2.5 pl-2">
+                            {item.steps.map((subStep) => (
+                              <div
+                                key={subStep.id}
+                                className="flex flex-wrap items-center justify-between gap-2 rounded bg-white/80 px-2.5 py-1.5 text-[11px] text-slate-700 border border-blue-100"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono font-bold text-slate-500">
+                                    #{subStep.stepNumber}
+                                  </span>
+                                  <span>{subStep.actionTitle}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {subStep.durationFromPrevLabel && (
+                                    <span className="text-[10px] text-slate-500 font-mono">
+                                      +{subStep.durationFromPrevLabel}
+                                    </span>
+                                  )}
+                                  <time className="font-mono text-[10px] text-slate-500">
+                                    {subStep.createdAtFormatted}
+                                  </time>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  )
+                }
+
+                // 2. TAMPILAN LANGKAH TUNGGAL (SINGLE STEP)
+                const step = item.step
+                const isDraftUpdate =
+                  step.actionBadge.label === "Update Draft" ||
+                  step.action === "draft_updated" ||
+                  step.action === "planning_updated" ||
+                  step.action === "updated"
+
+                const isSameActorRouting =
+                  step.routedTo &&
+                  (step.routedTo.personName === step.actor.fullName ||
+                    step.routedTo.personEmail === step.actor.email)
+
+                return (
+                  <li key={step.id} className="ml-5 relative">
+                    {/* Titik Indikator Timeline */}
+                    <span
+                      className={`absolute -left-[27px] top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full ring-4 ${
+                        DOT_STYLES[step.actionBadge.tone]
+                      }`}
+                    />
+
+                    <div
+                      className={`rounded-xl border bg-white p-3.5 shadow-2xs space-y-2 ${
+                        step.actionBadge.tone === "emerald"
+                          ? "border-emerald-200/80 bg-emerald-50/20"
+                          : step.actionBadge.tone === "amber"
+                          ? "border-amber-200/80 bg-amber-50/30"
+                          : step.actionBadge.tone === "rose"
+                          ? "border-rose-200/80 bg-rose-50/30"
+                          : "border-slate-200"
+                      }`}
+                    >
+                      {/* Baris Atas: Nomor Tahap, Badge Aksi, Durasi SLA, dan Waktu Presisi */}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-slate-700">
+                            Tahap #{step.stepNumber}
                           </span>
-                          <p className="font-bold text-slate-900 mt-0.5">
-                            {step.routedTo.personName}
-                          </p>
-                          <p className="text-[11px] font-medium text-slate-600">
-                            {step.routedTo.roleLabel}
-                            {step.routedTo.personEmail ? ` · ${step.routedTo.personEmail}` : ""}
-                          </p>
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold ${
+                              BADGE_STYLES[step.actionBadge.tone]
+                            }`}
+                          >
+                            {step.actionBadge.label}
+                          </span>
+                          {step.durationFromPrevLabel && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                              <Timer className="size-3 text-brand" />
+                              {step.durationContextLabel || "Durasi respons"}:{" "}
+                              <strong className="text-ink">{step.durationFromPrevLabel}</strong>
+                            </span>
+                          )}
+                        </div>
+
+                        <time className="font-mono text-xs font-medium text-slate-500">
+                          {step.createdAtFormatted}
+                        </time>
+                      </div>
+
+                      {/* Judul Tindakan */}
+                      <p className="text-sm font-bold text-ink">{step.actionTitle}</p>
+
+                      {/* Kotak Info Eksekutor: RINGKAS UNTUK DRAFT, PENUH UNTUK PERPINDAHAN TANGAN */}
+                      {isDraftUpdate || isSameActorRouting ? (
+                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs border border-slate-200/70">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-slate-900">{step.actor.fullName}</span>
+                            <span className="text-muted">
+                              ({step.actor.roleLabel} · {step.actor.branchName})
+                            </span>
+                            {step.actor.email && (
+                              <span className="font-mono text-[11px] text-slate-500 hidden sm:inline">
+                                · {step.actor.email}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 text-[11px] text-slate-600">
+                            <span>Posisi:</span>
+                            <strong className="text-brand font-semibold">{step.toStageLabel}</strong>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid gap-2.5 rounded-lg bg-slate-50 p-3 text-xs sm:grid-cols-2 border border-slate-200/80">
+                          <div>
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 block">
+                              Dilakukan Oleh (Eksekutor):
+                            </span>
+                            <p className="font-bold text-slate-900 mt-0.5">{step.actor.fullName}</p>
+                            <p className="text-brand font-medium">
+                              {step.actor.roleLabel} · {step.actor.branchName}
+                            </p>
+                            {step.actor.email && (
+                              <p className="font-mono text-[11px] text-slate-500">{step.actor.email}</p>
+                            )}
+                          </div>
+
+                          {step.routedTo && (
+                            <div
+                              className={`rounded-md p-2 border ${
+                                step.routedTo.isRevisionReturn
+                                  ? "bg-amber-50/90 border-amber-200 text-amber-950"
+                                  : "bg-white border-slate-200/80 text-slate-800"
+                              }`}
+                            >
+                              <span className="text-[10px] font-semibold uppercase tracking-wide flex items-center gap-1 text-slate-600">
+                                {step.routedTo.isRevisionReturn ? (
+                                  <>
+                                    <RotateCcw className="size-3 text-amber-700" />
+                                    <span className="text-amber-900 font-bold">{step.routedTo.label}:</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <ArrowRight className="size-3 text-brand" />
+                                    <span>{step.routedTo.label}:</span>
+                                  </>
+                                )}
+                              </span>
+                              <p className="font-bold text-slate-900 mt-0.5">{step.routedTo.personName}</p>
+                              <p className="text-[11px] font-medium text-slate-600">
+                                {step.routedTo.roleLabel}
+                                {step.routedTo.personEmail ? ` · ${step.routedTo.personEmail}` : ""}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
-                    </div>
 
-                    {/* Alur Perubahan Posisi Status Dokumen */}
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
-                      <span className="font-semibold text-slate-700">Posisi Dokumen:</span>
-                      {step.fromStageLabel ? (
-                        <>
+                      {/* Alur Perubahan Posisi Status Dokumen (hanya jika ada perpindahan tahap) */}
+                      {step.fromStageLabel && step.fromStageLabel !== step.toStageLabel && (
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600 pt-0.5">
+                          <span className="font-semibold text-slate-700">Perpindahan Posisi:</span>
                           <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
                             {step.fromStageLabel}
                           </span>
-                          <ArrowRight className="size-3.5 text-slate-400" />
-                        </>
-                      ) : null}
-                      <span className="rounded bg-brand/10 px-2 py-0.5 text-[11px] font-bold text-brand">
-                        {step.toStageLabel}
-                      </span>
-                    </div>
+                          <ArrowRight className="size-3 text-slate-400" />
+                          <span className="rounded bg-brand/10 px-2 py-0.5 text-[11px] font-bold text-brand">
+                            {step.toStageLabel}
+                          </span>
+                        </div>
+                      )}
 
-                    {/* Catatan / Alasan Revisi / Komentar Pemeriksa */}
-                    {step.note && (
-                      <div
-                        className={`rounded-lg border p-3 text-xs leading-relaxed whitespace-pre-wrap ${
-                          step.actionBadge.tone === "amber" || step.actionBadge.tone === "rose"
-                            ? "border-amber-300 bg-amber-50/80 text-amber-950"
-                            : "border-slate-200 bg-slate-50 text-slate-800"
-                        }`}
-                      >
-                        <span className="font-bold block mb-0.5">
-                          {step.actionBadge.tone === "amber"
-                            ? "Catatan / Alasan Permintaan Revisi:"
-                            : step.actionBadge.tone === "rose"
-                            ? "Alasan Penolakan:"
-                            : "Catatan / Keterangan:"}
-                        </span>
-                        {step.note}
-                      </div>
-                    )}
-                  </div>
-                </li>
-              ))}
+                      {/* Catatan / Alasan Revisi / Komentar Pemeriksa */}
+                      {step.note && (
+                        <div
+                          className={`rounded-lg border p-2.5 text-xs leading-relaxed whitespace-pre-wrap ${
+                            step.actionBadge.tone === "amber" || step.actionBadge.tone === "rose"
+                              ? "border-amber-300 bg-amber-50/80 text-amber-950"
+                              : "border-slate-200 bg-slate-50 text-slate-800"
+                          }`}
+                        >
+                          <span className="font-bold block mb-0.5">
+                            {step.actionBadge.tone === "amber"
+                              ? "Catatan / Alasan Permintaan Revisi:"
+                              : step.actionBadge.tone === "rose"
+                              ? "Alasan Penolakan:"
+                              : "Catatan / Keterangan:"}
+                          </span>
+                          {step.note}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
             </ol>
           )}
         </div>

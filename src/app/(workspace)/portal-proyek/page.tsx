@@ -26,13 +26,24 @@ export default async function ProjectPortalPage({
   const w = await requireWorkspace()
   const owner = w.actorRole === "owner"
 
-  const [projectResult, branches, profiles, members, setupProjects] = await Promise.all([
+  const [projectResult, branches, profiles, members, setupProjects, orgUsersRes] = await Promise.all([
     w.supabase.rpc("list_portal_projects", { p_org: w.organizationId }),
     w.supabase.from("business_units").select("id,name").eq("organization_id", w.organizationId).in("kind", ["branch", "center"]),
     w.supabase.from("person_profiles").select("user_id,relationship_status").eq("organization_id", w.organizationId).in("relationship_status", ["client", "consultant", "vendor"]),
     w.supabase.from("project_memberships").select("project_id,user_id,member_type,can_submit,is_active").eq("organization_id", w.organizationId),
     owner ? w.supabase.from("crm_projects").select("id,code,name,status").eq("organization_id", w.organizationId).order("code") : Promise.resolve({ data: [], error: null }),
+    w.supabase.rpc("list_organization_users", { p_org: w.organizationId }),
   ])
+
+  const userMap = new Map<string, { email: string; fullName: string }>()
+  if (orgUsersRes.data && Array.isArray(orgUsersRes.data)) {
+    for (const u of orgUsersRes.data) {
+      userMap.set(u.user_id, {
+        email: u.email || "",
+        fullName: u.full_name || "",
+      })
+    }
+  }
 
   const missing = [projectResult.error, branches.error, profiles.error, members.error].some(isProcurementMissing)
   if (!missing && [projectResult.error, branches.error, profiles.error, members.error, setupProjects.error].some(Boolean)) {
@@ -188,11 +199,17 @@ export default async function ProjectPortalPage({
                       Akun pengguna
                       <select name="user_id" required className={input}>
                         <option value="">Pilih akun</option>
-                        {profiles.data?.map((p) => (
-                          <option key={p.user_id} value={p.user_id}>
-                            {relationshipLabels[p.relationship_status]} · {p.user_id}
-                          </option>
-                        ))}
+                        {profiles.data?.map((p) => {
+                          const info = userMap.get(p.user_id)
+                          const labelText = info?.email
+                            ? `${relationshipLabels[p.relationship_status] ?? p.relationship_status} · ${info.email}${info.fullName ? ` (${info.fullName})` : ""}`
+                            : `${relationshipLabels[p.relationship_status] ?? p.relationship_status} · ${p.user_id.slice(0, 8)}...`
+                          return (
+                            <option key={p.user_id} value={p.user_id}>
+                              {labelText}
+                            </option>
+                          )
+                        })}
                       </select>
                     </label>
                     <label className={label}>

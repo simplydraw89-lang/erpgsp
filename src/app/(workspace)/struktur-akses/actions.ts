@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { requireWorkspace } from "@/lib/auth/context"
@@ -76,4 +76,43 @@ export async function removeWorkAssignment(data: FormData) {
   revalidatePath(path)
   revalidatePath("/pengajuan", "layout")
   finish("notice", "Penugasan dicabut. Akun pengguna dan penugasan lainnya tetap tersedia.")
+}
+
+export async function syncAuthUsersAction() {
+  const { supabase, organizationId } = await owner()
+  const { data, error } = await supabase.rpc("sync_unlinked_auth_users", { p_org: organizationId })
+  if (error) finish("error", `Gagal sinkronisasi: ${error.message}`)
+  
+  const count = Array.isArray(data) ? data.length : 0
+  revalidatePath(path)
+  revalidatePath("/portal-proyek")
+  revalidatePath("/pengajuan", "layout")
+  
+  if (count > 0) {
+    const emails = Array.isArray(data) ? data.map((u: any) => u.email).filter(Boolean).join(", ") : ""
+    finish("notice", `Sinkronisasi berhasil: ${count} akun baru (${emails}) otomatis terhubung ke organisasi!`)
+  } else {
+    finish("notice", "Semua akun di Supabase Auth sudah sinkron dan terdaftar dalam organisasi.")
+  }
+}
+
+export async function updateMemberRelationshipAction(data: FormData) {
+  const { supabase, organizationId } = await owner()
+  const userId = text(data, "user_id")
+  const relationship = text(data, "relationship_status")
+
+  if (!userId) finish("error", "Akun pengguna tidak valid.")
+  if (!relationship) finish("error", "Status hubungan wajib dipilih.")
+
+  const { error } = await supabase.rpc("update_member_relationship", {
+    p_org: organizationId,
+    p_user: userId,
+    p_relationship: relationship,
+  })
+
+  if (error) finish("error", error.message)
+  revalidatePath(path)
+  revalidatePath("/portal-proyek")
+  revalidatePath("/pengajuan", "layout")
+  finish("notice", "Status hubungan pengguna berhasil diperbarui.")
 }

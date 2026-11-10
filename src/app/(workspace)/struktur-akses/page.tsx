@@ -4,7 +4,7 @@ import { requireWorkspace } from "@/lib/auth/context"
 import { ProcurementMessage, ProcurementUnavailable } from "@/components/procurement/section-nav"
 import { SubmitButton } from "@/components/procurement/submit-button"
 import { jobLabels, relationshipLabels, isProcurementMissing, procurementInput as input, procurementLabel as label } from "@/lib/procurement-ui"
-import { linkBusinessUnit, removeWorkAssignment } from "./actions"
+import { linkBusinessUnit, removeWorkAssignment, syncAuthUsersAction, updateMemberRelationshipAction } from "./actions"
 import { MultiAssignmentForm } from "./multi-assignment-form"
 
 export default async function AccessStructurePage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
@@ -154,6 +154,112 @@ export default async function AccessStructurePage({ searchParams }: { searchPara
               </p>
             </Card>
           </div>
+
+          {/* SINKRONISASI AKUN SUPABASE AUTH & DAFTAR ANGGOTA */}
+          <Card className="p-5 border-brand/20 bg-gradient-to-r from-slate-50 to-blue-50/20 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">
+                  Sinkronisasi Otomatis Pengguna Supabase Auth
+                </h2>
+                <p className="mt-1 text-xs text-muted max-w-2xl leading-relaxed">
+                  Semua akun yang baru dibuat di Supabase Auth (misal akun klien seperti <strong className="text-slate-800">bara@bara.test</strong> atau akun tim penguji) kini otomatis terhubung ke organisasi. Jika akun baru belum muncul, klik tombol di sebelah kanan untuk menyinkronkan langsung tanpa query SQL manual.
+                </p>
+              </div>
+
+              {canEdit && (
+                <form action={syncAuthUsersAction}>
+                  <SubmitButton>
+                    🔄 Sinkronkan Akun dari Auth
+                  </SubmitButton>
+                </form>
+              )}
+            </div>
+
+            {/* DAFTAR SELURUH ANGGOTA & PENGATURAN STATUS KLIEN / STAF */}
+            <div className="mt-4 border-t border-line/60 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Daftar Pengguna Terdaftar ({enrichedMembers.length} Akun)
+                </span>
+                <span className="text-[11px] text-muted">
+                  Kelola status hubungan (Klien, Karyawan, Vendor, Konsultan)
+                </span>
+              </div>
+
+              <div className="overflow-x-auto rounded-lg border border-line bg-white">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-600 border-b border-line">
+                    <tr>
+                      <th className="px-3.5 py-2.5 font-semibold">Pengguna / Email</th>
+                      <th className="px-3.5 py-2.5 font-semibold">Nama Lengkap</th>
+                      <th className="px-3.5 py-2.5 font-semibold">Peran Organisasi</th>
+                      <th className="px-3.5 py-2.5 font-semibold">Status Hubungan</th>
+                      {canEdit && <th className="px-3.5 py-2.5 font-semibold text-right">Ubah Status</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {enrichedMembers.map((m) => {
+                      const rel = profiles.data?.find((p) => p.user_id === m.user_id)?.relationship_status || "permanent"
+                      const isClient = rel === "client"
+                      return (
+                        <tr key={m.user_id} className="border-b border-line/60 last:border-0 hover:bg-slate-50/50">
+                          <td className="px-3.5 py-2.5">
+                            <span className="font-semibold text-ink">{m.email || m.user_id}</span>
+                            <span className="block font-mono text-[10px] text-muted">{m.user_id}</span>
+                          </td>
+                          <td className="px-3.5 py-2.5 text-slate-700 font-medium">
+                            {m.full_name || "-"}
+                          </td>
+                          <td className="px-3.5 py-2.5">
+                            <span className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold bg-slate-100 text-slate-800">
+                              {m.role}
+                            </span>
+                          </td>
+                          <td className="px-3.5 py-2.5">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                                isClient
+                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                  : "bg-blue-100 text-blue-900 border border-blue-200"
+                              }`}
+                            >
+                              {relationshipLabels[rel] ?? rel}
+                            </span>
+                          </td>
+                          {canEdit && (
+                            <td className="px-3.5 py-2.5 text-right">
+                              <form action={updateMemberRelationshipAction} className="inline-flex items-center gap-1.5 justify-end">
+                                <input type="hidden" name="user_id" value={m.user_id} />
+                                <select
+                                  name="relationship_status"
+                                  defaultValue={rel}
+                                  className="h-7 rounded border border-line bg-white px-2 text-[11px] text-slate-800"
+                                >
+                                  <option value="client">Klien</option>
+                                  <option value="permanent">Karyawan Tetap</option>
+                                  <option value="contract">Kontrak</option>
+                                  <option value="probation">Probation</option>
+                                  <option value="consultant">Konsultan</option>
+                                  <option value="vendor">Vendor</option>
+                                </select>
+                                <button
+                                  type="submit"
+                                  className="h-7 rounded bg-slate-800 px-2.5 text-[11px] font-medium text-white hover:bg-slate-900"
+                                >
+                                  Simpan
+                                </button>
+                              </form>
+                            </td>
+                          )}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </Card>
 
           <Card className="p-5">
             <h2 className="font-semibold">Penugasan Pengguna & Multi-Jabatan</h2>
