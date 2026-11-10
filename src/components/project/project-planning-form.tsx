@@ -225,42 +225,11 @@ export function ProjectPlanningForm({
   const rabTotal = rab.length > 0 && breakdownSum > 0 ? breakdownSum : directRabTotal
   const projectedMargin = contractAmount > 0 ? ((contractAmount - rabTotal) / contractAmount) * 100 : 0
 
-  // Payment terms (Termin Pembayaran)
+  // Payment terms (Termin Pembayaran - Bersifat Opsional)
   const [paymentTerms, setPaymentTerms] = useState<PaymentTermItem[]>(
-    project.payment_terms && project.payment_terms.length > 0
+    project.payment_terms && Array.isArray(project.payment_terms) && project.payment_terms.length > 0
       ? project.payment_terms
-      : [
-          {
-            id: "term-1",
-            index: 1,
-            name: "Termin 1 (Uang Muka / DP)",
-            percentage: 30,
-            amount: Math.round(contractAmount * 0.3),
-            trigger: "Setelah Penandatanganan SPK & Kick-off Meeting",
-            estimated_date: "",
-            status: "planned",
-          },
-          {
-            id: "term-2",
-            index: 2,
-            name: "Termin 2 (Progress Lapangan & Draft)",
-            percentage: 40,
-            amount: Math.round(contractAmount * 0.4),
-            trigger: "Setelah Survey Lapangan, Pengujian Lab & Draft Laporan",
-            estimated_date: "",
-            status: "planned",
-          },
-          {
-            id: "term-3",
-            index: 3,
-            name: "Termin 3 (Pelunasan & BAST Final)",
-            percentage: 30,
-            amount: Math.round(contractAmount * 0.3),
-            trigger: "Setelah Terbit SK Persetujuan Teknis & BAST Final",
-            estimated_date: "",
-            status: "planned",
-          },
-        ]
+      : []
   )
 
   const totalTermPercentage = paymentTerms.reduce((sum, t) => sum + (Number(t.percentage) || 0), 0)
@@ -271,7 +240,8 @@ export function ProjectPlanningForm({
     const nextIdx = paymentTerms.length + 1
     const currentTotalPercent = paymentTerms.reduce((sum, t) => sum + (Number(t.percentage) || 0), 0)
     const remainingPercent = Math.max(0, 100 - currentTotalPercent)
-    const remainingAmt = Math.round((remainingPercent / 100) * contractAmount)
+    const fallbackPercent = remainingPercent > 0 ? remainingPercent : 25
+    const fallbackAmt = Math.round((fallbackPercent / 100) * contractAmount)
 
     setPaymentTerms([
       ...paymentTerms,
@@ -279,8 +249,8 @@ export function ProjectPlanningForm({
         id: `term-${Date.now()}`,
         index: nextIdx,
         name: `Termin ${nextIdx}`,
-        percentage: remainingPercent,
-        amount: remainingAmt,
+        percentage: fallbackPercent,
+        amount: fallbackAmt,
         trigger: "Capaian tahapan pengerjaan proyek",
         estimated_date: "",
         status: "planned",
@@ -289,7 +259,6 @@ export function ProjectPlanningForm({
   }
 
   function removePaymentTerm(id: string) {
-    if (paymentTerms.length <= 1) return
     setPaymentTerms(paymentTerms.filter((t) => t.id !== id))
   }
 
@@ -694,7 +663,7 @@ export function ProjectPlanningForm({
           }`}
         >
           <Calculator className="size-4" />
-          4. Berkas & Pagu RAB ({rab.length || (directRabTotal > 0 ? 1 : 0)})
+          4. Pagu Anggaran RAB ({rab.length || (directRabTotal > 0 ? 1 : 0)})
         </button>
         <button
           type="button"
@@ -714,7 +683,7 @@ export function ProjectPlanningForm({
           }`}
         >
           <Receipt className="size-4" />
-          6. Termin Pembayaran ({paymentTerms.length})
+          6. Termin Pembayaran {paymentTerms.length > 0 ? `(${paymentTerms.length})` : "(Opsional)"}
         </button>
       </div>
 
@@ -1238,35 +1207,11 @@ export function ProjectPlanningForm({
               </div>
             )}
 
-            {/* Section 1: Upload Berkas Dokumen RAB Proyek */}
-            <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-5 space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="flex size-9 items-center justify-center rounded-lg bg-blue-600 text-white shrink-0 mt-0.5">
-                  <UploadCloud className="size-5" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-blue-950">1. Unggah Berkas Dokumen RAB Proyek (Utama)</h4>
-                  <p className="text-xs text-blue-800 mt-0.5">
-                    Unggah file lembar kerja RAB resmi (Excel .xlsx, .xls, PDF, atau scan bertandatangan). Berkas ini otomatis terlampir sebagai dasar verifikasi Direktur Utama.
-                  </p>
-                </div>
-              </div>
-
-              <DocumentUpload
-                branchId={project.branch_id}
-                label="Unggah Berkas Dokumen RAB (PDF, Excel, Scan Gambar, Max 10MB)"
-                attachments={attachments}
-                onChange={setAttachments}
-                onBusyChange={setUploadBusy}
-                disabled={busy}
-              />
-            </div>
-
-            {/* Section 2: Input Total Pagu Anggaran RAB */}
+            {/* Section 1: Input Total Pagu Anggaran RAB */}
             <div className="rounded-xl border border-line bg-canvas/60 p-5 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h4 className="text-sm font-bold text-ink">2. Total Nominal Pagu Anggaran RAB (Rp)</h4>
+                  <h4 className="text-sm font-bold text-ink">1. Total Nominal Pagu Anggaran RAB (Rp)</h4>
                   <p className="text-xs text-muted mt-0.5">
                     Tentukan total pagu biaya yang disetujui. Pagu ini menjadi batas pemotongan anggaran pembelian vendor dan kasbon operasional.
                   </p>
@@ -1311,12 +1256,12 @@ export function ProjectPlanningForm({
               </div>
             </div>
 
-            {/* Section 3: Rincian Komponen Pos Biaya RAB */}
+            {/* Section 2: Rincian Komponen Pos Biaya RAB */}
             <div className="rounded-xl border border-line p-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-muted">
-                    3. Komponen Pos Anggaran RAB (Sesuai Lampiran)
+                    2. Komponen Pos Anggaran RAB (Sesuai Lampiran)
                   </h4>
                   <p className="text-xs text-muted mt-0.5">
                     Rincian pos komponen biaya (Tenaga ahli, survei lapangan, uji laboratorium, perjalanan dinas, overhead, dll).
@@ -1453,12 +1398,12 @@ export function ProjectPlanningForm({
               )}
             </div>
 
-            {/* Section 4: CHECKLIST BERKAS PENDUKUNG (Sesuai Halaman 4 PDF) */}
+            {/* Section 3: CHECKLIST BERKAS PENDUKUNG (Sesuai Halaman 4 PDF) */}
             <div className="rounded-xl border border-line bg-canvas/40 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-muted">
-                    4. Checklist Berkas Pendukung (Pra-Eksekusi Proyek)
+                    3. Checklist Berkas Pendukung (Pra-Eksekusi Proyek)
                   </h4>
                   <p className="text-xs text-muted mt-0.5">
                     Centang berkas resmi yang telah tersedia sebelum diajukan ke Direktur Utama.
@@ -1537,138 +1482,162 @@ export function ProjectPlanningForm({
               </Button>
             </div>
 
-            {/* Status Balance Banner */}
-            {totalTermPercentage === 100 ? (
-              <div className="rounded-xl border border-emerald-300 bg-emerald-50/70 p-3.5 text-xs text-emerald-950 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
-                  <span>
-                    <strong>Alokasi Termin Sempurna (100%)</strong>: Total termin telah sesuai dengan nilai kontrak SPK ({rupiah(contractAmount)}).
-                  </span>
+            {paymentTerms.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 p-8 text-center space-y-3">
+                <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-slate-200/80 text-slate-500">
+                  <Receipt className="size-6" />
                 </div>
-                <span className="font-bold text-emerald-800">Seimbang</span>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800">Termin Pembayaran Bersifat Opsional</h4>
+                  <p className="text-xs text-muted max-w-md mx-auto mt-1 leading-relaxed">
+                    Pengisian termin tidak wajib untuk mengajukan proyek. Jika penagihan dilakukan lunas di akhir atau diatur fleksibel pada invoice penagihan, Anda dapat melewati bagian ini.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={addPaymentTerm}
+                  disabled={busy}
+                  className="gap-1.5 bg-brand text-white hover:bg-brand/90 text-xs mt-1"
+                >
+                  <Plus className="size-3.5" /> Atur Rencana Termin (Opsional)
+                </Button>
               </div>
             ) : (
-              <div className="rounded-xl border border-amber-300 bg-amber-50/70 p-3.5 text-xs text-amber-950 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="size-4 text-amber-600 shrink-0" />
-                  <span>
-                    <strong>Alokasi Belum Seimbang ({totalTermPercentage}%)</strong>: Sisa belum dialokasikan sebesar{" "}
-                    <strong>{rupiah(remainingTermAmount)}</strong> ({100 - totalTermPercentage}%).
-                  </span>
-                </div>
-                <span className="font-bold text-amber-800">{100 - totalTermPercentage}% Sisa</span>
-              </div>
-            )}
-
-            {/* List Termin Items */}
-            <div className="space-y-3">
-              {paymentTerms.map((term, idx) => (
-                <div
-                  key={term.id}
-                  className="rounded-xl border border-line bg-slate-50/60 p-4 space-y-3 text-xs transition hover:border-brand/40"
-                >
-                  <div className="flex items-center justify-between border-b border-line pb-2">
-                    <span className="font-bold text-ink">Tahap {idx + 1}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="font-extrabold text-brand text-sm">{rupiah(term.amount)}</span>
-                      {paymentTerms.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removePaymentTerm(term.id)}
-                          disabled={busy}
-                          className="text-muted hover:text-red-600"
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
-                      )}
+              <>
+                {/* Status Balance Banner */}
+                {totalTermPercentage === 100 ? (
+                  <div className="rounded-xl border border-emerald-300 bg-emerald-50/70 p-3.5 text-xs text-emerald-950 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
+                      <span>
+                        <strong>Alokasi Termin Sempurna (100%)</strong>: Total termin telah sesuai dengan nilai kontrak SPK ({rupiah(contractAmount)}).
+                      </span>
                     </div>
+                    <span className="font-bold text-emerald-800">Seimbang</span>
                   </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <label className="block text-slate-700 font-medium">
-                      Nama / Keterangan Termin
-                      <input
-                        type="text"
-                        value={term.name}
-                        disabled={busy}
-                        onChange={(e) => updatePaymentTerm(term.id, "name", e.target.value)}
-                        placeholder="Contoh: Termin 1 (Uang Muka / DP)"
-                        className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs"
-                      />
-                    </label>
-
-                    <label className="block text-slate-700 font-medium">
-                      Bobot Persentase (%)
-                      <input
-                        type="number"
-                        min={1}
-                        max={100}
-                        step="0.01"
-                        value={term.percentage}
-                        disabled={busy}
-                        onChange={(e) => updatePaymentTerm(term.id, "percentage", e.target.value)}
-                        className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs font-bold"
-                      />
-                    </label>
-
-                    <label className="block text-slate-700 font-medium">
-                      Nominal Tagihan (Rp)
-                      <MoneyInput
-                        min="0"
-                        value={term.amount ? String(term.amount) : ""}
-                        disabled={busy}
-                        onValueChange={(val: string) => updatePaymentTerm(term.id, "amount", Number(val) || 0)}
-                        className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs font-bold"
-                      />
-                    </label>
-
-                    <label className="block text-slate-700 font-medium">
-                      Estimasi Tanggal Penagihan
-                      <input
-                        type="date"
-                        value={term.estimated_date || ""}
-                        disabled={busy}
-                        onChange={(e) => updatePaymentTerm(term.id, "estimated_date", e.target.value)}
-                        className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs"
-                      />
-                    </label>
+                ) : (
+                  <div className="rounded-xl border border-amber-300 bg-amber-50/70 p-3.5 text-xs text-amber-950 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="size-4 text-amber-600 shrink-0" />
+                      <span>
+                        <strong>Alokasi Belum Seimbang ({totalTermPercentage}%)</strong>: Sisa belum dialokasikan sebesar{" "}
+                        <strong>{rupiah(remainingTermAmount)}</strong> ({100 - totalTermPercentage}%).
+                      </span>
+                    </div>
+                    <span className="font-bold text-amber-800">{100 - totalTermPercentage}% Sisa</span>
                   </div>
+                )}
 
-                  <label className="block text-slate-700 font-medium">
-                    Syarat / Pemicu Tagihan (Deliverable Trigger)
-                    <input
-                      type="text"
-                      value={term.trigger}
-                      disabled={busy}
-                      onChange={(e) => updatePaymentTerm(term.id, "trigger", e.target.value)}
-                      placeholder="Contoh: Setelah Laporan Draft Disetujui atau setelah BAST Tahap I ditandatangani"
-                      className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs"
-                    />
-                  </label>
-                </div>
-              ))}
-            </div>
+                {/* List Termin Items */}
+                <div className="space-y-3">
+                  {paymentTerms.map((term, idx) => (
+                    <div
+                      key={term.id}
+                      className="rounded-xl border border-line bg-slate-50/60 p-4 space-y-3 text-xs transition hover:border-brand/40"
+                    >
+                      <div className="flex items-center justify-between border-b border-line pb-2">
+                        <span className="font-bold text-ink">Tahap {idx + 1}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="font-extrabold text-brand text-sm">{rupiah(term.amount)}</span>
+                          <button
+                            type="button"
+                            onClick={() => removePaymentTerm(term.id)}
+                            disabled={busy}
+                            className="text-muted hover:text-red-600"
+                            title="Hapus termin ini"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        </div>
+                      </div>
 
-            {/* Summary Footer */}
-            <div className="rounded-xl border border-line bg-white p-4 space-y-2 text-xs">
-              <div className="flex justify-between font-medium">
-                <span className="text-muted">Nilai Kontrak SPK:</span>
-                <span className="font-bold text-ink">{rupiah(contractAmount)}</span>
-              </div>
-              <div className="flex justify-between font-medium text-brand">
-                <span>Total Rencana Termin:</span>
-                <span className="font-bold">
-                  {rupiah(totalTermAmount)} ({totalTermPercentage}%)
-                </span>
-              </div>
-              {remainingTermAmount !== 0 && (
-                <div className="flex justify-between font-semibold text-amber-700 border-t border-line pt-2">
-                  <span>Selisih Belum Dialokasikan:</span>
-                  <span>{rupiah(remainingTermAmount)}</span>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <label className="block text-slate-700 font-medium">
+                          Nama / Keterangan Termin
+                          <input
+                            type="text"
+                            value={term.name}
+                            disabled={busy}
+                            onChange={(e) => updatePaymentTerm(term.id, "name", e.target.value)}
+                            placeholder="Contoh: Termin 1 (Uang Muka / DP)"
+                            className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs"
+                          />
+                        </label>
+
+                        <label className="block text-slate-700 font-medium">
+                          Bobot Persentase (%)
+                          <input
+                            type="number"
+                            min={1}
+                            max={100}
+                            step="0.01"
+                            value={term.percentage}
+                            disabled={busy}
+                            onChange={(e) => updatePaymentTerm(term.id, "percentage", e.target.value)}
+                            className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs font-bold"
+                          />
+                        </label>
+
+                        <label className="block text-slate-700 font-medium">
+                          Nominal Tagihan (Rp)
+                          <MoneyInput
+                            min="0"
+                            value={term.amount ? String(term.amount) : ""}
+                            disabled={busy}
+                            onValueChange={(val: string) => updatePaymentTerm(term.id, "amount", Number(val) || 0)}
+                            className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs font-bold"
+                          />
+                        </label>
+
+                        <label className="block text-slate-700 font-medium">
+                          Estimasi Tanggal Penagihan
+                          <input
+                            type="date"
+                            value={term.estimated_date || ""}
+                            disabled={busy}
+                            onChange={(e) => updatePaymentTerm(term.id, "estimated_date", e.target.value)}
+                            className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs"
+                          />
+                        </label>
+                      </div>
+
+                      <label className="block text-slate-700 font-medium">
+                        Syarat / Pemicu Tagihan (Deliverable Trigger)
+                        <input
+                          type="text"
+                          value={term.trigger}
+                          disabled={busy}
+                          onChange={(e) => updatePaymentTerm(term.id, "trigger", e.target.value)}
+                          placeholder="Contoh: Setelah Laporan Draft Disetujui atau setelah BAST Tahap I ditandatangani"
+                          className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs"
+                        />
+                      </label>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
+
+                {/* Summary Footer */}
+                <div className="rounded-xl border border-line bg-white p-4 space-y-2 text-xs">
+                  <div className="flex justify-between font-medium">
+                    <span className="text-muted">Nilai Kontrak SPK:</span>
+                    <span className="font-bold text-ink">{rupiah(contractAmount)}</span>
+                  </div>
+                  <div className="flex justify-between font-medium text-brand">
+                    <span>Total Rencana Termin:</span>
+                    <span className="font-bold">
+                      {rupiah(totalTermAmount)} ({totalTermPercentage}%)
+                    </span>
+                  </div>
+                  {remainingTermAmount !== 0 && (
+                    <div className="flex justify-between font-semibold text-amber-700 border-t border-line pt-2">
+                      <span>Selisih Belum Dialokasikan:</span>
+                      <span>{rupiah(remainingTermAmount)}</span>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </Card>
         )}
 

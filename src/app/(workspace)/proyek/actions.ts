@@ -1,4 +1,4 @@
-﻿"use server"
+"use server"
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
@@ -57,9 +57,7 @@ export async function saveProjectPlanningAction(prevState: { error?: string } | 
     return { error: error.message || "Gagal menyimpan perencanaan proyek." }
   }
 
-  if (payment_terms.length > 0) {
-    await supabase.from("crm_projects").update({ payment_terms }).eq("id", id)
-  }
+  await supabase.from("crm_projects").update({ payment_terms }).eq("id", id)
 
   revalidatePath("/proyek")
   revalidatePath(`/proyek/${id}`)
