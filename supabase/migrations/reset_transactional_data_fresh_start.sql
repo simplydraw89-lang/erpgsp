@@ -8,29 +8,61 @@
 
 begin;
 
--- 1. Matikan sementara trigger user (termasuk guard_accounting_journal & audit)
---    agar jurnal berstatus 'posted' dan relasi dokumen dapat dibersihkan tanpa error.
-alter table public.accounting_journal_lines disable trigger user;
-alter table public.accounting_journals disable trigger user;
-alter table public.crm_projects disable trigger user;
-alter table public.sales_documents disable trigger user;
-alter table public.purchase_requests disable trigger user;
-
+-- 1. Matikan sementara seluruh trigger user (termasuk guard_accounting_journal,
+--    scoped_legacy_write, sales_sph_number_guard, dan audit_*) pada tabel transaksi
 do $$
+declare
+  v_tbl text;
 begin
-  if to_regclass('public.sales_invoices') is not null then
-    execute 'alter table public.sales_invoices disable trigger user';
-  end if;
+  foreach v_tbl in array array[
+    'sales_invoices',
+    'payment_records',
+    'cash_advance_settlements',
+    'cash_advances',
+    'purchase_requests',
+    'bank_reconciliations',
+    'accounting_journal_lines',
+    'accounting_journals',
+    'tax_records',
+    'project_portal_comments',
+    'project_portal_entries',
+    'project_memberships',
+    'project_access_scopes',
+    'operational_work_items',
+    'crm_projects',
+    'sales_documents',
+    'procurement_events',
+    'procurement_attachments',
+    'workflow_executions',
+    'approval_requests',
+    'workflow_documents',
+    'audit_events'
+  ] loop
+    if to_regclass('public.' || v_tbl) is not null then
+      execute format('alter table public.%I disable trigger user', v_tbl);
+    end if;
+  end loop;
 end $$;
 
--- 2. Putuskan hubungan Foreign Key melingkar antar dokumen, proyek, dan jurnal
+-- 2. Putuskan seluruh hubungan Foreign Key melingkar / silang antar tabel transaksi
 update public.sales_documents set project_id = null;
 update public.crm_projects set spk_id = null;
+update public.purchase_requests
+set journal_id = null,
+    payment_journal_id = null,
+    project_id = null;
+update public.accounting_journals set reversal_of = null;
+update public.accounting_journal_lines set project_id = null;
+update public.payment_records
+set cash_advance_id = null,
+    cash_advance_settlement_id = null,
+    document_id = null;
+update public.approval_requests set document_id = null;
 
 do $$
 begin
   if to_regclass('public.sales_invoices') is not null then
-    execute 'update public.sales_invoices set invoice_journal_id = null, payment_journal_id = null';
+    execute 'update public.sales_invoices set invoice_journal_id = null, payment_journal_id = null, project_id = null, spk_id = null';
   end if;
 end $$;
 
@@ -42,17 +74,18 @@ begin
   end if;
 end $$;
 
--- 4. Bersihkan transaksi Akuntansi & Perpajakan yang timbul dari pengajuan lama
+-- 4. Bersihkan transaksi Pembayaran, Kasbon (SPPD), & Pengadaan Barang/Jasa (Purchase Order)
+--    (Dihapus sebelum accounting_journals agar tidak ada FK yang menyangkut)
+delete from public.payment_records;
+delete from public.cash_advance_settlements;
+delete from public.cash_advances;
+delete from public.purchase_requests;
+
+-- 5. Bersihkan transaksi Akuntansi & Perpajakan yang timbul dari pengajuan lama
 delete from public.bank_reconciliations;
 delete from public.accounting_journal_lines;
 delete from public.accounting_journals;
 delete from public.tax_records;
-
--- 5. Bersihkan transaksi Kasbon (SPPD) & Pengadaan Barang/Jasa (Purchase Order)
-delete from public.cash_advance_settlements;
-delete from public.cash_advances;
-delete from public.purchase_requests;
-delete from public.payment_records;
 
 -- 6. Bersihkan Proyek, RAB, & Pekerjaan Operasional
 do $$
@@ -75,8 +108,8 @@ delete from public.sales_documents;
 delete from public.procurement_events;
 delete from public.procurement_attachments;
 delete from public.workflow_executions;
-delete from public.workflow_documents;
 delete from public.approval_requests;
+delete from public.workflow_documents;
 delete from public.audit_events
 where entity_type in (
   'crm_project',
@@ -86,6 +119,10 @@ where entity_type in (
   'sales_invoice',
   'purchase_request',
   'cash_advance',
+  'cash_advance_settlement',
+  'payment',
+  'work_item',
+  'tax_record',
   'accounting_journal'
 );
 
@@ -245,17 +282,38 @@ begin
 end $$;
 
 -- 11. Aktifkan kembali seluruh trigger user seperti semula
-alter table public.accounting_journal_lines enable trigger user;
-alter table public.accounting_journals enable trigger user;
-alter table public.crm_projects enable trigger user;
-alter table public.sales_documents enable trigger user;
-alter table public.purchase_requests enable trigger user;
-
 do $$
+declare
+  v_tbl text;
 begin
-  if to_regclass('public.sales_invoices') is not null then
-    execute 'alter table public.sales_invoices enable trigger user';
-  end if;
+  foreach v_tbl in array array[
+    'sales_invoices',
+    'payment_records',
+    'cash_advance_settlements',
+    'cash_advances',
+    'purchase_requests',
+    'bank_reconciliations',
+    'accounting_journal_lines',
+    'accounting_journals',
+    'tax_records',
+    'project_portal_comments',
+    'project_portal_entries',
+    'project_memberships',
+    'project_access_scopes',
+    'operational_work_items',
+    'crm_projects',
+    'sales_documents',
+    'procurement_events',
+    'procurement_attachments',
+    'workflow_executions',
+    'approval_requests',
+    'workflow_documents',
+    'audit_events'
+  ] loop
+    if to_regclass('public.' || v_tbl) is not null then
+      execute format('alter table public.%I enable trigger user', v_tbl);
+    end if;
+  end loop;
 end $$;
 
 commit;
