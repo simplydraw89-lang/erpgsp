@@ -38,6 +38,7 @@ export async function POST(request: Request) {
 
   const branchId = String(body.get("branch_id") || "")
   const target = (String(body.get("target") || "all")) as ProjectOcrTarget
+  const skipOcr = String(body.get("skip_ocr") || "") === "true"
   const file = body.get("file")
 
   if (!uuidRegex.test(branchId) || !(file instanceof File) || !file.size || file.size > MAX_BYTES) {
@@ -119,8 +120,8 @@ export async function POST(request: Request) {
     )
   }
 
-  // Lakukan ekstraksi OCR AI dengan target spesifik
-  const extracted = await extractProjectPlanningDocument(bytes, extension, target)
+  // Lakukan ekstraksi OCR AI dengan target spesifik (kecuali skip_ocr=true untuk lampiran milestone)
+  const extracted = skipOcr ? undefined : await extractProjectPlanningDocument(bytes, extension, target)
 
   return Response.json(
     {

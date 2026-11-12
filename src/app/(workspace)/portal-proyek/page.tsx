@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { headers } from "next/headers"
-import { CheckCircle2, KeyRound, Mail, Sparkles } from "lucide-react"
+import { CheckCircle2, KeyRound, Layers, Mail, Sparkles } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { requireWorkspace } from "@/lib/auth/context"
 import { SubmitButton } from "@/components/procurement/submit-button"
@@ -8,6 +8,8 @@ import { ProcurementMessage, ProcurementUnavailable } from "@/components/procure
 import { isProcurementMissing, procurementInput as input, procurementLabel as label, relationshipLabels } from "@/lib/procurement-ui"
 import { savePortalEntry, setPortalAccess, configurePortalProject, provisionPortalClientAction, sendClientPasswordResetAction } from "./actions"
 import { ProjectPortalView, type PortalEntryItem } from "@/components/project/project-portal-view"
+import { ProjectMilestonesManager, type MilestoneAttachmentOption } from "@/components/project/project-milestones-manager"
+import { getProjectMilestones, isMilestoneSyncEntry } from "@/lib/project-milestones"
 
 type PortalProject = {
   id: string
@@ -22,7 +24,7 @@ type PortalProject = {
 export default async function ProjectPortalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ project?: string; error?: string; notice?: string }>
+  searchParams: Promise<{ project?: string; error?: string; notice?: string; tab?: string }>
 }) {
   const q = await searchParams
   const w = await requireWorkspace()
@@ -219,6 +221,30 @@ export default async function ProjectPortalPage({
   const isClient = w.relationshipStatus === "client" || (!project?.is_internal && project?.can_submit)
   const isInternal = Boolean(project?.is_internal)
   const canSubmit = Boolean(project && (project.is_internal || project.can_submit) && !w.isReadOnlyPreview)
+
+  portalEntries = portalEntries.filter((e) => !isMilestoneSyncEntry(e))
+
+  const portalTab = q.tab === "milestones" && isInternal && !isClient ? "milestones" : "kolaborasi"
+  const milestones = project ? await getProjectMilestones(project.id, w.organizationId) : []
+  let milestoneAttachments: MilestoneAttachmentOption[] = []
+
+  if (project && portalTab === "milestones") {
+    const { data: projRow } = await w.supabase
+      .from("crm_projects")
+      .select("attachment_ids")
+      .eq("id", project.id)
+      .maybeSingle()
+    const projAttIds = Array.isArray(projRow?.attachment_ids) ? (projRow.attachment_ids as string[]) : []
+    const msAttIds = milestones.flatMap((m) => m.attachment_ids || [])
+    const combinedAttIds = Array.from(new Set([...projAttIds, ...msAttIds]))
+    if (combinedAttIds.length > 0) {
+      const { data: attRows } = await w.supabase
+        .from("procurement_attachments")
+        .select("id, file_name, content_type, byte_size")
+        .in("id", combinedAttIds)
+      milestoneAttachments = (attRows ?? []) as MilestoneAttachmentOption[]
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -493,7 +519,20 @@ export default async function ProjectPortalPage({
                   </div>
                   <h2 className="mt-1 text-xl font-bold text-ink">{project.name}</h2>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {isInternal && !isClient && (
+                    <Link
+                      href={`/portal-proyek?project=${project.id}&tab=${portalTab === "milestones" ? "kolaborasi" : "milestones"}`}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                        portalTab === "milestones"
+                          ? "border-teal-600 bg-teal-700 text-white"
+                          : "border-teal-300 bg-white text-teal-900 hover:bg-teal-50"
+                      }`}
+                    >
+                      <Layers className="size-3.5" />
+                      {portalTab === "milestones" ? "← Kembali ke Kolaborasi & MoM" : "Kelola Milestone & Laporan Klien"}
+                    </Link>
+                  )}
                   <Link
                     href={`/proyek/${project.id}`}
                     className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
@@ -503,17 +542,27 @@ export default async function ProjectPortalPage({
                 </div>
               </div>
 
-              {/* Interactive 2-Way Collaboration & MoM View */}
-              <ProjectPortalView
-                projectId={project.id}
-                branchId={project.branch_id}
-                isInternal={isInternal}
-                isDirector={isDirector}
-                isClient={isClient}
-                canSubmit={canSubmit}
-                entries={portalEntries}
-                disabled={w.isReadOnlyPreview}
-              />
+              {portalTab === "milestones" && isInternal && !isClient ? (
+                <ProjectMilestonesManager
+                  projectId={project.id}
+                  branchId={project.branch_id}
+                  initialMilestones={milestones}
+                  disabled={w.isReadOnlyPreview}
+                  availableAttachments={milestoneAttachments}
+                />
+              ) : (
+                /* Interactive 2-Way Collaboration & MoM View */
+                <ProjectPortalView
+                  projectId={project.id}
+                  branchId={project.branch_id}
+                  isInternal={isInternal}
+                  isDirector={isDirector}
+                  isClient={isClient}
+                  canSubmit={canSubmit}
+                  entries={portalEntries}
+                  disabled={w.isReadOnlyPreview}
+                />
+              )}
             </div>
           )}
         </>

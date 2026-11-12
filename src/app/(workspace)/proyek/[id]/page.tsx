@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   AlertCircle,
   Users,
+  Layers,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { requireWorkspace } from "@/lib/auth/context"
@@ -17,6 +18,8 @@ import { rupiah, formatDateID } from "@/lib/procurement-ui"
 import { ProjectPlanningForm } from "@/components/project/project-planning-form"
 import { ProjectDirectorConsole, type AttachmentItem, type DirectorInsight } from "@/components/project/project-director-console"
 import { ProjectCostingCard, type ProjectCostingData } from "@/components/project/project-costing-card"
+import { ProjectMilestonesManager } from "@/components/project/project-milestones-manager"
+import { getProjectMilestones } from "@/lib/project-milestones"
 import { loadOrganizationActorDirectory, buildWorkflowAuditSummary } from "@/lib/audit-trail"
 import { AuditWorkflowTimeline } from "@/components/procurement/audit-workflow-timeline"
 import { provisionProjectClientAction } from "../actions"
@@ -26,7 +29,7 @@ export default async function ProjectDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ notice?: string; error?: string }>
+  searchParams: Promise<{ notice?: string; error?: string; tab?: string }>
 }) {
   const { id } = await params
   const qParams = await searchParams
@@ -58,11 +61,15 @@ export default async function ProjectDetailPage({
         .maybeSingle()
     : { data: null }
 
-  // Unified attachment collection: project files + SPK files + SPH files
+  // Load milestones first so we can include milestone attachments in the attachment metadata query
+  const milestones = await getProjectMilestones(id, organizationId)
+
+  // Unified attachment collection: project files + SPK files + SPH files + milestone files
   const projectAttIds = Array.isArray(project.attachment_ids) ? (project.attachment_ids as string[]) : []
   const spkAttIds = Array.isArray((project.spk as any)?.attachment_ids) ? ((project.spk as any).attachment_ids as string[]) : []
   const sphAttIds = Array.isArray(sphRes.data?.attachment_ids) ? (sphRes.data.attachment_ids as string[]) : []
-  const allAttachmentIds = Array.from(new Set([...projectAttIds, ...spkAttIds, ...sphAttIds]))
+  const milestoneAttIds = milestones.flatMap((m) => m.attachment_ids || [])
+  const allAttachmentIds = Array.from(new Set([...projectAttIds, ...spkAttIds, ...sphAttIds, ...milestoneAttIds]))
 
   // Load procurement events, attachments, costing, actor directory, and client portal access
   const [eventsRes, attachmentsRes, costingRes, actorDir, clientMembershipRes, orgUsersRes, clientInfoRes] = await Promise.all([
@@ -165,6 +172,19 @@ export default async function ProjectDetailPage({
     (isOwner || isBranchUser || project.created_by === user.id)
 
   const canReview = !isReadOnlyPreview && project.approval_status === "director_review" && isDirut
+  const canManageMilestones =
+    !isReadOnlyPreview &&
+    (isOwner ||
+      isBranchUser ||
+      project.created_by === user.id ||
+      (workAssignments ?? []).some((j) =>
+        ["project_manager", "branch_manager", "admin", "technical_director"].includes(j.job_role)
+      ))
+
+  const activeTab = qParams.tab === "milestones" ? "milestones" : "overview"
+  const overallMilestoneProgress = Math.round(
+    milestones.reduce((acc, m) => acc + (Number(m.progress) || 0), 0) / (milestones.length || 1)
+  )
 
   const contractVal = Number(project.contract_amount) || 0
   const rabVal = Number(project.rab_total) || 0
@@ -243,6 +263,55 @@ export default async function ProjectDetailPage({
         </div>
       )}
 
+      {/* Navigasi Tab Halaman Proyek */}
+      <nav aria-label="Tab manajemen proyek" className="flex flex-wrap items-center gap-2 border-b border-line pb-3">
+        <Link
+          href={`/proyek/${project.id}`}
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition ${
+            activeTab === "overview"
+              ? "bg-slate-900 text-white shadow-sm"
+              : "border border-line bg-white text-slate-700 hover:bg-slate-50"
+          }`}
+        >
+          <BriefcaseBusiness className="size-3.5" />
+          <span>Ringkasan &amp; Perencanaan Proyek</span>
+        </Link>
+        <Link
+          href={`/proyek/${project.id}?tab=milestones`}
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition ${
+            activeTab === "milestones"
+              ? "bg-teal-700 text-white shadow-sm"
+              : "border border-teal-200 bg-teal-50/70 text-teal-900 hover:bg-teal-100"
+          }`}
+        >
+          <Layers className="size-3.5" />
+          <span>Kelola Milestone &amp; Laporan Klien</span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+              activeTab === "milestones" ? "bg-white/20 text-white" : "bg-teal-200/80 text-teal-950"
+            }`}
+          >
+            {overallMilestoneProgress}%
+          </span>
+        </Link>
+      </nav>
+
+      {activeTab === "milestones" ? (
+        <ProjectMilestonesManager
+          projectId={project.id}
+          branchId={project.branch_id ?? undefined}
+          initialMilestones={milestones}
+          disabled={!canManageMilestones}
+          availableAttachments={projectAttachments.map((a) => ({
+            id: a.id,
+            file_name: a.file_name,
+            content_type: a.content_type,
+            byte_size: a.byte_size,
+          }))}
+        />
+      ) : (
+        <>
+
       {/* Project Costing & Realisasi RAB jika Proyek Aktif atau Memiliki Realisasi */}
       {costingData && (status === "active" || costingData.total_realized > 0) ? (
         <ProjectCostingCard
@@ -300,12 +369,21 @@ export default async function ProjectDetailPage({
             </div>
           </div>
 
-          <Link
-            href={`/portal-proyek?project=${project.id}`}
-            className="rounded-lg bg-teal-700 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 transition"
-          >
-            Buka Portal Proyek →
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/proyek/${project.id}?tab=milestones`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-teal-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-teal-900 hover:bg-teal-50 transition"
+            >
+              <Layers className="size-3.5" />
+              Kelola Milestone &amp; Laporan Klien
+            </Link>
+            <Link
+              href={`/portal-proyek?project=${project.id}`}
+              className="rounded-lg bg-teal-700 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 transition"
+            >
+              Buka Portal Proyek →
+            </Link>
+          </div>
         </div>
 
         {isConnected ? (
@@ -429,6 +507,8 @@ export default async function ProjectDetailPage({
         summary={projectAuditSummary}
         title="Riwayat Proyek, Posisi Dokumen & KPI Waktu Pengerjaan"
       />
+        </>
+      )}
     </div>
   )
 }

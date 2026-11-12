@@ -8,6 +8,7 @@ import { loadBusinessSummary } from "@/lib/business-summary"
 import { SphConversionChart } from "@/components/dashboard/sph-conversion-chart"
 import { loadSphConversionSummary } from "@/lib/director-dashboard"
 import { ClientPortalDashboard } from "@/components/project/client-portal-dashboard"
+import { getProjectMilestones, isMilestoneSyncEntry } from "@/lib/project-milestones"
 
 export default async function DashboardPage() {
   const { supabase, organizationId, user, role, navigationRoles, relationshipStatus, actorRole, workAssignments } = await requireWorkspace()
@@ -34,6 +35,8 @@ export default async function DashboardPage() {
     let portalEntries: any[] = []
     let projectAttachments: any[] = []
 
+    const dynamicMilestones = activeProject ? await getProjectMilestones(activeProject.id, organizationId) : []
+
     if (activeProject) {
       const [entriesRes, commentsRes, projectDataRes] = await Promise.all([
         supabase
@@ -54,7 +57,7 @@ export default async function DashboardPage() {
           .maybeSingle(),
       ])
 
-      const rawEntries = (entriesRes.data ?? []) as any[]
+      const rawEntries = ((entriesRes.data ?? []) as any[]).filter((e) => !isMilestoneSyncEntry(e))
       const comments = (commentsRes.data ?? []) as any[]
       const commentsByEntry: Record<string, any[]> = {}
       for (const c of comments) {
@@ -67,7 +70,9 @@ export default async function DashboardPage() {
         comments: commentsByEntry[e.id] ?? [],
       }))
 
-      const attIds = Array.isArray(projectDataRes.data?.attachment_ids) ? (projectDataRes.data?.attachment_ids as string[]) : []
+      const projAttIds = Array.isArray(projectDataRes.data?.attachment_ids) ? (projectDataRes.data?.attachment_ids as string[]) : []
+      const milestoneAttIds = dynamicMilestones.flatMap((m) => m.attachment_ids || [])
+      const attIds = Array.from(new Set([...projAttIds, ...milestoneAttIds]))
       if (attIds.length > 0) {
         const { data: attData } = await supabase
           .from("procurement_attachments")
@@ -97,6 +102,7 @@ export default async function DashboardPage() {
         clientCompany={clientCompany}
         entries={portalEntries}
         projectAttachments={projectAttachments}
+        milestones={dynamicMilestones}
         canSubmit={Boolean(activeProject?.can_submit ?? true)}
       />
     )

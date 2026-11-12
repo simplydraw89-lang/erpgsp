@@ -1,29 +1,26 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
 import {
-  Briefcase,
-  Building2,
-  Calendar,
   CheckCircle2,
-  ChevronRight,
   Clock,
   ExternalLink,
   FileCheck2,
   FileText,
-  Info,
-  MapPin,
   MessageSquare,
-  ShieldCheck,
+  Paperclip,
   Sparkles,
   TrendingUp,
   UserCheck,
-  Users,
   X,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { ProjectPortalView, type PortalEntryItem } from "@/components/project/project-portal-view"
+import {
+  DEFAULT_PROJECT_MILESTONES,
+  isMilestoneSyncEntry,
+  type ProjectMilestoneItem,
+} from "@/lib/project-milestone-types"
 
 export type ClientProjectInfo = {
   id: string
@@ -40,104 +37,48 @@ interface ClientPortalDashboardProps {
   clientCompany: string
   entries: PortalEntryItem[]
   projectAttachments?: Array<{ id: string; file_name: string; content_type: string; byte_size: number }>
+  milestones?: ProjectMilestoneItem[]
   canSubmit?: boolean
 }
-
-type MilestoneDetail = {
-  id: number
-  title: string
-  status: "completed" | "in_progress" | "upcoming"
-  progress: number
-  subtitle: string
-  pic: string
-  period: string
-  description: string
-  deliverables: string[]
-  clientActions: string[]
-}
-
-const defaultMilestones: MilestoneDetail[] = [
-  {
-    id: 1,
-    title: "1. Kontrak SPK & Administrasi",
-    status: "completed",
-    progress: 100,
-    subtitle: "Penerbitan & pengesahan SPK resmi oleh Direktur Utama",
-    pic: "Legal & Branch Manager Surabaya",
-    period: "Tahap Awal (Selesai)",
-    description:
-      "Surat Perintah Kerja (SPK) dan Kerangka Acuan Kerja (KAK) telah diverifikasi dan disahkan secara resmi oleh Direksi PT. Global Solusi Prima. Dasar hukum penugasan operasional telah aktif dan terkunci pada sistem ERP.",
-    deliverables: ["Berkas SPK Resmi Bertandatangan", "Lembar Pagu Anggaran RAB Terkunci", "Pakta Integritas Pelaksanaan"],
-    clientActions: ["Menerima salinan resmi SPK", "Menunjuk PIC teknis pendamping dari pihak klien"],
-  },
-  {
-    id: 2,
-    title: "2. Tim SDM Ahli & Manpower",
-    status: "completed",
-    progress: 100,
-    subtitle: "Penugasan tenaga ahli tersertifikasi & kesiapan lapangan",
-    pic: "Project Manager (PM) & Tim Teknis",
-    period: "Mobilisasi Lapangan (Selesai)",
-    description:
-      "Penetapan susunan tim tenaga ahli lingkungan (Ketua Tim Ahli Amdal, Ahli Geologi, Ahli Kualitas Udara, Ahli Flora-Fauna, dan Surveyor Lapangan) beserta sertifikasi kompetensi resmi KLHK/BNSP.",
-    deliverables: ["Surat Tugas Resmi Tim Ahli", "Matriks Kualifikasi Personil", "Jadwal Timesheet Kerja Lapangan"],
-    clientActions: ["Konfirmasi akses masuk ke area tapak kegiatan", "Pemberitahuan kepada tim keamanan lokal klien"],
-  },
-  {
-    id: 3,
-    title: "3. Kajian Lapangan & Uji Laboratorium",
-    status: "in_progress",
-    progress: 75,
-    subtitle: "Pengambilan sampel rona awal & uji parameter lingkungan",
-    pic: "Koordinator Tim Lapangan & Lab Terakreditasi KAN",
-    period: "Sedang Berjalan (Estimasi Selesai: 7 Hari Kerja)",
-    description:
-      "Tahapan pengambilan sampel kualitas air permukaan, air tanah, udara ambien, kebisingan, dan getaran di sekitar tapak proyek. Sampel diuji pada laboratorium lingkungan independen terakreditasi KAN untuk penyusunan rona lingkungan awal.",
-    deliverables: ["Berita Acara Sampling Lapangan", "Sertifikat Hasil Uji Laboratorium (CoA)", "Peta Titik Koordinat Sampling"],
-    clientActions: ["Meninjau log sampel dan titik koordinat", "Menyediakan data penunjang operasional tapak"],
-  },
-  {
-    id: 4,
-    title: "4. Koordinasi Amdalnet & Notulensi MoM",
-    status: "in_progress",
-    progress: 40,
-    subtitle: "Integrasi sistem Amdalnet KLHK & risalah rapat berkala",
-    pic: "Spesialis Regulasi & Asisten PM",
-    period: "Berjalan Seiring Progres Lapangan",
-    description:
-      "Penginputan checklist dokumen lingkungan ke dalam portal Amdalnet KLHK serta pelaksanaan rapat koordinasi berkala bersama PIC klien. Seluruh hasil kesepakatan dicatat permanen dalam Notulensi Rapat Resmi (MoM) di portal ini.",
-    deliverables: ["Notulensi Rapat Resmi (MoM)", "Tanda Terima Pengajuan Amdalnet", "Matriks Dampak Lingkungan"],
-    clientActions: ["Mengunggah data legalitas lahan via portal ini", "Memberikan tanggapan / persetujuan pada draf MoM"],
-  },
-  {
-    id: 5,
-    title: "5. Laporan Akhir & Serah Terima",
-    status: "upcoming",
-    progress: 0,
-    subtitle: "Finalisasi dokumen lengkap & Berita Acara Serah Terima (BAST)",
-    pic: "Project Manager & Direktur Teknis",
-    period: "Tahap Finalisasi",
-    description:
-      "Penyusunan draf final Dokumen Kajian Lingkungan (ANDAL, RKL-RPL), konsultasi publik / penilaian teknis, serta penyerahan laporan resmi yang telah dijilid dan disahkan beserta Berita Acara Serah Terima (BAST).",
-    deliverables: ["Laporan Akhir Kajian Lingkungan (Hardcopy & Softcopy)", "Rekomendasi / Persetujuan Teknis", "Berita Acara Serah Terima (BAST)"],
-    clientActions: ["Penandatanganan Berita Acara Serah Terima (BAST)", "Pemberian evaluasi kepuasan layanan proyek"],
-  },
-]
 
 export function ClientPortalDashboard({
   project,
   clientCompany,
   entries,
   projectAttachments = [],
+  milestones = [],
   canSubmit = true,
 }: ClientPortalDashboardProps) {
-  const [selectedMilestone, setSelectedMilestone] = useState<MilestoneDetail | null>(defaultMilestones[2]) // Default buka tahap 3 (sedang berjalan)
+  const activeMilestones = milestones.length > 0 ? milestones : DEFAULT_PROJECT_MILESTONES
+  const visibleEntries = entries.filter((e) => !isMilestoneSyncEntry(e))
 
-  const momCount = entries.filter((e) => e.kind === "mom").length
-  const requestCount = entries.filter((e) => e.kind === "request" || e.kind === "status").length
-  const documentCount = projectAttachments.length + entries.filter((e) => e.kind === "document").length
+  // Pilih milestone aktif awal: yang in_progress pertama atau yang pertama
+  const defaultSelected =
+    activeMilestones.find((m) => m.status === "in_progress") ||
+    activeMilestones[0] ||
+    null
 
-  const progressPercent = 65
+  const [selectedMilestone, setSelectedMilestone] = useState<ProjectMilestoneItem | null>(defaultSelected)
+
+  const momCount = visibleEntries.filter((e) => e.kind === "mom").length
+  const requestCount = visibleEntries.filter((e) => e.kind === "request" || e.kind === "status").length
+  const milestoneAttachmentIds = new Set(activeMilestones.flatMap((m) => m.attachment_ids || []))
+  for (const att of projectAttachments) milestoneAttachmentIds.add(att.id)
+  const documentCount = milestoneAttachmentIds.size + visibleEntries.filter((e) => e.kind === "document").length
+
+  // Rata-rata progress dinamis dari seluruh milestones
+  const progressPercent = activeMilestones.length > 0
+    ? Math.round(activeMilestones.reduce((acc, m) => acc + (Number(m.progress) || 0), 0) / activeMilestones.length)
+    : 65
+
+  // Map attachments by ID for easy lookup
+  const attachmentMap = new Map<string, { id: string; file_name: string; content_type: string; byte_size: number }>()
+  for (const att of projectAttachments) {
+    attachmentMap.set(att.id, att)
+  }
+
+  // Active milestone for subtext
+  const currentActiveMilestone = activeMilestones.find((m) => m.status === "in_progress") || activeMilestones[activeMilestones.length - 1]
 
   return (
     <div className="space-y-6">
@@ -182,7 +123,7 @@ export function ClientPortalDashboard({
               <div>
                 <h2 className="text-sm font-bold text-slate-900">Progres Pelaksanaan Proyek</h2>
                 <p className="text-xs text-slate-500">
-                  Klik tiap tahapan untuk melihat rincian laporan teknis & kegiatan pelaksanaan
+                  Klik tiap tahapan untuk melihat rincian laporan teknis & kegiatan pelaksanaan secara real-time
                 </p>
               </div>
             </div>
@@ -203,21 +144,25 @@ export function ClientPortalDashboard({
             </div>
             <div className="flex justify-between text-[11px] text-slate-500">
               <span>Mulai Kontrak</span>
-              <span className="font-semibold text-teal-800">Tahap 3: Uji Lab & Analisis Lapangan (Sedang Berjalan · 75%)</span>
+              {currentActiveMilestone && (
+                <span className="font-semibold text-teal-800">
+                  {currentActiveMilestone.title} ({currentActiveMilestone.status === "completed" ? "Selesai" : currentActiveMilestone.status === "in_progress" ? "Sedang Berjalan" : "Akan Datang"} · {currentActiveMilestone.progress}%)
+                </span>
+              )}
               <span>Penyelesaian Dokumen (100%)</span>
             </div>
           </div>
 
-          {/* Visual 5-Tahapan Milestone Flow (Bisa Diklik & Interaktif) */}
+          {/* Visual Tahapan Milestone Flow (Dinamis dari Backend PM/PIC) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-2">
-            {defaultMilestones.map((m) => {
-              const isSelected = selectedMilestone?.id === m.id
+            {activeMilestones.map((m) => {
+              const isSelected = selectedMilestone?.milestone_number === m.milestone_number
               const isDone = m.status === "completed"
               const isCurrent = m.status === "in_progress"
 
               return (
                 <button
-                  key={m.id}
+                  key={m.milestone_number}
                   type="button"
                   onClick={() => setSelectedMilestone(m)}
                   className={`text-left rounded-xl p-3 space-y-1.5 transition-all cursor-pointer relative ${
@@ -334,10 +279,42 @@ export function ClientPortalDashboard({
                 </div>
               </div>
 
+              {/* Lampiran Berkas Resmi per Tahapan */}
+              {selectedMilestone.attachment_ids && selectedMilestone.attachment_ids.length > 0 && (
+                <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-3.5 space-y-2">
+                  <p className="font-bold text-slate-900 flex items-center gap-1.5 text-xs text-teal-950">
+                    <Paperclip className="size-4 text-teal-700" />
+                    <span>Dokumen & Berkas Resmi Terlampir untuk Tahap Ini:</span>
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    {selectedMilestone.attachment_ids.map((attId) => {
+                      const att = attachmentMap.get(attId)
+                      const fileName =
+                        att?.file_name ||
+                        selectedMilestone.attachment_names?.[attId] ||
+                        `Dokumen Lampiran (${attId.slice(0, 8)})`
+                      return (
+                        <a
+                          key={attId}
+                          href={`/api/invoice-documents/${attId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 p-2 rounded-lg bg-white border border-teal-200 text-xs text-teal-900 hover:bg-teal-50 transition"
+                        >
+                          <FileText className="size-4 text-teal-600 shrink-0" />
+                          <span className="truncate flex-1 font-medium">{fileName}</span>
+                          <ExternalLink className="size-3 text-slate-400 shrink-0" />
+                        </a>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between text-[11px] text-slate-500 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200/60">
                 <span className="flex items-center gap-1.5">
                   <Sparkles className="size-3.5 text-amber-600" />
-                  <span>Isi laporan tiap milestone dapat disesuaikan & diisi berkas real-time oleh PIC / Manajer Proyek.</span>
+                  <span>Isi laporan tiap milestone diperbarui secara real-time oleh Project Manager / PIC Proyek GSP.</span>
                 </span>
                 <span className="font-semibold text-teal-800">Progres: {selectedMilestone.progress}%</span>
               </div>
@@ -379,7 +356,7 @@ export function ClientPortalDashboard({
         </Card>
       </section>
 
-      {/* 2. BAGIAN BAWAH: RUANG KOLABORASI PORTAL PROYEK (LANGSUNG PADA HALAMAN YANG SAMA) */}
+      {/* 2. BAGIAN BAWAH: RUANG KOLABORASI PORTAL PROYEK */}
       <section className="space-y-3">
         <div className="flex items-center justify-between border-b border-slate-200/90 pb-2">
           <div>
@@ -398,7 +375,7 @@ export function ClientPortalDashboard({
             isDirector={false}
             isClient={true}
             canSubmit={canSubmit}
-            entries={entries}
+            entries={visibleEntries}
           />
         ) : (
           <Card className="p-8 text-center text-slate-500 text-sm">
