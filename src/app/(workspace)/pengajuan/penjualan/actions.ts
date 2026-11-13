@@ -119,7 +119,10 @@ export type ClientWithProjects = SalesClient & {
     name: string
     status: string
     approval_status?: string
+    branch_id?: string | null
+    branch?: { code?: string; name?: string } | null
   }>
+  hasOtherBranchProjects?: boolean
 }
 
 export async function searchSalesClients(
@@ -137,7 +140,7 @@ export async function searchSalesClients(
     .from("sales_clients")
     .select(`
       id,name,address,npwp,contact,phone,email,industry,additional_information,
-      projects:crm_projects(id,code,name,status,approval_status)
+      projects:crm_projects(id,code,name,status,approval_status,branch_id,branch:business_units(code,name))
     `, { count: "exact" })
     .eq("organization_id", context.organizationId)
 
@@ -145,22 +148,67 @@ export async function searchSalesClients(
   const result = await query.order("name").order("id").range(offset, offset + 19)
   if (result.error) return { clients: [], hasMore: false, error: "Pencarian klien gagal. Periksa koneksi dan izin akses." }
 
-  const rows = (result.data ?? []) as ClientWithProjects[]
-  const isClientActive = (c: ClientWithProjects) =>
-    (c.projects ?? []).some(p => p.status === "active" || p.approval_status === "active" || p.status === "planned")
+  const isOwner = context.actorRole === "owner"
+  const isCentralLeadership = (context.workAssignments ?? []).some(
+    (j) => !j.branch_id && ["president", "technical_director", "finance_director", "accounting_tax", "finance"].includes(j.job_role)
+  )
+  const userBranchIds = (context.workAssignments ?? []).map((j) => j.branch_id).filter(Boolean) as string[]
 
-  let filtered = rows
+  const rawRows = (result.data ?? []) as any[]
+
+  const processedRows: ClientWithProjects[] = rawRows.map((client) => {
+    const rawProjects = (client.projects ?? []) as Array<{
+      id: string
+      code: string
+      name: string
+      status: string
+      approval_status?: string
+      branch_id?: string | null
+      branch?: { code?: string; name?: string } | null
+    }>
+
+    if (isOwner || isCentralLeadership) {
+      return {
+        ...client,
+        projects: rawProjects,
+        hasOtherBranchProjects: false,
+      }
+    }
+
+    // Hanya tampilkan proyek yang sesuai dengan cakupan cabang pengguna
+    const branchProjects = rawProjects.filter(
+      (p) => p.branch_id && userBranchIds.includes(p.branch_id)
+    )
+    const hasOtherBranch = rawProjects.some(
+      (p) =>
+        (!p.branch_id || !userBranchIds.includes(p.branch_id)) &&
+        (p.status === "active" || p.approval_status === "active" || p.status === "planned")
+    )
+
+    return {
+      ...client,
+      projects: branchProjects,
+      hasOtherBranchProjects: hasOtherBranch,
+    }
+  })
+
+  const isClientActive = (c: ClientWithProjects) =>
+    (c.projects ?? []).some(
+      (p) => p.status === "active" || p.approval_status === "active" || p.status === "planned"
+    )
+
+  let filtered = processedRows
   if (filterTab === "active") {
-    filtered = rows.filter(isClientActive)
+    filtered = processedRows.filter(isClientActive)
   }
 
-  const activeCount = rows.filter(isClientActive).length
+  const activeCount = processedRows.filter(isClientActive).length
 
   return {
     clients: filtered,
-    hasMore: offset + rows.length < (result.count ?? 0),
+    hasMore: offset + processedRows.length < (result.count ?? 0),
     activeCount,
-    totalCount: result.count ?? rows.length,
+    totalCount: result.count ?? processedRows.length,
   }
 }
 

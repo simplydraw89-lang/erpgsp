@@ -53,6 +53,18 @@ export default async function ProjectDetailPage({
     notFound()
   }
 
+  // Strictly enforce branch authorization for non-owner / non-central leadership
+  const isOwner = actorRole === "owner"
+  const isCentralLeadership = (workAssignments ?? []).some(
+    (j) => !j.branch_id && ["president", "technical_director", "finance_director", "accounting_tax", "finance"].includes(j.job_role)
+  )
+  if (!isOwner && !isCentralLeadership) {
+    const userBranchIds = (workAssignments ?? []).map((j) => j.branch_id).filter(Boolean) as string[]
+    if (project.branch_id && !userBranchIds.includes(project.branch_id)) {
+      notFound()
+    }
+  }
+
   // Also query referenced SPH if available through SPK
   const sphRes = (project.spk as any)?.accepted_sph_id
     ? await supabase
@@ -158,7 +170,6 @@ export default async function ProjectDetailPage({
   }
 
   // Roles & permissions
-  const isOwner = actorRole === "owner"
   const isDirut = isOwner || (workAssignments ?? []).some((j) => !j.branch_id && j.job_role === "president")
   const isDirector =
     isOwner ||

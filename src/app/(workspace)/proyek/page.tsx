@@ -17,7 +17,7 @@ export default async function ProjectListPage({
   const { supabase, organizationId, user, actorRole, workAssignments } = await requireWorkspace()
   const isOwner = actorRole === "owner"
   const isDirector = (workAssignments ?? []).some(
-    (j) => !j.branch_id && ["president", "technical_director", "finance_director"].includes(j.job_role)
+    (j) => !j.branch_id && ["president", "technical_director", "finance_director", "accounting_tax", "finance"].includes(j.job_role)
   )
 
   // Load branches & projects

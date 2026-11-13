@@ -149,6 +149,10 @@ export function ClientDirectory() {
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-900 border border-emerald-300">
                           <FolderCheck className="size-3 text-emerald-700" /> Klien Aktif (Deal)
                         </span>
+                      ) : client.hasOtherBranchProjects ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800 border border-amber-200">
+                          Aktif di Cabang Lain
+                        </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
                           Tahap Prospek / SPH
@@ -167,6 +171,11 @@ export function ClientDirectory() {
                     <td className="px-4 py-3.5 text-xs space-y-1.5">
                       {activeProjects.map((p) => (
                         <div key={p.id} className="flex flex-wrap items-center gap-2">
+                          {p.branch?.code && (
+                            <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+                              {p.branch.code}
+                            </span>
+                          )}
                           <span className="font-semibold text-ink">{p.code}</span>
                           <span className="text-muted truncate max-w-[140px]">{p.name}</span>
                           <div className="flex items-center gap-1.5">
@@ -185,7 +194,12 @@ export function ClientDirectory() {
                           </div>
                         </div>
                       ))}
-                      {!activeProjects.length && (
+                      {!activeProjects.length && client.hasOtherBranchProjects && (
+                        <div className="flex items-center gap-1.5 text-xs text-amber-800/90 bg-amber-50/70 rounded-md px-2.5 py-1.5 border border-amber-200/60">
+                          <span className="italic">Proyek aktif berjalan di cabang lain (akses dibatasi)</span>
+                        </div>
+                      )}
+                      {!activeProjects.length && !client.hasOtherBranchProjects && (
                         <span className="text-muted italic">Belum ada proyek berjalan</span>
                       )}
                     </td>
