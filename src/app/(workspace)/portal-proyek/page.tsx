@@ -34,8 +34,15 @@ export default async function ProjectPortalPage({
   const origin = `${proto}://${host}`
 
   const owner = w.actorRole === "owner"
+  const isDirector =
+    w.actorRole === "director" ||
+    w.role === "director" ||
+    (w.workAssignments ?? []).some((a) =>
+      ["president", "finance_director", "technical_director"].includes(a.job_role)
+    )
   const canManage =
     owner ||
+    isDirector ||
     w.actorRole === "manager" ||
     w.workAssignments.some((a) => ["branch_manager", "admin", "project_manager"].includes(a.job_role))
 
@@ -210,11 +217,6 @@ export default async function ProjectPortalPage({
       }))
     }
   }
-
-  const isDirector =
-    w.actorRole === "director" ||
-    w.role === "director" ||
-    w.workAssignments.some((a) => ["president", "finance_director", "technical_director"].includes(a.job_role))
 
   const isClient = w.relationshipStatus === "client" || (!project?.is_internal && project?.can_submit)
   const isInternal = Boolean(project?.is_internal)
