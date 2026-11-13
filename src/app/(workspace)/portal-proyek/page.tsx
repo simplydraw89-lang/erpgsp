@@ -6,7 +6,7 @@ import { requireWorkspace } from "@/lib/auth/context"
 import { SubmitButton } from "@/components/procurement/submit-button"
 import { ProcurementMessage, ProcurementUnavailable } from "@/components/procurement/section-nav"
 import { isProcurementMissing, procurementInput as input, procurementLabel as label, relationshipLabels } from "@/lib/procurement-ui"
-import { savePortalEntry, setPortalAccess, configurePortalProject, provisionPortalClientAction, sendClientPasswordResetAction } from "./actions"
+import { savePortalEntry, setPortalAccess, provisionPortalClientAction, sendClientPasswordResetAction } from "./actions"
 import { ProjectPortalView, type PortalEntryItem } from "@/components/project/project-portal-view"
 import { ProjectMilestonesManager, type MilestoneAttachmentOption } from "@/components/project/project-milestones-manager"
 import { getProjectMilestones, isMilestoneSyncEntry } from "@/lib/project-milestones"
@@ -44,7 +44,6 @@ export default async function ProjectPortalPage({
     branches,
     profiles,
     members,
-    setupProjects,
     orgUsersRes,
     clientCandidatesRes,
     salesClientsRes,
@@ -54,7 +53,6 @@ export default async function ProjectPortalPage({
     w.supabase.from("business_units").select("id,name").eq("organization_id", w.organizationId).in("kind", ["branch", "center"]),
     w.supabase.from("person_profiles").select("user_id,relationship_status").eq("organization_id", w.organizationId).in("relationship_status", ["client", "consultant", "vendor"]),
     w.supabase.from("project_memberships").select("project_id,user_id,member_type,can_submit,is_active").eq("organization_id", w.organizationId),
-    canManage ? w.supabase.from("crm_projects").select("id,code,name,status,client_id").eq("organization_id", w.organizationId).order("code") : Promise.resolve({ data: [], error: null }),
     w.supabase.rpc("list_organization_users", { p_org: w.organizationId }),
     w.supabase.rpc("list_portal_client_candidates", { p_org: w.organizationId }),
     w.supabase.from("sales_clients").select("id,name,email,contact,branch_id").eq("organization_id", w.organizationId),
@@ -159,7 +157,7 @@ export default async function ProjectPortalPage({
   })
 
   const missing = [projectResult.error, branches.error, profiles.error, members.error].some(isProcurementMissing)
-  if (!missing && [projectResult.error, branches.error, profiles.error, members.error, setupProjects.error].some(Boolean)) {
+  if (!missing && [projectResult.error, branches.error, profiles.error, members.error].some(Boolean)) {
     throw new Error("Portal proyek gagal dimuat.")
   }
 
@@ -266,45 +264,7 @@ export default async function ProjectPortalPage({
         <>
           {/* Delegasi Akses Klien Portal 2 Arah */}
           {canManage && (
-            <div className={((setupProjects.data ?? []).filter((p) => !projects.some((scoped) => scoped.id === p.id))).length > 0 ? "grid gap-6 lg:grid-cols-2" : "w-full"}>
-              {((setupProjects.data ?? []).filter((p) => !projects.some((scoped) => scoped.id === p.id))).length > 0 && (
-                <Card className="p-5">
-                  <h2 className="font-semibold text-sm">Tetapkan Cabang Proyek</h2>
-                  <p className="mt-1 text-xs text-muted">
-                    Pilih proyek dari CRM dan tetapkan cabang operasionalnya sebelum memulai portal.
-                  </p>
-                  <form action={configurePortalProject} className="mt-4 space-y-3">
-                    <fieldset disabled={w.isReadOnlyPreview} className="space-y-3">
-                      <label className={label}>
-                        Proyek belum dialokasikan
-                        <select name="project_id" required className={input}>
-                          <option value="">Pilih proyek</option>
-                          {(setupProjects.data ?? [])
-                            .filter((p) => !projects.some((scoped) => scoped.id === p.id))
-                            .map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.code} · {p.name}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                      <label className={label}>
-                        Cabang operasional
-                        <select name="branch_id" required className={input}>
-                          <option value="">Pilih cabang</option>
-                          {branches.data?.map((b) => (
-                            <option key={b.id} value={b.id}>
-                              {b.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <SubmitButton>Tetapkan cabang</SubmitButton>
-                    </fieldset>
-                  </form>
-                </Card>
-              )}
-
+            <div className="w-full">
               <Card className="p-5">
                 <h2 className="font-semibold text-sm">Akses Pihak Eksternal (Klien / Konsultan)</h2>
                 <p className="mt-1 text-xs text-muted">
