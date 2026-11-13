@@ -216,3 +216,40 @@ export async function reviewCashAdvanceSettlement(data: FormData) {
     ? "Pertanggungjawaban disetujui; kasbon ditutup."
     : "Pertanggungjawaban ditolak; pengaju dapat memperbaiki dan mengajukan ulang.")
 }
+
+export async function addBankStatementLine(data: FormData) {
+  const { supabase, organizationId } = await requireWritableWorkspace(accountingPath)
+  const statementDate = required(data, "statement_date", "Tanggal mutasi")
+  if (!validDate(statementDate)) finish(accountingPath, "error", "Tanggal mutasi tidak valid.")
+  const direction = required(data, "direction", "Arah mutasi")
+  const amount = Number(required(data, "amount", "Nominal mutasi"))
+  if (!Number.isFinite(amount) || amount <= 0) {
+    finish(accountingPath, "error", "Nominal mutasi harus lebih besar dari nol.")
+  }
+  await callRpc(accountingPath, supabase, "add_bank_statement_line", {
+    p_org: organizationId,
+    p_entity_id: required(data, "entity_id", "Entitas"),
+    p_account_id: required(data, "account_id", "Akun kas/bank"),
+    p_statement_date: statementDate,
+    p_reference_no: text(data, "reference_no") || null,
+    p_description: required(data, "description", "Keterangan mutasi"),
+    p_debit: direction === "debit" ? amount : 0,
+    p_credit: direction === "credit" ? amount : 0,
+  }, "Baris mutasi rekening koran berhasil ditambahkan.")
+}
+
+export async function matchBankStatementLine(data: FormData) {
+  const { supabase, organizationId } = await requireWritableWorkspace(accountingPath)
+  const status = required(data, "match_status", "Status pencocokan")
+  const journalId = text(data, "matched_journal_id") || null
+  if (status === "matched" && !journalId) {
+    finish(accountingPath, "error", "Pilih jurnal yang cocok terlebih dahulu.")
+  }
+  await callRpc(accountingPath, supabase, "match_bank_statement_line", {
+    p_org: organizationId,
+    p_line_id: required(data, "line_id", "Baris mutasi"),
+    p_journal_id: journalId,
+    p_status: status,
+  }, "Status pencocokan mutasi bank berhasil diperbarui.")
+}
+

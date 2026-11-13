@@ -8,6 +8,31 @@ import { MigrationNotice } from "@/components/workflow/migration-notice"
 import { ModuleFilters } from "@/components/workflow/module-filters"
 import { AccountingWorkbench } from "@/components/accounting/accounting-workbench"
 import { ChartOfAccounts } from "@/components/accounting/chart-of-accounts"
+import { FinancialReportsView } from "@/components/accounting/financial-reports-view"
+import {
+  BankStatementReconciler,
+  type BankStatementLineRow,
+} from "@/components/accounting/bank-statement-reconciler"
+import {
+  TaxRecapView,
+  type FiscalAdjustmentRow,
+  type PurchaseTaxRow,
+  type SalesTaxRow,
+} from "@/components/accounting/tax-recap-view"
+import {
+  buildFinancialStatements,
+  type CoaMetaRow,
+  type TrialBalanceRow,
+} from "@/lib/accounting/financial-reports"
+import {
+  PayrollWorkbench,
+  type EmployeeOption,
+  type PayrollRunRow,
+} from "@/components/hr/payroll-workbench"
+import {
+  AssetDepreciationPanel,
+  type AssetDepreciationRow,
+} from "@/components/asset/asset-depreciation-panel"
 import type { CoaAccount } from "@/lib/accounting/coa"
 import {
   reviewCashAdvanceSettlement,
@@ -67,7 +92,10 @@ export default async function ModulePage({
   const { supabase, organizationId, role } = workspace
   const Icon = definition.icon
   if (key === "struktur-perusahaan") redirect("/struktur-akses")
-  if (workspace.actorRole !== "owner" && !["akuntansi", "keuangan", "manajemen"].includes(key)) {
+  if (
+    workspace.actorRole !== "owner" &&
+    !["akuntansi", "keuangan", "manajemen", "perpajakan", "sdm", "asset"].includes(key)
+  ) {
     return <Card className="space-y-3 p-6"><h1 className="text-xl font-semibold">{definition.name}</h1>
       <p className="text-sm leading-6 text-muted">Data modul sebelumnya belum dipetakan ke cabang. Akses pengguna perusahaan dibuka setelah data dan alur modul ini memiliki cakupan yang sesuai.</p>
       <Link href="/pengajuan" className="inline-block text-sm font-semibold text-brand">Buka pengajuan bisnis per cabang →</Link>
@@ -82,7 +110,7 @@ export default async function ModulePage({
     return <div className="space-y-5">{query.error && <Card role="alert" className="bg-red-50 p-4 text-sm">{query.error}</Card>}{query.notice && <Card role="status" className="bg-green-50 p-4 text-sm">{query.notice}</Card>}<ChartOfAccounts accounts={(accounts.data ?? []) as CoaAccount[]} editable={Boolean(permission.data) && !workspace.isReadOnlyPreview} editId={query.edit} /></div>
   }
   if (key === "akuntansi") {
-    const [entityResult, periodResult, accountResult, journalResult, ledgerResult, receivableResult, payableResult, employeeAdvanceResult, bankResult, trialBalanceResult, journalHeadersResult, reconciliationsResult, membersResult] = await Promise.all([
+    const [entityResult, periodResult, accountResult, journalResult, ledgerResult, receivableResult, payableResult, employeeAdvanceResult, bankResult, trialBalanceResult, journalHeadersResult, reconciliationsResult, membersResult, bankStatementLinesResult] = await Promise.all([
       supabase.from("company_entities").select("id,entity_code,legal_name,entity_type,parent_entity_id,functional_currency,is_reporting_parent,is_active").eq("organization_id", organizationId).order("entity_code"),
       supabase.from("accounting_periods").select("id,entity_id,period_code,starts_on,ends_on,period_status").eq("organization_id", organizationId).order("starts_on", { ascending: false }).limit(36),
       supabase.from("finance_accounts").select("id,code,account_code,name,account_type,normal_balance,is_active,parent_account_id,is_postable").eq("organization_id", organizationId).order("code"),
@@ -96,10 +124,12 @@ export default async function ModulePage({
       supabase.from("accounting_journals").select("id,entity_id,period_id,journal_number,journal_date,description,status,reversal_of").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100),
       supabase.from("bank_reconciliations").select("id,account_id,statement_date,statement_balance,book_balance,difference,status,note").eq("organization_id", organizationId).order("statement_date", { ascending: false }).limit(100),
       supabase.from("organization_members").select("user_id,role").eq("organization_id", organizationId).neq("role", "owner").order("role"),
+      supabase.from("bank_statement_lines").select("id,entity_id,account_id,statement_date,reference_no,description,debit,credit,match_status,matched_journal_id").eq("organization_id", organizationId).order("statement_date", { ascending: false }).limit(100),
     ])
     const reportErrors = [entityResult.error, periodResult.error, accountResult.error, journalResult.error, ledgerResult.error, receivableResult.error, payableResult.error, employeeAdvanceResult.error, bankResult.error, trialBalanceResult.error, journalHeadersResult.error, reconciliationsResult.error, membersResult.error]
     const reportUnavailable = reportErrors.some(isWorkflowMissing)
     if (reportErrors.some((error) => error && !isWorkflowMissing(error))) throw new Error("Laporan akuntansi gagal dimuat.")
+    const statementLines = (bankStatementLinesResult.error ? [] : (bankStatementLinesResult.data ?? [])) as BankStatementLineRow[]
     const entities = entityResult.data ?? []
     const formatMoney = (value: number | string | null | undefined) => displayValue(value ?? 0, { name: "amount", label: "Saldo", type: "money" })
     const entityName = (entityId: string) => entities.find((entity) => entity.id === entityId)?.entity_code ?? entityId.slice(0, 8)
@@ -125,6 +155,19 @@ export default async function ModulePage({
             reconciliations={reconciliationsResult.data ?? []}
             members={membersResult.data ?? []}
           />}
+          <FinancialReportsView
+            entities={entities}
+            periods={periodResult.data ?? []}
+            accounts={accountResult.data ?? []}
+            trialBalance={trialBalanceResult.data ?? []}
+          />
+          <BankStatementReconciler
+            entities={entities}
+            accounts={accountResult.data ?? []}
+            journals={journalHeadersResult.data ?? []}
+            lines={statementLines}
+            canEdit={["owner", "finance"].includes(role) && !workspace.isReadOnlyPreview}
+          />
           <section className="grid gap-4 xl:grid-cols-2"><Card className="overflow-hidden"><div className="border-b border-line p-5"><h2 className="font-semibold">Buku Besar Ringkasan</h2><p className="mt-1 text-xs text-muted">Saldo per akun dari jurnal posted.</p></div><div className="max-h-[420px] overflow-auto">{ledgerResult.data?.length ? <table className="w-full text-left text-xs"><thead className="sticky top-0 bg-canvas"><tr><th className="p-3">Entitas</th><th className="p-3">Akun</th><th className="p-3 text-right">Debit bersih</th></tr></thead><tbody>{ledgerResult.data.map((row,index)=><tr key={`${row.entity_id}-${row.period_id}-${row.account_code}-${index}`} className="border-t border-line"><td className="p-3">{entityName(row.entity_id)}</td><td className="p-3">{row.account_code} · {row.account_name}</td><td className="p-3 text-right">{formatMoney(row.net_debit_balance)}</td></tr>)}</tbody></table>:<p className="p-6 text-sm text-muted">Belum ada jurnal yang diposting.</p>}</div></Card><Card className="overflow-hidden"><div className="border-b border-line p-5"><h2 className="font-semibold">Neraca Saldo</h2><p className="mt-1 text-xs text-muted">Debit/kredit per akun dan periode.</p></div><div className="max-h-[420px] overflow-auto">{trialBalanceResult.data?.length ? <table className="w-full text-left text-xs"><thead className="sticky top-0 bg-canvas"><tr><th className="p-3">Entitas / akun</th><th className="p-3 text-right">Debit</th><th className="p-3 text-right">Kredit</th></tr></thead><tbody>{trialBalanceResult.data.map((row,index)=><tr key={`${row.entity_id}-${row.period_id}-${row.account_code}-${index}`} className="border-t border-line"><td className="p-3">{entityName(row.entity_id)} · {row.account_code} · {row.account_name}</td><td className="p-3 text-right">{formatMoney(Math.max(Number(row.net_debit_balance),0))}</td><td className="p-3 text-right">{formatMoney(Math.max(-Number(row.net_debit_balance),0))}</td></tr>)}</tbody></table>:<p className="p-6 text-sm text-muted">Neraca saldo muncul setelah jurnal posted tersedia.</p>}</div></Card></section>
           <section className="grid gap-4 xl:grid-cols-2">
             {[{title:"Buku Pembantu Piutang · Ringkasan",rows:(receivableResult.data ?? []).map((row)=>({entity_id:row.entity_id,account_code:row.account_code,account_name:row.account_name,counterparty_id:row.counterparty_id,currency:null,amount:row.balance}))},{title:"Buku Pembantu Utang · Ringkasan",rows:(payableResult.data ?? []).map((row)=>({entity_id:row.entity_id,account_code:row.account_code,account_name:row.account_name,counterparty_id:row.counterparty_id,currency:null,amount:row.balance}))},{title:"Piutang karyawan / Kasbon",rows:(employeeAdvanceResult.data ?? []).map((row)=>({entity_id:row.entity_id,account_code:row.account_code,account_name:row.account_name,counterparty_id:row.counterparty_id,currency:null,amount:row.outstanding_balance}))},{title:"Buku Bank",rows:(bankResult.data ?? []).map((row)=>({entity_id:row.entity_id,account_code:row.account_code,account_name:row.account_name,counterparty_id:null,currency:row.currency,amount:row.bank_balance}))}].map((section)=><Card key={section.title} className="overflow-hidden"><div className="border-b border-line p-5"><h2 className="font-semibold">{section.title}</h2><p className="mt-1 text-xs text-muted">Saldo berdasarkan akun dan pihak transaksi pada jurnal.</p></div>{section.rows.length?<div className="divide-y divide-line">{section.rows.slice(0,30).map((row,index)=><div key={`${row.entity_id}-${row.account_code}-${row.counterparty_id ?? ""}-${index}`} className="flex justify-between gap-3 p-4 text-xs"><span>{entityName(row.entity_id)} · {row.account_code} · {row.account_name}{row.currency?` · ${row.currency}`:""}{row.counterparty_id?` · ${String(row.counterparty_id).slice(0,8)}`:""}</span><strong>{formatMoney(row.amount)}</strong></div>)}</div>:<p className="p-5 text-sm text-muted">Belum ada transaksi jurnal untuk laporan ini.</p>}</Card>)}
@@ -757,6 +800,139 @@ export default async function ModulePage({
           ))}
         </div>
       </Card>
+      {key === "perpajakan" && (
+        <TaxRecapLoader
+          supabase={supabase}
+          organizationId={organizationId}
+          canEditFiscal={
+            !workspace.isReadOnlyPreview &&
+            (workspace.actorRole === "owner" ||
+              ["finance", "accounting_tax"].includes(role) ||
+              (workspace.workAssignments ?? []).some((j) =>
+                ["accounting_tax", "finance"].includes(j.job_role),
+              ))
+          }
+        />
+      )}
+      {key === "sdm" && (
+        <PayrollLoader
+          supabase={supabase}
+          organizationId={organizationId}
+          employees={(recordsResult.data ?? []) as unknown as EmployeeOption[]}
+          role={role}
+          actorRole={workspace.actorRole}
+          currentUserId={workspace.user.id}
+          isReadOnly={workspace.isReadOnlyPreview}
+        />
+      )}
+      {key === "asset" && (
+        <AssetDepreciationPanel assets={(recordsResult.data ?? []) as unknown as AssetDepreciationRow[]} />
+      )}
     </div>
+  )
+}
+
+async function TaxRecapLoader({
+  supabase,
+  organizationId,
+  canEditFiscal,
+}: {
+  supabase: Awaited<ReturnType<typeof requireWorkspace>>["supabase"]
+  organizationId: string
+  canEditFiscal: boolean
+}) {
+  const [purchaseRes, salesRes, branchesRes, fiscalRes, trialRes, coaRes] = await Promise.all([
+    supabase
+      .from("purchase_requests")
+      .select(
+        "id,branch_id,invoice_number,invoice_date,tax_invoice_number,tax_invoice_date,vendor_snapshot,subtotal,vat_amount,vat_creditable,withholding_code,withholding_amount,status",
+      )
+      .eq("organization_id", organizationId)
+      .order("invoice_date", { ascending: false })
+      .limit(300),
+    supabase
+      .from("sales_invoices")
+      .select(
+        "id,branch_id,invoice_number,invoice_date,amount,vat_amount,wht_amount,wht_proof_number,total_amount,status",
+      )
+      .eq("organization_id", organizationId)
+      .order("invoice_date", { ascending: false })
+      .limit(300),
+    supabase
+      .from("business_units")
+      .select("id,code,name")
+      .eq("organization_id", organizationId)
+      .eq("kind", "branch")
+      .order("code"),
+    supabase
+      .from("tax_fiscal_adjustments")
+      .select("id,fiscal_year,adjustment_type,difference_kind,account_code,description,amount,tax_rule_ref")
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("trial_balance")
+      .select("entity_id,period_id,account_code,account_name,debit_total,credit_total,net_debit_balance")
+      .eq("organization_id", organizationId)
+      .limit(500),
+    supabase
+      .from("finance_accounts")
+      .select("code,name,account_type,normal_balance")
+      .eq("organization_id", organizationId),
+  ])
+
+  const financial = buildFinancialStatements(
+    (trialRes.error ? [] : (trialRes.data ?? [])) as TrialBalanceRow[],
+    (coaRes.error ? [] : (coaRes.data ?? [])) as CoaMetaRow[],
+  )
+
+  return (
+    <TaxRecapView
+      purchases={(purchaseRes.data ?? []) as PurchaseTaxRow[]}
+      salesInvoices={(salesRes.data ?? []) as SalesTaxRow[]}
+      branches={(branchesRes.data ?? []) as Array<{ id: string; code: string; name: string }>}
+      fiscalAdjustments={
+        (fiscalRes.error ? [] : (fiscalRes.data ?? [])) as FiscalAdjustmentRow[]
+      }
+      commercialNetIncome={financial.incomeStatement.netIncome}
+      canEditFiscal={canEditFiscal}
+    />
+  )
+}
+
+async function PayrollLoader({
+  supabase,
+  organizationId,
+  employees,
+  role,
+  actorRole,
+  currentUserId,
+  isReadOnly,
+}: {
+  supabase: Awaited<ReturnType<typeof requireWorkspace>>["supabase"]
+  organizationId: string
+  employees: EmployeeOption[]
+  role: string
+  actorRole: string
+  currentUserId: string
+  isReadOnly: boolean
+}) {
+  const runsRes = await supabase
+    .from("payroll_runs")
+    .select("id,period_month,title,status,total_gross,total_deductions,total_net,created_by,created_at")
+    .eq("organization_id", organizationId)
+    .order("period_month", { ascending: false })
+    .limit(24)
+
+  if (isWorkflowMissing(runsRes.error)) return null
+  return (
+    <PayrollWorkbench
+      employees={employees}
+      runs={(runsRes.data ?? []) as PayrollRunRow[]}
+      canCreate={!isReadOnly && (actorRole === "owner" || ["hr", "finance"].includes(role))}
+      canApprove={!isReadOnly && (actorRole === "owner" || ["director", "finance"].includes(role))}
+      currentUserId={currentUserId}
+      isOwner={actorRole === "owner"}
+    />
   )
 }

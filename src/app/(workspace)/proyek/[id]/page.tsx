@@ -20,6 +20,7 @@ import { ProjectDirectorConsole, type AttachmentItem, type DirectorInsight } fro
 import { ProjectCostingCard, type ProjectCostingData } from "@/components/project/project-costing-card"
 import { ProjectMilestonesManager } from "@/components/project/project-milestones-manager"
 import { getProjectMilestones } from "@/lib/project-milestones"
+import { ProjectTimesheetPanel, type ProjectTimesheetRow } from "@/components/project/project-timesheet-panel"
 import { loadOrganizationActorDirectory, buildWorkflowAuditSummary } from "@/lib/audit-trail"
 import { AuditWorkflowTimeline } from "@/components/procurement/audit-workflow-timeline"
 import { provisionProjectClientAction } from "../actions"
@@ -502,6 +503,15 @@ export default async function ProjectDetailPage({
         </div>
       )}
 
+      {/* Realisasi Timesheet & Utilisasi Manpower */}
+      <TimesheetLoader
+        supabase={supabase}
+        organizationId={organizationId}
+        projectId={project.id}
+        isActiveProject={status === "active"}
+        canLog={!isReadOnlyPreview}
+      />
+
       {/* Riwayat / Log Aktivitas Proyek & KPI Waktu Pengerjaan */}
       <AuditWorkflowTimeline
         summary={projectAuditSummary}
@@ -510,5 +520,37 @@ export default async function ProjectDetailPage({
         </>
       )}
     </div>
+  )
+}
+
+async function TimesheetLoader({
+  supabase,
+  organizationId,
+  projectId,
+  isActiveProject,
+  canLog,
+}: {
+  supabase: Awaited<ReturnType<typeof requireWorkspace>>["supabase"]
+  organizationId: string
+  projectId: string
+  isActiveProject: boolean
+  canLog: boolean
+}) {
+  const { data, error } = await supabase
+    .from("project_timesheets")
+    .select("id,work_date,personnel_name,personnel_role,phase_name,hours_worked,progress_pct,notes")
+    .eq("organization_id", organizationId)
+    .eq("project_id", projectId)
+    .order("work_date", { ascending: false })
+    .limit(100)
+
+  if (error) return null
+  return (
+    <ProjectTimesheetPanel
+      projectId={projectId}
+      isActiveProject={isActiveProject}
+      canLog={canLog}
+      timesheets={(data ?? []) as ProjectTimesheetRow[]}
+    />
   )
 }
