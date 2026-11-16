@@ -384,3 +384,220 @@ body {
     width: 100%;
   }
 }
+
+
+/* ==========================================================================
+   DARK MODE STYLES & THEME OVERRIDES
+   ========================================================================== */
+:root {
+  --color-canvas: #f4f6f7;
+  --color-ink: #17212b;
+  --color-muted: #687783;
+  --color-line: #e5eaed;
+}
+
+html.dark {
+  color-scheme: dark;
+  --color-canvas: #090e17;
+  --color-ink: #f1f5f9;
+  --color-muted: #94a3b8;
+  --color-line: #1e293b;
+}
+
+html.dark body {
+  background-color: #090e17;
+  color: #f1f5f9;
+}
+
+/* 1. Portal & Dashboard in Dark Mode */
+html.dark .portal-background {
+  background:
+    radial-gradient(
+      ellipse 65% 420px at 5% 0%,
+      rgba(15, 23, 42, 0.95),
+      transparent
+    ),
+    radial-gradient(
+      ellipse 42% 360px at 100% 0%,
+      rgba(40, 28, 12, 0.6),
+      transparent
+    ),
+    radial-gradient(
+      ellipse 50% 440px at 62% 105%,
+      rgba(24, 20, 60, 0.7),
+      transparent
+    ),
+    #090e17;
+  color: #f1f5f9;
+}
+
+html.dark .portal-header {
+  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+  background: rgba(15, 23, 42, 0.6);
+}
+
+html.dark .portal-header-content h1 {
+  color: #f8fafc;
+}
+
+html.dark .portal-search-button {
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  background: rgba(30, 41, 59, 0.75);
+  color: #94a3b8;
+}
+
+html.dark .portal-group {
+  border: 1px solid rgba(51, 65, 85, 0.7);
+  background: rgba(15, 23, 42, 0.85);
+  box-shadow: 0 16px 27px -13px rgba(0, 0, 0, 0.6);
+}
+
+html.dark .portal-summary {
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  background: rgba(15, 23, 42, 0.85);
+  box-shadow: 0 17px 28px -15px rgba(0, 0, 0, 0.6);
+  color: #f1f5f9;
+}
+
+html.dark .portal-popover {
+  border: 1px solid #334155;
+  background: #0f172a;
+  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.6);
+  color: #f1f5f9;
+}
+
+html.dark .portal-search-dialog {
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #f1f5f9;
+}
+
+html.dark .portal-search-dialog input {
+  background: transparent;
+  color: #f8fafc;
+}
+
+/* 2. Module Dock & Navigation in Dark Mode */
+html.dark .module-dock {
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  background: rgba(15, 23, 42, 0.88);
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+html.dark .module-dock-item {
+  border: 1px solid #334155;
+  background: rgba(30, 41, 59, 0.85);
+  color: #94a3b8;
+}
+
+html.dark .module-dock-item:hover,
+html.dark .module-dock-item.is-active {
+  background: #116a61;
+  color: #ffffff;
+  border-color: #116a61;
+}
+
+html.dark .module-dock-dialog {
+  border: 1px solid #334155;
+  background: rgba(15, 23, 42, 0.98);
+  color: #f1f5f9;
+}
+
+html.dark .module-dock-mobile {
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  background: rgba(15, 23, 42, 0.9);
+  color: #2dd4bf;
+}
+
+html.dark .module-dock-mobile-icon {
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #2dd4bf;
+}
+
+html.dark .module-filter-panel {
+  border: 1px solid #334155;
+  background: rgba(15, 23, 42, 0.92);
+}
+
+html.dark .module-filter-input {
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #f1f5f9;
+}
+
+/* 3. Surface & Card Adaptive Styling */
+html.dark .bg-white {
+  background-color: #0f172a;
+}
+
+html.dark .bg-slate-50,
+html.dark .bg-gray-50 {
+  background-color: #162032;
+}
+
+html.dark .bg-slate-100,
+html.dark .bg-gray-100 {
+  background-color: #1e293b;
+}
+
+html.dark .border-slate-200,
+html.dark .border-slate-100,
+html.dark .border-gray-200,
+html.dark .border-gray-100,
+html.dark .border-line {
+  border-color: #1e293b;
+}
+
+html.dark .text-slate-900,
+html.dark .text-slate-950,
+html.dark .text-gray-900,
+html.dark .text-ink {
+  color: #f8fafc;
+}
+
+html.dark .text-slate-800,
+html.dark .text-slate-700,
+html.dark .text-gray-800,
+html.dark .text-gray-700 {
+  color: #cbd5e1;
+}
+
+html.dark .text-slate-600,
+html.dark .text-gray-600,
+html.dark .text-muted {
+  color: #94a3b8;
+}
+
+html.dark .text-slate-500,
+html.dark .text-gray-500 {
+  color: #64748b;
+}
+
+/* 4. Form inputs, tables, select in Dark Mode */
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+html.dark select,
+html.dark textarea {
+  background-color: #0f172a;
+  color: #f8fafc;
+  border-color: #334155;
+}
+
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: #116a61;
+}
+
+html.dark table thead th {
+  background-color: #1e293b;
+  color: #e2e8f0;
+}
+
+html.dark table tbody tr {
+  border-color: #1e293b;
+}
+
+html.dark table tbody tr:hover {
+  background-color: #162032;
+}

@@ -16,7 +16,8 @@
     "test:procurement": "node --test scripts/procurement-database.test.mjs",
     "test:documents": "node --test scripts/invoice-ocr.test.cjs",
     "test:sales": "node --test scripts/sales-upload.test.cjs scripts/sales-navigation.test.cjs scripts/document-preview.test.cjs scripts/sales-database.test.mjs",
-    "test:coa": "node --test scripts/coa-database.test.mjs"
+    "test:coa": "node --test scripts/coa-database.test.mjs",
+    "test:theme": "node --test scripts/theme.test.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.2",

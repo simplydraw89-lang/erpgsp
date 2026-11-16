@@ -6,6 +6,7 @@ import { SalesNotificationBell } from "@/components/sales/notifications"
 import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import { LogoutButton } from "@/components/auth/logout-button"
 import { ViewAsControl } from "@/components/auth/view-as-control"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
 import type { OrganizationRole } from "@/lib/auth/context"
 import { getApplications, roleLabels } from "@/lib/app-catalog"
 
@@ -177,6 +178,7 @@ export function PortalHeader({
           </button>
         </div>
         <div className="portal-account-actions">
+          <ThemeToggle align="right" />
           <SalesNotificationBell disabled={isReadOnlyPreview} />
           <details className="relative">
             <summary
