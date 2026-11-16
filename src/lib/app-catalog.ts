@@ -14,6 +14,7 @@ import {
   ReceiptText,
   Settings2,
   ShieldCheck,
+  Sliders,
   UsersRound,
 } from "lucide-react"
 import type { OrganizationRole } from "@/lib/auth/context"
@@ -220,6 +221,13 @@ export const applicationGroups = [
     tone: "slate",
     apps: [
       {
+        name: "Pengaturan",
+        href: "/pengaturan",
+        icon: Settings2,
+        roles: everyone,
+        description: "Pengaturan mode tampilan (terang, gelap, sesuai waktu) dan preferensi sistem",
+      },
+      {
         name: "Struktur & akses",
         href: "/struktur-akses",
         icon: UsersRound,
@@ -229,7 +237,7 @@ export const applicationGroups = [
       {
         name: "Kebijakan Approval",
         href: "/pengaturan/persetujuan",
-        icon: Settings2,
+        icon: Sliders,
         roles: everyone,
         description: "Aturan pemeriksa dan eskalasi nominal",
       },
