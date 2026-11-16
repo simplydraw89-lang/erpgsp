@@ -3,7 +3,8 @@ import type { OrganizationRole } from "./context"
 const jobRoles: Record<string, OrganizationRole> = {
   president: "director", finance_director: "director", technical_director: "director",
   accounting_tax: "finance", finance: "finance", hr: "hr", branch_manager: "manager",
-  project_manager: "operations", admin: "staff", marketing: "staff", support: "staff", other: "staff",
+  project_manager: "operations", project_liaison: "operations", client_liaison: "operations", liaison_officer: "operations",
+  admin: "staff", marketing: "staff", support: "staff", other: "staff",
 }
 const priority: OrganizationRole[] = ["director", "finance", "hr", "manager", "operations", "staff"]
 

@@ -16,8 +16,10 @@ export default async function ProjectListPage({
 
   const { supabase, organizationId, user, actorRole, workAssignments } = await requireWorkspace()
   const isOwner = actorRole === "owner"
-  const isDirector = (workAssignments ?? []).some(
-    (j) => !j.branch_id && ["president", "technical_director", "finance_director", "accounting_tax", "finance"].includes(j.job_role)
+  const isDirectorOrLiaison = (workAssignments ?? []).some(
+    (j) =>
+      (!j.branch_id && ["president", "technical_director", "finance_director", "accounting_tax", "finance"].includes(j.job_role)) ||
+      ["project_liaison", "client_liaison", "liaison_officer"].includes(j.job_role)
   )
 
   // Load branches & projects
@@ -55,8 +57,8 @@ export default async function ProjectListPage({
   const branches = branchesRes.data ?? []
   let allProjects = (projectsRes.data ?? []) as any[]
 
-  // Filter based on branch scope if not owner/director
-  if (!isOwner && !isDirector) {
+  // Filter based on branch scope if not owner/director/liaison
+  if (!isOwner && !isDirectorOrLiaison) {
     const userBranchIds = (workAssignments ?? []).map((j) => j.branch_id).filter(Boolean)
     allProjects = allProjects.filter((p) => userBranchIds.includes(p.branch_id))
   }

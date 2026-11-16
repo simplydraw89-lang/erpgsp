@@ -37,6 +37,7 @@ const centralJobs = new Set([
   "technical_director",
   "finance",
   "accounting_tax",
+  "project_liaison",
 ])
 
 const branchJobs = new Set([

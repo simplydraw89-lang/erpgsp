@@ -40,8 +40,8 @@ export function ModuleDock({ role, navigationRoles = [role] }: { role: Organizat
   const shortcuts = [
     { href: "/dashboard", label: "Beranda", icon: Home },
     ...(navigationRoles.length ? [
-      { href: "/pengajuan/pembelian", label: "Pembelian", icon: ClipboardCheck },
       { href: "/pengajuan/penjualan", label: "Penjualan", icon: BriefcaseBusiness },
+      { href: "/pengajuan/pembelian", label: "Pembelian", icon: ClipboardCheck },
       { href: "/proyek", label: "Proyek", icon: FolderKanban },
       { href: "/vendor", label: "Vendor", icon: ContactRound },
       { href: "/pekerjaan-saya", label: "Pekerjaan saya", icon: ClipboardList },

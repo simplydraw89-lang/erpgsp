@@ -207,7 +207,7 @@ export function PurchaseForm({ branches, vendors, accounts, projects, purchase, 
           <label className={label}>Hubungkan ke Proyek (Potong Pagu RAB)<select name="project_id" value={projectId} onChange={e => setProjectId(e.target.value)} className={input}><option value="">Bukan Biaya Proyek (Pengeluaran Umum Cabang)</option>{(projects ?? []).filter(p => !p.branch_id || p.branch_id === branch).map(p => <option key={p.id} value={p.id}>{p.code}  -  {p.name}</option>)}</select></label>
           <label className={label}>Nomor invoice<input name="invoice_number" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} required maxLength={160} className={input} /></label>
           <label className={label}>Tanggal invoice<DatePicker name="invoice_date" value={invoiceDate} onValueChange={setInvoiceDate} required className={input} /></label>
-          <label className={label}>Nomor faktur pajak<input name="tax_invoice_number" value={taxInvoiceNumber} onChange={e => setTaxInvoiceNumber(e.target.value)} className={input} /></label>
+          <label className={label}>Nomor faktur pajak (e-Faktur)<input name="tax_invoice_number" value={taxInvoiceNumber} onChange={e => setTaxInvoiceNumber(e.target.value)} placeholder="Contoh: 010.000-26.XXXXXXXX" className={input} /></label>
           <label className={label}>Tanggal faktur pajak<DatePicker name="tax_invoice_date" value={taxInvoiceDate} onValueChange={setTaxInvoiceDate} className={input} /></label>
           <label className={label}>Rencana tanggal pembayaran<DatePicker name="requested_payment_date" value={requestedPaymentDate} onValueChange={setRequestedPaymentDate} className={input} /></label>
         </div>

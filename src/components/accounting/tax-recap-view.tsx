@@ -31,6 +31,9 @@ export type SalesTaxRow = {
   branch_id: string | null
   invoice_number: string
   invoice_date: string
+  tax_invoice_type?: string | null
+  tax_invoice_number?: string | null
+  is_wapu?: boolean
   amount: number | string
   vat_amount: number | string
   wht_amount: number | string
@@ -140,8 +143,19 @@ export function TaxRecapView({
   const ppnMasukanNonCreditable = validPurchases
     .filter((p) => !p.vat_creditable)
     .reduce((sum, p) => sum + Number(p.vat_amount ?? 0), 0)
-  const ppnKeluaran = validSales.reduce((sum, s) => sum + Number(s.vat_amount ?? 0), 0)
-  const netPpn = ppnKeluaran - ppnMasukanCreditable
+
+  // PPN Keluaran Dipungut Sendiri (010) vs Dipungut Pemungut (030 Migas / 020 Pemda)
+  const ppnKeluaranSelf = validSales
+    .filter((s) => !s.is_wapu && s.tax_invoice_type !== "030" && s.tax_invoice_type !== "020")
+    .reduce((sum, s) => sum + Number(s.vat_amount ?? 0), 0)
+
+  const ppnKeluaranWapu = validSales
+    .filter((s) => s.is_wapu || s.tax_invoice_type === "030" || s.tax_invoice_type === "020")
+    .reduce((sum, s) => sum + Number(s.vat_amount ?? 0), 0)
+
+  const ppnKeluaranTotal = ppnKeluaranSelf + ppnKeluaranWapu
+  // SPT Masa Kurang / Lebih Bayar hanya memperhitungkan PPN yang dipungut sendiri oleh perusahaan:
+  const netPpn = ppnKeluaranSelf - ppnMasukanCreditable
 
   const pphByCode = useMemo(() => {
     const map = new Map<string, number>()
@@ -231,9 +245,9 @@ export function TaxRecapView({
 
       {activeTab === "ppn" && (
         <div className="space-y-5">
-          <div className="grid gap-4 sm:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-5">
             <Card className="p-4">
-              <p className="text-xs text-muted">PPN Masukan (Dapat Dikreditkan)</p>
+              <p className="text-xs text-muted">PPN Masukan (Kredit)</p>
               <p className="mt-2 text-xl font-bold tabular-nums text-emerald-700">
                 {formatCurrency(ppnMasukanCreditable)}
               </p>
@@ -245,14 +259,21 @@ export function TaxRecapView({
               </p>
             </Card>
             <Card className="p-4">
-              <p className="text-xs text-muted">PPN Keluaran (Penjualan)</p>
+              <p className="text-xs text-muted">PPN Keluaran (010 Sendiri)</p>
               <p className="mt-2 text-xl font-bold tabular-nums text-blue-700">
-                {formatCurrency(ppnKeluaran)}
+                {formatCurrency(ppnKeluaranSelf)}
               </p>
+            </Card>
+            <Card className="p-4 bg-indigo-50/50 border-indigo-200">
+              <p className="text-xs text-indigo-900 font-medium">PPN WAPU (030 Migas / BUMN)</p>
+              <p className="mt-2 text-xl font-bold tabular-nums text-indigo-700">
+                {formatCurrency(ppnKeluaranWapu)}
+              </p>
+              <p className="text-[10px] text-indigo-600 mt-1">Disetor Pembeli ke Kas Negara</p>
             </Card>
             <Card className="p-4">
               <p className="text-xs text-muted">
-                {netPpn >= 0 ? "PPN Kurang Bayar" : "PPN Lebih Bayar"}
+                {netPpn >= 0 ? "SPT PPN Kurang Bayar (Setor)" : "SPT PPN Lebih Bayar"}
               </p>
               <p
                 className={`mt-2 text-xl font-bold tabular-nums ${
@@ -261,6 +282,7 @@ export function TaxRecapView({
               >
                 {formatCurrency(Math.abs(netPpn))}
               </p>
+              <p className="text-[10px] text-muted mt-1">{netPpn >= 0 ? "PPN 010 - PPN Masukan" : "Dapat dikompensasikan"}</p>
             </Card>
           </div>
 
@@ -374,36 +396,56 @@ export function TaxRecapView({
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase text-muted">
                   <tr>
-                    <th className="px-3 py-2">No. Invoice</th>
+                    <th className="px-3 py-2">No. Invoice & Faktur</th>
                     <th className="px-3 py-2">Tanggal</th>
                     <th className="px-3 py-2">Cabang</th>
+                    <th className="px-3 py-2">Kategori PPN</th>
                     <th className="px-3 py-2 text-right">DPP</th>
-                    <th className="px-3 py-2 text-right">PPN Keluaran</th>
-                    <th className="px-3 py-2 text-right">Total</th>
+                    <th className="px-3 py-2 text-right">PPN 11%</th>
+                    <th className="px-3 py-2 text-right">Total Ditagih</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {validSales.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-3 py-4 text-center text-xs text-muted">
+                      <td colSpan={7} className="px-3 py-4 text-center text-xs text-muted">
                         Belum ada invoice penjualan pada filter ini.
                       </td>
                     </tr>
                   ) : (
-                    validSales.map((s) => (
-                      <tr key={s.id}>
-                        <td className="px-3 py-2 font-mono text-xs">{s.invoice_number}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-xs">{s.invoice_date}</td>
-                        <td className="px-3 py-2 text-xs">
-                          {(s.branch_id && branchMap.get(s.branch_id)) || "—"}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(s.amount)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(s.vat_amount)}</td>
-                        <td className="px-3 py-2 text-right font-medium tabular-nums">
-                          {formatCurrency(s.total_amount)}
-                        </td>
-                      </tr>
-                    ))
+                    validSales.map((s) => {
+                      const isWapu = Boolean(s.is_wapu) || s.tax_invoice_type === "030" || s.tax_invoice_type === "020"
+                      return (
+                        <tr key={s.id}>
+                          <td className="px-3 py-2 font-mono text-xs">
+                            <div className="font-bold text-slate-900">{s.invoice_number}</div>
+                            {s.tax_invoice_number && (
+                              <div className="text-[10px] text-indigo-700">FP: {s.tax_invoice_number}</div>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-xs">{s.invoice_date}</td>
+                          <td className="px-3 py-2 text-xs">
+                            {(s.branch_id && branchMap.get(s.branch_id)) || "—"}
+                          </td>
+                          <td className="px-3 py-2 text-xs">
+                            {isWapu ? (
+                              <span className="rounded bg-indigo-100 px-2 py-0.5 text-[11px] font-semibold text-indigo-800">
+                                WAPU {s.tax_invoice_type || "030"} (Disetor Klien)
+                              </span>
+                            ) : (
+                              <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                                010 (Setor Sendiri)
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(s.amount)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(s.vat_amount)}</td>
+                          <td className="px-3 py-2 text-right font-medium tabular-nums">
+                            {formatCurrency(isWapu ? s.amount : s.total_amount)}
+                          </td>
+                        </tr>
+                      )
+                    })
                   )}
                 </tbody>
               </table>

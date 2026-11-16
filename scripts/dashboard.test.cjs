@@ -60,7 +60,7 @@ test("display name accepts text metadata and falls back safely", () => {
       email: "ardie@example.invalid",
       user_metadata: { full_name: {} },
     }),
-    "ardie",
+    "Ardie",
   )
   assert.equal(getDisplayName({}), "Pengguna")
 })

@@ -21,6 +21,8 @@ export async function saveProjectPlanningAction(prevState: { error?: string } | 
   let rab_breakdown = []
   let attachment_ids = []
   let payment_terms = []
+  let custom_milestones = []
+  const client_gdrive_url = String(formData.get("client_gdrive_url") || "").trim()
 
   try {
     manpower = JSON.parse(String(formData.get("manpower") || "[]"))
@@ -28,6 +30,7 @@ export async function saveProjectPlanningAction(prevState: { error?: string } | 
     rab_breakdown = JSON.parse(String(formData.get("rab_breakdown") || "[]"))
     attachment_ids = JSON.parse(String(formData.get("attachment_ids") || "[]"))
     payment_terms = JSON.parse(String(formData.get("payment_terms") || "[]"))
+    custom_milestones = JSON.parse(String(formData.get("custom_milestones") || "[]"))
   } catch {
     return { error: "Format data perencanaan proyek tidak valid." }
   }
@@ -44,6 +47,8 @@ export async function saveProjectPlanningAction(prevState: { error?: string } | 
     rab_total,
     attachment_ids,
     payment_terms,
+    client_gdrive_url,
+    custom_milestones,
   }
 
   const { error } = await supabase.rpc("save_project_planning", {
@@ -57,7 +62,37 @@ export async function saveProjectPlanningAction(prevState: { error?: string } | 
     return { error: error.message || "Gagal menyimpan perencanaan proyek." }
   }
 
-  await supabase.from("crm_projects").update({ payment_terms }).eq("id", id)
+  await supabase.from("crm_projects").update({
+    payment_terms,
+    client_gdrive_url: client_gdrive_url || null,
+    ...(custom_milestones.length > 0 ? { custom_milestones } : {}),
+  }).eq("id", id)
+
+  // Sinkronkan daftar alur proses pengerjaan (custom_milestones) ke tabel project_milestones
+  if (custom_milestones.length > 0) {
+    try {
+      const { organizationId } = await requireWorkspace()
+      for (let i = 0; i < custom_milestones.length; i++) {
+        const ms = custom_milestones[i]
+        await supabase.from("project_milestones").upsert({
+          organization_id: organizationId,
+          project_id: id,
+          milestone_number: i + 1,
+          title: ms.title || `Tahap ${i + 1}`,
+          subtitle: ms.subtitle || "",
+          pic_name: ms.pic || "Tim Teknis",
+          period: ms.period || "",
+          description: ms.description || "",
+          deliverables: Array.isArray(ms.deliverables) ? ms.deliverables : [],
+          client_actions: Array.isArray(ms.clientActions) ? ms.clientActions : [],
+          status: ms.status || "upcoming",
+          progress: typeof ms.progress === "number" ? ms.progress : 0,
+        }, { onConflict: "project_id,milestone_number" })
+      }
+    } catch (e) {
+      console.warn("Milestone sync notice:", e)
+    }
+  }
 
   revalidatePath("/proyek")
   revalidatePath(`/proyek/${id}`)

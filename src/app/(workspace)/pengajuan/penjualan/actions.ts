@@ -321,6 +321,8 @@ export async function createSalesInvoiceAction(data: FormData) {
   const invoiceDate = value(data, "invoice_date") || new Date().toISOString().slice(0, 10)
   const dueDate = value(data, "due_date") || new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
   const notes = value(data, "notes")
+  const taxInvoiceType = value(data, "tax_invoice_type") || "010"
+  const taxInvoiceNumber = value(data, "tax_invoice_number")
 
   const { data: project } = await context.supabase
     .from("crm_projects")
@@ -329,6 +331,8 @@ export async function createSalesInvoiceAction(data: FormData) {
     .single()
 
   if (!project) finish(path, "error", "Proyek tidak ditemukan.")
+
+  const isWapu = ["030", "020"].includes(taxInvoiceType)
 
   const { data: rpcInvId, error: rpcErr } = await context.supabase.rpc("create_sales_invoice", {
     p_org: context.organizationId,
@@ -339,12 +343,42 @@ export async function createSalesInvoiceAction(data: FormData) {
     p_amount: amount,
     p_due_date: dueDate,
     p_notes: notes,
+    p_tax_invoice_type: taxInvoiceType,
+    p_tax_invoice_number: taxInvoiceNumber || null,
   })
 
   let finalInvoiceId = rpcInvId as string | undefined
 
   if (rpcErr) {
-    finish(path, "error", rpcErr.message || "Gagal menerbitkan invoice penagihan.")
+    // Coba panggil versi 8 parameter jika RPC overload belum terpasang
+    const { data: fallbackId, error: fallbackErr } = await context.supabase.rpc("create_sales_invoice", {
+      p_org: context.organizationId,
+      p_project_id: projectId,
+      p_term_index: termIndex,
+      p_term_name: termName,
+      p_percentage: percentage,
+      p_amount: amount,
+      p_due_date: dueDate,
+      p_notes: notes,
+    })
+    if (fallbackErr) {
+      finish(path, "error", rpcErr.message || "Gagal menerbitkan invoice penagihan.")
+    }
+    finalInvoiceId = fallbackId as string | undefined
+  }
+
+  // Sinkronkan atribut WAPU dan nomor faktur pajak
+  if (finalInvoiceId) {
+    const wht = Math.round(amount * 0.02)
+    await context.supabase
+      .from("sales_invoices")
+      .update({
+        tax_invoice_type: taxInvoiceType,
+        tax_invoice_number: taxInvoiceNumber || null,
+        is_wapu: isWapu,
+        ...(isWapu ? { total_amount: amount, net_receivable: amount - wht } : {}),
+      })
+      .eq("id", finalInvoiceId)
   }
 
   // Otomatis posting jurnal akuntansi piutang penjualan
@@ -524,32 +558,58 @@ async function autoPostSalesInvoiceJournal(context: any, invoiceId: string) {
 
     if (!jrn?.id) return
 
-    const lines: any[] = [
-      {
-        organization_id: context.organizationId,
-        journal_id: jrn.id,
-        line_number: 1,
-        account_id: arAcc,
-        debit: Number(inv.total_amount || 0),
-        credit: 0,
-        description: `Piutang klien invoice ${inv.invoice_number}`,
-        counterparty_type: "customer",
-        counterparty_id: inv.client_id,
-        project_id: inv.project_id || null,
-      },
-      {
-        organization_id: context.organizationId,
-        journal_id: jrn.id,
-        line_number: 2,
-        account_id: revAcc,
-        debit: 0,
-        credit: Number(inv.amount || 0),
-        description: `Pendapatan jasa termin ${inv.term_name} (${inv.invoice_number})`,
-        project_id: inv.project_id || null,
-      },
-    ]
+    const isWapu = Boolean(inv.is_wapu) || ["030", "020"].includes(inv.tax_invoice_type)
+    const lines: any[] = isWapu
+      ? [
+          {
+            organization_id: context.organizationId,
+            journal_id: jrn.id,
+            line_number: 1,
+            account_id: arAcc,
+            debit: Number(inv.amount || 0),
+            credit: 0,
+            description: `Piutang klien WAPU invoice ${inv.invoice_number}`,
+            counterparty_type: "customer",
+            counterparty_id: inv.client_id,
+            project_id: inv.project_id || null,
+          },
+          {
+            organization_id: context.organizationId,
+            journal_id: jrn.id,
+            line_number: 2,
+            account_id: revAcc,
+            debit: 0,
+            credit: Number(inv.amount || 0),
+            description: `Pendapatan jasa termin WAPU ${inv.term_name} (${inv.invoice_number})`,
+            project_id: inv.project_id || null,
+          },
+        ]
+      : [
+          {
+            organization_id: context.organizationId,
+            journal_id: jrn.id,
+            line_number: 1,
+            account_id: arAcc,
+            debit: Number(inv.total_amount || 0),
+            credit: 0,
+            description: `Piutang klien invoice ${inv.invoice_number}`,
+            counterparty_type: "customer",
+            counterparty_id: inv.client_id,
+            project_id: inv.project_id || null,
+          },
+          {
+            organization_id: context.organizationId,
+            journal_id: jrn.id,
+            line_number: 2,
+            account_id: revAcc,
+            debit: 0,
+            credit: Number(inv.amount || 0),
+            description: `Pendapatan jasa termin ${inv.term_name} (${inv.invoice_number})`,
+            project_id: inv.project_id || null,
+          },
+        ]
 
-    if (Number(inv.vat_amount || 0) > 0) {
+    if (!isWapu && Number(inv.vat_amount || 0) > 0) {
       lines.push({
         organization_id: context.organizationId,
         journal_id: jrn.id,
@@ -671,10 +731,13 @@ async function autoPostSalesPaymentJournal(context: any, invoiceId: string) {
     const whtAcc = await getOrMakeAccount("1192", "Pajak Penghasilan Dibayar di Muka (PPh 23)", "asset", "debit", "general")
     const arAcc = await getOrMakeAccount("1121", "Piutang Klien", "asset", "debit", "receivable")
 
+    const isWapu = Boolean(inv.is_wapu) || ["030", "020"].includes(inv.tax_invoice_type)
     const wht = Number(inv.wht_amount || 0)
-    let paid = Number(inv.paid_amount || inv.net_receivable || 0)
-    if (paid <= 0) paid = Number(inv.total_amount || 0) - wht
-    const arCleared = paid + wht
+    let paid = Number(inv.paid_amount || 0)
+    if (paid <= 0) {
+      paid = isWapu ? Number(inv.amount || 0) - wht : Number(inv.net_receivable || (Number(inv.total_amount || 0) - wht))
+    }
+    const arCleared = isWapu ? Number(inv.amount || (paid + wht)) : (paid + wht)
 
     const kwtLabel = inv.receipt_number || `KWT-${inv.invoice_number}`
     const journalNum = `JRN/${targetDate.replace(/-/g, "").slice(0, 6)}/${String(Date.now()).slice(-4)}`

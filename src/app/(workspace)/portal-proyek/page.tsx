@@ -44,7 +44,7 @@ export default async function ProjectPortalPage({
     owner ||
     isDirector ||
     w.actorRole === "manager" ||
-    w.workAssignments.some((a) => ["branch_manager", "admin", "project_manager"].includes(a.job_role))
+    w.workAssignments.some((a) => ["branch_manager", "admin", "project_manager", "project_liaison", "client_liaison", "liaison_officer"].includes(a.job_role))
 
   const [
     projectResult,

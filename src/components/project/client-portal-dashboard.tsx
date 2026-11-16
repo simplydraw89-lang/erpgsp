@@ -30,6 +30,7 @@ export type ClientProjectInfo = {
   branch_name?: string
   start_date?: string
   target_end_date?: string
+  client_gdrive_url?: string | null
 }
 
 interface ClientPortalDashboardProps {
@@ -128,9 +129,22 @@ export function ClientPortalDashboard({
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-600">Total Progres Keseluruhan:</span>
-              <span className="text-lg font-extrabold text-teal-700">{progressPercent}%</span>
+            <div className="flex flex-wrap items-center gap-3">
+              {project?.client_gdrive_url && (
+                <a
+                  href={project.client_gdrive_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/90 px-3 py-1.5 text-xs font-bold text-blue-900 hover:bg-blue-100 transition shadow-sm"
+                >
+                  <span>📁</span>
+                  <span>Google Drive Proyek ↗</span>
+                </a>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-600">Total Progres Keseluruhan:</span>
+                <span className="text-lg font-extrabold text-teal-700">{progressPercent}%</span>
+              </div>
             </div>
           </div>
 

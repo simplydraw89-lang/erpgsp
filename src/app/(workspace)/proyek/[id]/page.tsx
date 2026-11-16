@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Users,
   Layers,
+  FolderOpen,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { requireWorkspace } from "@/lib/auth/context"
@@ -53,12 +54,14 @@ export default async function ProjectDetailPage({
     notFound()
   }
 
-  // Strictly enforce branch authorization for non-owner / non-central leadership
+  // Strictly enforce branch authorization for non-owner / non-central leadership / non-liaison
   const isOwner = actorRole === "owner"
-  const isCentralLeadership = (workAssignments ?? []).some(
-    (j) => !j.branch_id && ["president", "technical_director", "finance_director", "accounting_tax", "finance"].includes(j.job_role)
+  const isCentralLeadershipOrLiaison = (workAssignments ?? []).some(
+    (j) =>
+      (!j.branch_id && ["president", "technical_director", "finance_director", "accounting_tax", "finance"].includes(j.job_role)) ||
+      ["project_liaison", "client_liaison", "liaison_officer"].includes(j.job_role)
   )
-  if (!isOwner && !isCentralLeadership) {
+  if (!isOwner && !isCentralLeadershipOrLiaison) {
     const userBranchIds = (workAssignments ?? []).map((j) => j.branch_id).filter(Boolean) as string[]
     if (project.branch_id && !userBranchIds.includes(project.branch_id)) {
       notFound()
@@ -178,10 +181,14 @@ export default async function ProjectDetailPage({
     )
   const isBranchUser = (workAssignments ?? []).some((j) => j.branch_id === project.branch_id)
 
+  const isLiaison = (workAssignments ?? []).some((j) =>
+    ["project_liaison", "client_liaison", "liaison_officer"].includes(j.job_role)
+  )
+
   const canEdit =
     !isReadOnlyPreview &&
     ["draft", "revision_requested"].includes(project.approval_status) &&
-    (isOwner || isBranchUser || project.created_by === user.id)
+    (isOwner || isBranchUser || isLiaison || project.created_by === user.id)
 
   const canReview = !isReadOnlyPreview && project.approval_status === "director_review" && isDirut
   const canManageMilestones =
@@ -190,7 +197,7 @@ export default async function ProjectDetailPage({
       isBranchUser ||
       project.created_by === user.id ||
       (workAssignments ?? []).some((j) =>
-        ["project_manager", "branch_manager", "admin", "technical_director"].includes(j.job_role)
+        ["project_manager", "branch_manager", "admin", "technical_director", "project_liaison", "client_liaison", "liaison_officer"].includes(j.job_role)
       ))
 
   const activeTab = qParams.tab === "milestones" ? "milestones" : "overview"
@@ -382,6 +389,17 @@ export default async function ProjectDetailPage({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {project.client_gdrive_url && (
+              <a
+                href={project.client_gdrive_url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-blue-400 bg-blue-50 px-3.5 py-1.5 text-xs font-semibold text-blue-900 hover:bg-blue-100 transition shadow-xs"
+              >
+                <FolderOpen className="size-3.5 text-blue-700" />
+                Buka Google Drive Klien ↗
+              </a>
+            )}
             <Link
               href={`/proyek/${project.id}?tab=milestones`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-teal-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-teal-900 hover:bg-teal-50 transition"
@@ -408,6 +426,11 @@ export default async function ProjectDetailPage({
               <p className="text-[11px] text-muted mt-0.5">
                 Izin Interaksi: <strong>Dua Arah</strong> (Dapat mengirim permintaan data, merespons instruksi, dan menulis komentar MoM)
               </p>
+              {project.liaison_name && (
+                <p className="text-[11px] text-teal-800 mt-1 font-medium">
+                  🏢 Narahubung Proyek & Instansi (LO): <span className="font-bold">{project.liaison_name}</span>
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <span className="rounded bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[11px] font-medium text-emerald-800">

@@ -127,6 +127,8 @@ export function BillingWorkspace({
     project: ProjectBillingItem
     term: PaymentTerm
   } | null>(null)
+  const [invoiceTaxType, setInvoiceTaxType] = useState<"010" | "030" | "020">("010")
+  const [invoiceTaxNumber, setInvoiceTaxNumber] = useState<string>("")
 
   // Modal State: Catat Pembayaran
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<{
@@ -869,13 +871,14 @@ export function BillingWorkspace({
               </p>
             </div>
 
-            {/* Perhitungan Pajak Otomatis */}
+            {/* Perhitungan Pajak Otomatis & Penanganan WAPU Migas / BUMN */}
             {(() => {
               const dpp = Number(selectedTermForInvoice.term.amount || 0)
               const ppn = Math.round(dpp * 0.11)
               const pph23 = Math.round(dpp * 0.02)
-              const totalTagihan = dpp + ppn
-              const netKasMasuk = totalTagihan - pph23
+              const isWapu = invoiceTaxType === "030" || invoiceTaxType === "020"
+              const totalTagihan = isWapu ? dpp : dpp + ppn
+              const netKasMasuk = isWapu ? dpp - pph23 : totalTagihan - pph23
 
               return (
                 <form action={createSalesInvoiceAction} className="space-y-4">
@@ -884,6 +887,7 @@ export function BillingWorkspace({
                   <input type="hidden" name="term_name" value={selectedTermForInvoice.term.name} />
                   <input type="hidden" name="percentage" value={selectedTermForInvoice.term.percentage} />
                   <input type="hidden" name="amount" value={dpp} />
+                  <input type="hidden" name="tax_invoice_type" value={invoiceTaxType} />
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="block text-xs font-medium text-slate-700">
@@ -910,6 +914,44 @@ export function BillingWorkspace({
                     </label>
                   </div>
 
+                  {/* Pengaturan Perpajakan: WAPU Migas / BUMN / Pemda vs Normal */}
+                  <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3.5 space-y-3 text-xs">
+                    <div>
+                      <label className="block font-bold text-indigo-950">
+                        Perlakuan PPN & Karakteristik Klien (WAPU)
+                        <select
+                          value={invoiceTaxType}
+                          onChange={(e) => setInvoiceTaxType(e.target.value as any)}
+                          className="mt-1 block w-full rounded-lg border border-indigo-300 bg-white p-2 text-xs font-medium text-slate-900"
+                        >
+                          <option value="010">010 · PPN Normal (Dipungut Sendiri - Klien Membayar DPP + PPN)</option>
+                          <option value="030">030 · WAPU Migas / KKKS / BUMN (PPN Disetor Sendiri oleh Klien)</option>
+                          <option value="020">020 · WAPU Bendaharawan Pemerintah (PPN Disetor Sendiri oleh Pemda/Dinas)</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <div>
+                      <label className="block font-medium text-indigo-950">
+                        Nomor Faktur Pajak e-Faktur (Opsional)
+                        <input
+                          type="text"
+                          name="tax_invoice_number"
+                          value={invoiceTaxNumber}
+                          onChange={(e) => setInvoiceTaxNumber(e.target.value)}
+                          placeholder={isWapu ? "Contoh: 030.001-26.00000001" : "Contoh: 010.001-26.00000001"}
+                          className="mt-1 block w-full rounded-lg border border-indigo-300 bg-white p-2 text-xs font-mono"
+                        />
+                      </label>
+                    </div>
+
+                    {isWapu && (
+                      <p className="rounded-lg bg-blue-100/70 p-2.5 text-[11px] leading-relaxed text-blue-950">
+                        ℹ️ <strong>Ketentuan WAPU Migas (Kode {invoiceTaxType}) / BUMN:</strong> PPN 11% ({rupiah(ppn)}) dipungut dan disetor sendiri oleh pembeli ke Kas Negara. Perusahaan hanya menerima transfer dana sebesar <strong>DPP dikurangi PPh 23 Jasa (2%)</strong>, yaitu <strong>{rupiah(netKasMasuk)}</strong>.
+                      </p>
+                    )}
+                  </div>
+
                   {/* Ringkasan Kalkulasi Pajak */}
                   <div className="rounded-xl border border-line bg-slate-50/80 p-3.5 space-y-2 text-xs">
                     <div className="flex justify-between">
@@ -917,19 +959,19 @@ export function BillingWorkspace({
                       <span className="font-semibold text-ink">{rupiah(dpp)}</span>
                     </div>
                     <div className="flex justify-between text-blue-900">
-                      <span>PPN (11%):</span>
+                      <span>PPN (11%){isWapu ? " [Disetor Sendiri oleh Klien WAPU]" : ""}:</span>
                       <span className="font-semibold">{rupiah(ppn)}</span>
                     </div>
                     <div className="flex justify-between border-t border-line pt-1 font-bold text-ink">
-                      <span>Total Tagihan (Invoice Klien):</span>
+                      <span>{isWapu ? "Total Tagihan Ditransfer Klien (DPP):" : "Total Tagihan (Invoice Klien):"}</span>
                       <span>{rupiah(totalTagihan)}</span>
                     </div>
                     <div className="flex justify-between text-amber-800 text-[11px] pt-1 border-t border-dashed border-line">
-                      <span>Estimasi Bukti Potong PPh 23 (2%):</span>
+                      <span>Estimasi Bukti Potong PPh 23 Jasa (2%):</span>
                       <span>- {rupiah(pph23)}</span>
                     </div>
-                    <div className="flex justify-between font-bold text-emerald-800">
-                      <span>Estimasi Bersih Kas Diterima:</span>
+                    <div className="flex justify-between font-bold text-emerald-800 text-sm pt-1 border-t border-emerald-200">
+                      <span>Estimasi Bersih Kas Diterima (DPP - PPh 23):</span>
                       <span>{rupiah(netKasMasuk)}</span>
                     </div>
                   </div>
@@ -939,7 +981,11 @@ export function BillingWorkspace({
                     <textarea
                       name="notes"
                       rows={3}
-                      defaultValue={`Mohon pembayaran ditransfer ke rekening PT. Global Solusi Prima:\nBank Mandiri No. Rek: 123-00-9876543-2\nBukti transfer & Bukti Potong PPh 23 mohon dikonfirmasi melalui portal klien.`}
+                      defaultValue={
+                        isWapu
+                          ? `Mohon pembayaran ditransfer ke rekening PT. Global Solusi Prima:\nBank Mandiri No. Rek: 123-00-9876543-2\nKetentuan WAPU Migas/BUMN: Pembayaran ditransfer sebesar DPP dipotong PPh 23 (2%). Mohon sertakan Bukti Potong PPh 23 dan SSP/NTPN PPN 030.`
+                          : `Mohon pembayaran ditransfer ke rekening PT. Global Solusi Prima:\nBank Mandiri No. Rek: 123-00-9876543-2\nBukti transfer & Bukti Potong PPh 23 mohon dikonfirmasi melalui portal klien.`
+                      }
                       className="mt-1 block w-full rounded-lg border border-line bg-white p-2 text-xs"
                     />
                   </label>

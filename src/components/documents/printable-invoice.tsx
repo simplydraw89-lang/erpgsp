@@ -20,6 +20,9 @@ export type PrintableInvoiceProps = {
     wht_amount: number // PPh 23 2%
     total_amount: number
     net_receivable: number
+    tax_invoice_type?: string
+    tax_invoice_number?: string
+    is_wapu?: boolean
     notes?: string
     invoice_journal_number?: string
   }
@@ -71,6 +74,11 @@ export function PrintableInvoiceDocument({
           <p className="font-mono text-sm font-bold text-brand mt-1">
             No: {invoice.invoice_number}
           </p>
+          {invoice.tax_invoice_number && (
+            <p className="font-mono text-xs text-indigo-700 font-semibold mt-1">
+              Faktur Pajak ({invoice.tax_invoice_type || "030"}): {invoice.tax_invoice_number}
+            </p>
+          )}
           {invoice.invoice_journal_number && (
             <p className="font-mono text-[10px] text-slate-500 mt-0.5">
               Ref Jurnal ERP: {invoice.invoice_journal_number}
@@ -143,48 +151,64 @@ export function PrintableInvoiceDocument({
             </tr>
 
             {/* SUB TOTAL & PAJAK */}
-            <tr className="bg-slate-50">
-              <td colSpan={3} className="border border-slate-300 p-2 text-right font-semibold text-slate-700">
-                Dasar Pengenaan Pajak (DPP):
-              </td>
-              <td className="border border-slate-300 p-2 text-right font-bold text-slate-900">
-                {formatCurrency(invoice.amount)}
-              </td>
-            </tr>
-            <tr className="bg-slate-50">
-              <td colSpan={3} className="border border-slate-300 p-2 text-right font-semibold text-slate-700">
-                PPN Keluaran (11%):
-              </td>
-              <td className="border border-slate-300 p-2 text-right font-bold text-slate-900">
-                {formatCurrency(invoice.vat_amount)}
-              </td>
-            </tr>
-            <tr className="bg-slate-100 font-bold text-slate-900">
-              <td colSpan={3} className="border border-slate-300 p-2 text-right">
-                Total Tagihan Kotor:
-              </td>
-              <td className="border border-slate-300 p-2 text-right font-bold">
-                {formatCurrency(invoice.total_amount)}
-              </td>
-            </tr>
-            {invoice.wht_amount > 0 && (
-              <tr className="bg-amber-50/50 text-amber-900">
-                <td colSpan={3} className="border border-slate-300 p-2 text-right font-semibold">
-                  Dipungut PPh Pasal 23 (2%):
-                </td>
-                <td className="border border-slate-300 p-2 text-right font-bold">
-                  - {formatCurrency(invoice.wht_amount)}
-                </td>
-              </tr>
-            )}
-            <tr className="bg-slate-900 text-white font-extrabold text-sm">
-              <td colSpan={3} className="border border-slate-900 p-3 text-right">
-                JUMLAH BERSIH YANG HARUS DIBAYAR (NET):
-              </td>
-              <td className="border border-slate-900 p-3 text-right">
-                {formatCurrency(invoice.net_receivable)}
-              </td>
-            </tr>
+            {(() => {
+              const isWapu = Boolean(invoice.is_wapu) || ["030", "020"].includes(invoice.tax_invoice_type || "")
+              return (
+                <>
+                  <tr className="bg-slate-50">
+                    <td colSpan={3} className="border border-slate-300 p-2 text-right font-semibold text-slate-700">
+                      Dasar Pengenaan Pajak (DPP):
+                    </td>
+                    <td className="border border-slate-300 p-2 text-right font-bold text-slate-900">
+                      {formatCurrency(invoice.amount)}
+                    </td>
+                  </tr>
+                  <tr className="bg-slate-50">
+                    <td colSpan={3} className="border border-slate-300 p-2 text-right font-semibold text-slate-700">
+                      {isWapu
+                        ? `PPN 11% (WAPU ${invoice.tax_invoice_type || "030"} - Disetor Sendiri oleh Klien/Pembeli):`
+                        : "PPN Keluaran (11%):"}
+                    </td>
+                    <td className="border border-slate-300 p-2 text-right font-bold text-slate-900">
+                      {formatCurrency(invoice.vat_amount)}
+                    </td>
+                  </tr>
+                  {isWapu && (
+                    <tr className="bg-blue-50/70 text-blue-900 text-[11px]">
+                      <td colSpan={4} className="border border-slate-300 p-2">
+                        ℹ️ <strong>Ketentuan WAPU (Kode Faktur {invoice.tax_invoice_type || "030"}):</strong> PPN sebesar {formatCurrency(invoice.vat_amount)} dipungut dan disetor sendiri oleh pembeli (perusahaan Migas/BUMN/Pemerintah) langsung ke Kas Negara. Perusahaan hanya menerima pelunasan nilai DPP dipotong PPh 23 jasa (2%).
+                      </td>
+                    </tr>
+                  )}
+                  <tr className="bg-slate-100 font-bold text-slate-900">
+                    <td colSpan={3} className="border border-slate-300 p-2 text-right">
+                      {isWapu ? "Nilai DPP Ditagihkan:" : "Total Tagihan Kotor:"}
+                    </td>
+                    <td className="border border-slate-300 p-2 text-right font-bold">
+                      {formatCurrency(isWapu ? invoice.amount : invoice.total_amount)}
+                    </td>
+                  </tr>
+                  {invoice.wht_amount > 0 && (
+                    <tr className="bg-amber-50/50 text-amber-900">
+                      <td colSpan={3} className="border border-slate-300 p-2 text-right font-semibold">
+                        Dipungut PPh Pasal 23 Jasa (2%):
+                      </td>
+                      <td className="border border-slate-300 p-2 text-right font-bold">
+                        - {formatCurrency(invoice.wht_amount)}
+                      </td>
+                    </tr>
+                  )}
+                  <tr className="bg-slate-900 text-white font-extrabold text-sm">
+                    <td colSpan={3} className="border border-slate-900 p-3 text-right">
+                      {isWapu ? "TOTAL YANG HARUS DITRANSFER KLIEN (DPP - PPh 23):" : "JUMLAH BERSIH YANG HARUS DIBAYAR (NET):"}
+                    </td>
+                    <td className="border border-slate-900 p-3 text-right">
+                      {formatCurrency(invoice.net_receivable)}
+                    </td>
+                  </tr>
+                </>
+              )
+            })()}
           </tbody>
         </table>
 

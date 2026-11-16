@@ -21,6 +21,8 @@ import {
   Square,
   Clock,
   Layers,
+  ListOrdered,
+  ExternalLink,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -28,6 +30,7 @@ import { saveProjectPlanningAction } from "@/app/(workspace)/proyek/actions"
 import { DocumentUpload } from "@/components/sales/document-upload"
 import { rupiah } from "@/lib/procurement-ui"
 import { MoneyInput } from "@/components/ui/money-input"
+import { DEFAULT_PROJECT_MILESTONES } from "@/lib/project-milestones"
 
 export type ManpowerItem = {
   id: string
@@ -133,11 +136,13 @@ export function ProjectPlanningForm({
     payment_terms?: PaymentTermItem[]
     attachment_ids: string[]
     approval_status: string
+    client_gdrive_url?: string | null
+    custom_milestones?: any[]
   }
   disabled?: boolean
 }) {
   const [state, formAction, isPending] = useActionState(saveProjectPlanningAction, undefined)
-  const [activeTab, setActiveTab] = useState<"sdm" | "teknis" | "jadwal" | "rab" | "lampiran" | "termin">("sdm")
+  const [activeTab, setActiveTab] = useState<"sdm" | "teknis" | "tahapan" | "jadwal" | "rab" | "lampiran" | "termin">("sdm")
   const [uploadBusy, setUploadBusy] = useState(false)
 
   // Targeted OCR State & Ref
@@ -152,6 +157,24 @@ export function ProjectPlanningForm({
   const [workDetails, setWorkDetails] = useState(project.work_details || "")
   const [startsOn, setStartsOn] = useState(project.starts_on || "")
   const [endsOn, setEndsOn] = useState(project.ends_on || "")
+  const [clientGdriveUrl, setClientGdriveUrl] = useState(project.client_gdrive_url || "")
+
+  const [customMilestones, setCustomMilestones] = useState<any[]>(() => {
+    if (Array.isArray(project.custom_milestones) && project.custom_milestones.length > 0) {
+      return project.custom_milestones
+    }
+    return DEFAULT_PROJECT_MILESTONES.map((m) => ({
+      id: `ms-${m.id}`,
+      number: m.milestone_number,
+      title: m.title,
+      subtitle: m.subtitle,
+      pic: m.pic,
+      period: m.period,
+      description: m.description,
+      deliverables: m.deliverables,
+      clientActions: m.clientActions,
+    }))
+  })
 
   const [deliverables, setDeliverables] = useState<DeliverableItem[]>([
     {
@@ -560,6 +583,305 @@ export function ProjectPlanningForm({
     setChecklist(checklist.map((c) => (c.id === id ? { ...c, checked: !c.checked } : c)))
   }
 
+  // Handlers for Custom Milestones (Alur Proses Pengerjaan Proyek)
+  function addCustomMilestone() {
+    const nextNum = customMilestones.length + 1
+    setCustomMilestones([
+      ...customMilestones,
+      {
+        id: `ms-${Date.now()}`,
+        number: nextNum,
+        title: `${nextNum}. Tahapan Pengerjaan Baru`,
+        subtitle: "Ringkasan proses & fokus kerja",
+        pic: "Project Manager / Tim Teknis",
+        period: "Target waktu pelaksanaan",
+        description: "Uraian teknis aktivitas yang akan dijalankan pada tahap ini.",
+        deliverables: ["Hasil / Deliverable output"],
+        clientActions: ["Data atau izin yang dibutuhkan dari klien"],
+      },
+    ])
+  }
+
+  function addSidangMilestone() {
+    const existingSidangCount = customMilestones.filter((m) =>
+      m.title.toLowerCase().includes("sidang") || (m.subtitle && m.subtitle.toLowerCase().includes("sidang"))
+    ).length
+    const sidangIndex = existingSidangCount + 1
+    const nextNum = customMilestones.length + 1
+
+    setCustomMilestones([
+      ...customMilestones,
+      {
+        id: `ms-${Date.now()}`,
+        number: nextNum,
+        title: `${nextNum}. Sidang Evaluasi Teknis / Uji Kelayakan (Sidang Ke-${sidangIndex})`,
+        subtitle: `Sidang pembahasan & penilaian dokumen bersama Tim Penilai Komisi / Instansi (Sidang Ke-${sidangIndex})`,
+        pic: "Ketua Tim Ahli, PM & Narahubung Instansi (LO)",
+        period: "1 - 3 Hari (Sesuai Undangan Dinas)",
+        description: `Pelaksanaan sidang evaluasi dan uji teknis bersama Komisi Penilai DLH / KLHK. Presentasi dokumen kajian lingkungan, pencatatan saran/masukan tim penguji, dan penandatanganan Berita Acara Sidang.`,
+        deliverables: [
+          `Berita Acara Sidang Teknis Ke-${sidangIndex}`,
+          "Matriks Tanggapan & Perbaikan Rekomendasi Penguji",
+          "Daftar Hadir & Dokumentasi Foto Sidang",
+        ],
+        clientActions: [
+          "Menghadiri sidang bersama tim konsultan (diwakili PIC teknis)",
+          "Konfirmasi komitmen dan pernyataan pemrakarsa kegiatan",
+        ],
+      },
+    ])
+  }
+
+  function addBastMilestone() {
+    const nextNum = customMilestones.length + 1
+    setCustomMilestones([
+      ...customMilestones,
+      {
+        id: `ms-${Date.now()}`,
+        number: nextNum,
+        title: `${nextNum}. Penyerahan Laporan Akhir & Penandatanganan BAST`,
+        subtitle: "Serah terima deliverable resmi pekerjaan dan pengesahan Berita Acara Serah Terima (BAST)",
+        pic: "Branch Manager & Project Manager",
+        period: "Tahap Penyelesaian Akhir",
+        description: "Penyerahan seluruh dokumen final laporan hasil studi lingkungan hidup (hardcopy terjilid & softcopy lengkap), surat persetujuan/SKKL resmi dari instansi, serta penandatanganan Berita Acara Serah Terima (BAST) bersama klien sebagai syarat penagihan termin akhir.",
+        deliverables: [
+          "Berita Acara Serah Terima (BAST) Bertandatangan Kedua Pihak",
+          "Laporan Akhir Terjilid Hardcopy & Softcopy Lengkap",
+          "Salinan Surat Keputusan Kelayakan / Persetujuan Teknis Resmi",
+        ],
+        clientActions: [
+          "Verifikasi kelengkapan berkas deliverable fisik & digital",
+          "Penandatanganan Berita Acara Serah Terima (BAST) Pekerjaan",
+        ],
+      },
+    ])
+  }
+
+  function removeCustomMilestone(index: number) {
+    if (customMilestones.length <= 1) return
+    const updated = customMilestones
+      .filter((_, i) => i !== index)
+      .map((m, i) => ({ ...m, number: i + 1 }))
+    setCustomMilestones(updated)
+  }
+
+  function updateCustomMilestone(index: number, field: string, val: any) {
+    setCustomMilestones(
+      customMilestones.map((m, i) => (i === index ? { ...m, [field]: val } : m))
+    )
+  }
+
+  function applyMilestonePreset(preset: "amdal" | "ukl_upl" | "pertek") {
+    if (preset === "amdal") {
+      setCustomMilestones([
+        {
+          id: "ms-1",
+          number: 1,
+          title: "1. Kontrak SPK & Kick-Off Koordinasi",
+          subtitle: "Pengesahan SPK resmi, penetapan jadwal, dan kick-off meeting",
+          pic: "Branch Manager & Project Manager",
+          period: "Minggu 1",
+          description: "Pengesahan kontrak SPK resmi, penetapan susunan tim tenaga ahli lingkungan hidup, serta rapat koordinasi kick-off awal bersama klien.",
+          deliverables: ["Berkas SPK Resmi", "Pakta Integritas", "Notulensi Kick-Off Meeting"],
+          clientActions: ["Memberikan data izin usaha dasar", "Menunjuk PIC teknis pendamping"],
+        },
+        {
+          id: "ms-2",
+          number: 2,
+          title: "2. Mobilisasi Lapangan & Uji Laboratorium Terakreditasi KAN",
+          subtitle: "Sampling rona awal lingkungan hidup (fisik, kimia, biologi, sosekbud)",
+          pic: "Tim Ahli Lingkungan & Laboratorium Penguji KAN",
+          period: "Minggu 2 - 5",
+          description: "Pengambilan sampel air permukaan, air limbah, udara ambien, emisi, kebisingan, dan flora-fauna. Sampel diuji di lab independen terakreditasi KAN.",
+          deliverables: ["Berita Acara Sampling Lapangan", "Sertifikat Hasil Uji Laboratorium (CoA)", "Peta Titik Koordinat Sampling"],
+          clientActions: ["Izin akses area tapak & pendampingan tim lapangan"],
+        },
+        {
+          id: "ms-3",
+          number: 3,
+          title: "3. Penyusunan Dokumen ANDAL & RKL-RPL",
+          subtitle: "Penyusunan dokumen kajian dampak besar & rencana pengelolaan",
+          pic: "Ketua Tim Penyusun AMDAL & Anggota Tim Ahli",
+          period: "Minggu 6 - 12",
+          description: "Penyusunan dokumen Analisis Dampak Lingkungan (ANDAL) serta Rencana Pengelolaan Lingkungan (RKL) dan Rencana Pemantauan Lingkungan (RPL) komprehensif.",
+          deliverables: ["Draf Dokumen ANDAL Lengkap", "Matriks RKL-RPL Spesifik Tapak"],
+          clientActions: ["Review internal bersama tim teknis klien"],
+        },
+        {
+          id: "ms-4",
+          number: 4,
+          title: "4. Sidang Teknis Komisi Penilai AMDAL (Sidang Ke-1)",
+          subtitle: "Sidang pembahasan substansi teknis bersama tim ahli komisi penilai",
+          pic: "Ketua Tim AMDAL & Narahubung Proyek (LO)",
+          period: "Minggu 13 - 14",
+          description: "Presentasi materi teknis di hadapan tim penilai teknis komisi penilai lingkungan hidup (KLHK/DLH) dan perumusan matriks perbaikan.",
+          deliverables: ["Berita Acara Sidang Teknis Ke-1", "Matriks Saran Masukan Tim Ahli Penguji"],
+          clientActions: ["Menghadiri sidang teknis bersama tim konsultan"],
+        },
+        {
+          id: "ms-5",
+          number: 5,
+          title: "5. Sidang Uji Kelayakan Lingkungan Hidup / Pleno (Sidang Ke-2)",
+          subtitle: "Sidang pleno komisi uji kelayakan lingkungan hidup & rekomendasi kelayakan",
+          pic: "Direktur, PM & Narahubung Instansi (LO)",
+          period: "Minggu 15 - 16",
+          description: "Sidang pleno komisi penilai kelayakan lingkungan hidup untuk penetapan rekomendasi kelayakan lingkungan hidup proyek pemrakarsa.",
+          deliverables: ["Berita Acara Kesepakatan Sidang Pleno", "Rekomendasi Kelayakan Lingkungan Hidup"],
+          clientActions: ["Penandatanganan komitmen pemrakarsa dalam sidang pleno"],
+        },
+        {
+          id: "ms-6",
+          number: 6,
+          title: "6. Penerbitan Surat Keputusan Kelayakan Lingkungan (SKKL)",
+          subtitle: "Penerbitan keputusan persetujuan lingkungan resmi dari Menteri/Gubernur/Bupati",
+          pic: "Narahubung Instansi & Legal",
+          period: "Minggu 17 - 18",
+          description: "Pengawalan proses administrasi penetapan dan penandatanganan SKKL / Persetujuan Lingkungan resmi dari instansi yang berwenang.",
+          deliverables: ["Salinan Surat Keputusan Kelayakan Lingkungan (SKKL) Resmi"],
+          clientActions: ["Menerima salinan SKKL untuk perizinan berusaha OSS-RBA"],
+        },
+        {
+          id: "ms-7",
+          number: 7,
+          title: "7. Penyerahan Laporan Akhir & Penandatanganan BAST",
+          subtitle: "Serah terima dokumen final lengkap dan pengesahan BAST pekerjaan",
+          pic: "Branch Manager & Project Manager",
+          period: "Minggu 19 - 20",
+          description: "Penyerahan seluruh dokumen AMDAL final terjilid rapi, media digital softcopy, berkas perizinan asli, serta penandatanganan Berita Acara Serah Terima (BAST).",
+          deliverables: ["Berita Acara Serah Terima (BAST) Bertandatangan", "Laporan Akhir AMDAL Terjilid Lengkap"],
+          clientActions: ["Penandatanganan Berita Acara Serah Terima (BAST)"],
+        },
+      ])
+    } else if (preset === "ukl_upl") {
+      setCustomMilestones([
+        {
+          id: "ms-1",
+          number: 1,
+          title: "1. Pengumpulan Dokumen Legalitas & Tapak Proyek",
+          subtitle: "Kelengkapan data perizinan dasar klien & batas tapak",
+          pic: "Narahubung & PIC Klien",
+          period: "Minggu 1 - 2",
+          description: "Pengumpulan KKPR, kesesuaian tata ruang, site plan tapak, dan persetujuan lingkungan awal.",
+          deliverables: ["Matriks Kelengkapan Dokumen", "Peta Batas Tapak Proyek"],
+          clientActions: ["Menyediakan dokumen legalitas usaha", "Memberikan izin survei lokasi"],
+        },
+        {
+          id: "ms-2",
+          number: 2,
+          title: "2. Survei Rona Lingkungan Hidup Awal & Sampling Lab",
+          subtitle: "Pengukuran komponen fisik, kimia, biologi, dan sosekbud",
+          pic: "Tim Ahli Lapangan & Lab Terakreditasi KAN",
+          period: "Minggu 3 - 4",
+          description: "Pengambilan sampel air limbah/udara/kebisingan dan survei sosial ekonomi masyarakat sekitar.",
+          deliverables: ["Berita Acara Sampling Lapangan", "Sertifikat Hasil Uji Laboratorium (CoA)"],
+          clientActions: ["Mendampingi tim survei lapangan"],
+        },
+        {
+          id: "ms-3",
+          number: 3,
+          title: "3. Penyusunan Draf Formulir UKL-UPL",
+          subtitle: "Penyusunan matriks dampak lingkungan dan SOP pengelolaan",
+          pic: "Project Manager & Tim Teknis",
+          period: "Minggu 5 - 7",
+          description: "Penyusunan dokumen formulir UKL-UPL standar spesifik bidang usaha dan matriks RKL-RPL.",
+          deliverables: ["Draf Dokumen Formulir UKL-UPL", "Matriks Rencana Pengelolaan & Pemantauan"],
+          clientActions: ["Review dan persetujuan draf internal bersama PM"],
+        },
+        {
+          id: "ms-4",
+          number: 4,
+          title: "4. Sidang Pembahasan Teknis Tim Penilai DLH / KLHK",
+          subtitle: "Sidang evaluasi dokumen oleh tim penilai instansi lingkungan hidup",
+          pic: "Narahubung Proyek (Liaison Officer)",
+          period: "Minggu 8 - 9",
+          description: "Koordinasi dan pelaksanaan sidang evaluasi teknis bersama Dinas Lingkungan Hidup / KLHK, pencatatan masukan, dan perumusan berita acara kesepakatan.",
+          deliverables: ["Berita Acara Sidang Pembahasan Teknis", "Notulen Perbaikan Saran Masukan Instansi"],
+          clientActions: ["Menghadiri sidang teknis bersama tim konsultan"],
+        },
+        {
+          id: "ms-5",
+          number: 5,
+          title: "5. Penerbitan Persetujuan Pernyataan Kesanggupan (PKPLH)",
+          subtitle: "Penerbitan surat persetujuan resmi dari instansi pemerintah",
+          pic: "Branch Manager & Narahubung Proyek",
+          period: "Minggu 10",
+          description: "Penerbitan Surat Persetujuan Pernyataan Kesanggupan Pengelolaan Lingkungan Hidup (PKPLH) resmi.",
+          deliverables: ["Surat Persetujuan PKPLH Resmi Terverifikasi"],
+          clientActions: ["Menerima persetujuan PKPLH untuk integrasi OSS"],
+        },
+        {
+          id: "ms-6",
+          number: 6,
+          title: "6. Penyerahan Laporan Akhir & Penandatanganan BAST",
+          subtitle: "Serah terima laporan akhir terjilid dan penandatanganan BAST pekerjaan",
+          pic: "Branch Manager & Project Manager",
+          period: "Minggu 11",
+          description: "Penyerahan laporan akhir formulir UKL-UPL terjilid resmi, lampiran hasil lab, serta penandatanganan Berita Acara Serah Terima (BAST).",
+          deliverables: ["Berita Acara Serah Terima (BAST)", "Dokumen Laporan Akhir Terjilid"],
+          clientActions: ["Penandatanganan Berita Acara Serah Terima (BAST)"],
+        },
+      ])
+    } else if (preset === "pertek") {
+      setCustomMilestones([
+        {
+          id: "ms-1",
+          number: 1,
+          title: "1. Kajian Teknis & Karakteristik Limbah / Emisi",
+          subtitle: "Inventarisasi sumber buangan air limbah / emisi cerobong",
+          pic: "Tim Ahli Lingkungan",
+          period: "Minggu 1 - 2",
+          description: "Kajian neraca air, desain IPAL / cerobong, dan baku mutu lingkungan acuan.",
+          deliverables: ["Neraca Air & Beban Pencemaran", "Desain Teknis Pengolahan"],
+          clientActions: ["Menyediakan data kapasitas produksi & layout instalasi"],
+        },
+        {
+          id: "ms-2",
+          number: 2,
+          title: "2. Penyusunan Dokumen Kajian Teknis Pertek",
+          subtitle: "Penyusunan standar teknis operasional sesuai Permen LHK",
+          pic: "Project Manager",
+          period: "Minggu 3 - 4",
+          description: "Dokumen standar teknis pembuangan/pemanfaatan air limbah atau emisi cerobong.",
+          deliverables: ["Draf Dokumen Kajian Teknis Pertek Lengkap"],
+          clientActions: ["Konfirmasi komitmen operasional instalasi"],
+        },
+        {
+          id: "ms-3",
+          number: 3,
+          title: "3. Sidang Ekspose Teknis & Verifikasi Lapangan Instansi",
+          subtitle: "Pemeriksaan lapangan dan sidang teknis persetujuan",
+          pic: "Narahubung Proyek & Instansi (LO)",
+          period: "Minggu 5 - 6",
+          description: "Sidang ekspose pemaparan kajian teknis, verifikasi berkas, serta visitasi lapangan oleh tim teknis instansi KLHK / DLH.",
+          deliverables: ["Berita Acara Sidang Ekspose Teknis", "Berita Acara Verifikasi Lapangan"],
+          clientActions: ["Menerima kunjungan verifikasi lapangan instansi"],
+        },
+        {
+          id: "ms-4",
+          number: 4,
+          title: "4. Penerbitan Persetujuan Teknis (Pertek) & SLO",
+          subtitle: "Penerbitan surat keputusan Pertek dan Surat Layak Operasi resmi",
+          pic: "Branch Manager & Narahubung Proyek",
+          period: "Minggu 7 - 8",
+          description: "Penerbitan Surat Persetujuan Teknis (Pertek) resmi dan SLO dari instansi yang berwenang.",
+          deliverables: ["Surat Persetujuan Teknis (Pertek) Resmi", "Surat Kelayakan Operasional (SLO)"],
+          clientActions: ["Menerima berkas perizinan operasional resmi"],
+        },
+        {
+          id: "ms-5",
+          number: 5,
+          title: "5. Penyerahan Laporan Akhir & Penandatanganan BAST",
+          subtitle: "Serah terima laporan kajian final dan penandatanganan BAST",
+          pic: "Branch Manager & Project Manager",
+          period: "Minggu 9",
+          description: "Penyerahan laporan kajian teknis terjilid, dokumen persetujuan teknis resmi, dan penandatanganan Berita Acara Serah Terima (BAST).",
+          deliverables: ["Berita Acara Serah Terima (BAST)", "Laporan Kajian Teknis Final"],
+          clientActions: ["Penandatanganan Berita Acara Serah Terima (BAST)"],
+        },
+      ])
+    }
+  }
+
   const busy = disabled || isPending || uploadBusy || activeOcrLoading !== null
 
   // Serialized work details combining job type, duration, deliverables, and description
@@ -647,13 +969,23 @@ export function ProjectPlanningForm({
         </button>
         <button
           type="button"
+          onClick={() => setActiveTab("tahapan")}
+          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition whitespace-nowrap ${
+            activeTab === "tahapan" ? "border-brand text-brand" : "border-transparent text-muted hover:text-ink"
+          }`}
+        >
+          <ListOrdered className="size-4" />
+          3. Alur Proses Pengerjaan ({customMilestones.length})
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab("jadwal")}
           className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition whitespace-nowrap ${
             activeTab === "jadwal" ? "border-brand text-brand" : "border-transparent text-muted hover:text-ink"
           }`}
         >
           <Calendar className="size-4" />
-          3. Jadwal & Timesheet ({schedule.length})
+          4. Jadwal & Timesheet ({schedule.length})
         </button>
         <button
           type="button"
@@ -663,7 +995,7 @@ export function ProjectPlanningForm({
           }`}
         >
           <Calculator className="size-4" />
-          4. Pagu Anggaran RAB ({rab.length || (directRabTotal > 0 ? 1 : 0)})
+          5. Pagu Anggaran RAB ({rab.length || (directRabTotal > 0 ? 1 : 0)})
         </button>
         <button
           type="button"
@@ -673,7 +1005,7 @@ export function ProjectPlanningForm({
           }`}
         >
           <FileText className="size-4" />
-          5. Lampiran Dokumen ({attachments.length})
+          6. Lampiran & Google Drive ({attachments.length})
         </button>
         <button
           type="button"
@@ -683,7 +1015,7 @@ export function ProjectPlanningForm({
           }`}
         >
           <Receipt className="size-4" />
-          6. Termin Pembayaran {paymentTerms.length > 0 ? `(${paymentTerms.length})` : "(Opsional)"}
+          7. Termin Pembayaran {paymentTerms.length > 0 ? `(${paymentTerms.length})` : "(Opsional)"}
         </button>
       </div>
 
@@ -700,6 +1032,8 @@ export function ProjectPlanningForm({
         <input type="hidden" name="rab_breakdown" value={JSON.stringify(rab)} />
         <input type="hidden" name="payment_terms" value={JSON.stringify(paymentTerms)} />
         <input type="hidden" name="attachment_ids" value={JSON.stringify(attachments)} />
+        <input type="hidden" name="client_gdrive_url" value={clientGdriveUrl} />
+        <input type="hidden" name="custom_milestones" value={JSON.stringify(customMilestones)} />
 
         {/* TAB 1: SDM / MANPOWER */}
         {activeTab === "sdm" && (
@@ -1020,7 +1354,223 @@ export function ProjectPlanningForm({
           </Card>
         )}
 
-        {/* TAB 3: JADWAL & TIMESHEET */}
+        {/* TAB 3: ALUR & TAHAPAN PROSES PENGERJAAN PROYEK */}
+        {activeTab === "tahapan" && (
+          <Card className="p-5 space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+              <div>
+                <h3 className="font-semibold text-ink text-base flex items-center gap-2">
+                  <ListOrdered className="size-4 text-brand" />
+                  03 Alur & Tahapan Proses Pengerjaan Proyek (Milestone)
+                </h3>
+                <p className="text-xs text-muted mt-1 max-w-2xl">
+                  Tentukan daftar dan urutan pengerjaan yang wajib dijalankan pada proyek ini. Daftar tahapan inilah yang menjadi patokan pemantauan progres operasional oleh PM, PIC, Narahubung Proyek, dan Direksi.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted font-medium">Template Cepat:</span>
+                <button
+                  type="button"
+                  onClick={() => applyMilestonePreset("amdal")}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                  title="Template lengkap AMDAL KLHK (7 Tahapan Termasuk Sidang Teknis, Sidang Pleno, & BAST)"
+                >
+                  AMDAL KLHK (Termasuk 2x Sidang & BAST)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyMilestonePreset("ukl_upl")}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                  title="Template lengkap UKL-UPL (6 Tahapan Termasuk Sidang Pembahasan DLH & BAST)"
+                >
+                  UKL-UPL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyMilestonePreset("pertek")}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                  title="Template lengkap Pertek (5 Tahapan Termasuk Sidang Ekspose & BAST)"
+                >
+                  Persetujuan Teknis (Pertek)
+                </button>
+
+                <div className="h-4 w-px bg-line mx-1" />
+
+                <span className="text-xs text-muted font-medium">Tambah Tahapan Cepat:</span>
+                <button
+                  type="button"
+                  onClick={addSidangMilestone}
+                  disabled={busy}
+                  className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-900 hover:bg-amber-100 transition shadow-2xs flex items-center gap-1"
+                  title="Klik untuk menyisipkan tahapan Sidang Teknis / Komisi (bisa diklik beberapa kali bila sidang lebih dari 1 kali)"
+                >
+                  <Plus className="size-3 text-amber-700" /> + Sidang (Bisa &gt; 1x)
+                </button>
+                <button
+                  type="button"
+                  onClick={addBastMilestone}
+                  disabled={busy}
+                  className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-900 hover:bg-emerald-100 transition shadow-2xs flex items-center gap-1"
+                  title="Klik untuk menyisipkan tahapan Penyerahan Laporan Akhir & Penandatanganan BAST"
+                >
+                  <Plus className="size-3 text-emerald-700" /> + Penyerahan BAST
+                </button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={addCustomMilestone}
+                  disabled={busy}
+                  className="gap-1.5 text-xs bg-brand text-white shadow-xs"
+                >
+                  <Plus className="size-3.5" /> + Tahap Kustom
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {customMilestones.map((ms, idx) => (
+                <div key={ms.id || idx} className="rounded-xl border border-line bg-canvas/40 p-4 space-y-3">
+                  <div className="flex items-center justify-between border-b border-line/60 pb-2">
+                    <span className="flex items-center gap-2 font-bold text-xs text-ink">
+                      <span className="flex size-5 items-center justify-center rounded-full bg-brand text-[10px] text-white">
+                        {idx + 1}
+                      </span>
+                      Tahap {idx + 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeCustomMilestone(idx)}
+                      disabled={busy || customMilestones.length <= 1}
+                      className="text-red-500 hover:text-red-700 disabled:opacity-40 text-xs flex items-center gap-1"
+                    >
+                      <Trash2 className="size-3.5" /> Hapus Tahap
+                    </button>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700">
+                        Judul Tahapan Kerja
+                        <input
+                          type="text"
+                          required
+                          value={ms.title}
+                          disabled={busy}
+                          placeholder="e.g. 1. Kajian Lapangan & Uji Laboratorium"
+                          onChange={(e) => updateCustomMilestone(idx, "title", e.target.value)}
+                          className="mt-1 block w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white font-medium"
+                        />
+                      </label>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700">
+                        Subtitle / Fokus Utama
+                        <input
+                          type="text"
+                          value={ms.subtitle || ""}
+                          disabled={busy}
+                          placeholder="e.g. Pengambilan sampel rona awal & uji parameter lingkungan"
+                          onChange={(e) => updateCustomMilestone(idx, "subtitle", e.target.value)}
+                          className="mt-1 block w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700">
+                        Penanggung Jawab (PIC Tahapan)
+                        <input
+                          type="text"
+                          value={ms.pic || ""}
+                          disabled={busy}
+                          placeholder="e.g. Project Manager, Narahubung, atau Tim Lapangan"
+                          onChange={(e) => updateCustomMilestone(idx, "pic", e.target.value)}
+                          className="mt-1 block w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white"
+                        />
+                      </label>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700">
+                        Target Periode / Estimasi Durasi
+                        <input
+                          type="text"
+                          value={ms.period || ""}
+                          disabled={busy}
+                          placeholder="e.g. Minggu ke-1 s/d ke-3 (14 Hari Kerja)"
+                          onChange={(e) => updateCustomMilestone(idx, "period", e.target.value)}
+                          className="mt-1 block w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700">
+                      Uraian Proses Pengerjaan
+                      <textarea
+                        rows={2}
+                        value={ms.description || ""}
+                        disabled={busy}
+                        placeholder="Jelaskan detail proses, koordinasi instansi terkait (KLHK/DLH), atau metodologi lapangan..."
+                        onChange={(e) => updateCustomMilestone(idx, "description", e.target.value)}
+                        className="mt-1 block w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white leading-relaxed"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 pt-1">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700">
+                        Deliverable / Output Resmi Dihasilkan (Pisahkan tanda koma)
+                        <input
+                          type="text"
+                          value={Array.isArray(ms.deliverables) ? ms.deliverables.join(", ") : ""}
+                          disabled={busy}
+                          placeholder="e.g. Berita Acara Sampling, Sertifikat Hasil Uji Lab (CoA)"
+                          onChange={(e) =>
+                            updateCustomMilestone(
+                              idx,
+                              "deliverables",
+                              e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean)
+                            )
+                          }
+                          className="mt-1 block w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white"
+                        />
+                      </label>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700">
+                        Tindakan / Permintaan Data ke Klien (Pisahkan tanda koma)
+                        <input
+                          type="text"
+                          value={Array.isArray(ms.clientActions) ? ms.clientActions.join(", ") : ""}
+                          disabled={busy}
+                          placeholder="e.g. Sediakan data tata letak tapak, Izin akses lokasi"
+                          onChange={(e) =>
+                            updateCustomMilestone(
+                              idx,
+                              "clientActions",
+                              e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean)
+                            )
+                          }
+                          className="mt-1 block w-full rounded border border-line px-2.5 py-1.5 text-xs bg-white"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* TAB 4: JADWAL & TIMESHEET */}
         {activeTab === "jadwal" && (
           <Card className="p-5 space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
@@ -1439,14 +1989,49 @@ export function ProjectPlanningForm({
           </Card>
         )}
 
-        {/* TAB 5: LAMPIRAN PENDUKUNG */}
+        {/* TAB 6: LAMPIRAN PENDUKUNG & GOOGLE DRIVE */}
         {activeTab === "lampiran" && (
           <Card className="p-5 space-y-5">
             <div>
-              <h3 className="font-semibold text-ink text-base">05 Lampiran Dokumen Kelengkapan Proyek</h3>
+              <h3 className="font-semibold text-ink text-base">06 Lampiran Dokumen & Google Drive Klien</h3>
               <p className="text-xs text-muted mt-1">
-                Seluruh dokumen yang diunggah dari tab SDM, Teknis, Jadwal, dan RAB otomatis terkumpul di sini sebagai berkas lampiran resmi proyek. Anda juga dapat mengunggah dokumen pendukung lainnya secara manual.
+                Seluruh dokumen yang diunggah otomatis terkumpul di sini sebagai berkas resmi proyek. Untuk data berukuran besar (peta GIS, raw data, foto lapangan), hubungkan langsung link Google Drive klien.
               </p>
+            </div>
+
+            {/* TAUTAN GOOGLE DRIVE KLIEN */}
+            <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50/70 to-indigo-50/50 p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-sm font-bold text-blue-950 flex items-center gap-1.5">
+                    📁 Tautan Google Drive Data Klien (Shared Folder / GDrive)
+                  </h4>
+                  <p className="text-xs text-blue-800 mt-0.5">
+                    Klien biasanya membagikan link Google Drive berisi data mentah, peta GIS, dan hasil survei. Masukkan tautan tersebut agar dapat diakses 1-klik tanpa membebani storage database.
+                  </p>
+                </div>
+                {clientGdriveUrl && (
+                  <a
+                    href={clientGdriveUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700 transition shadow-sm"
+                  >
+                    <ExternalLink className="size-3.5" /> Buka GDrive ↗
+                  </a>
+                )}
+              </div>
+
+              <div>
+                <input
+                  type="url"
+                  value={clientGdriveUrl}
+                  disabled={busy}
+                  placeholder="Contoh: https://drive.google.com/drive/folders/..."
+                  onChange={(e) => setClientGdriveUrl(e.target.value)}
+                  className="w-full rounded-lg border border-blue-300 bg-white p-2.5 text-xs font-mono text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
             </div>
 
             <DocumentUpload

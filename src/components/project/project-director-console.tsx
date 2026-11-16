@@ -93,6 +93,8 @@ export function ProjectDirectorConsole({
     timesheet_schedule: Array<{ id: string; phase: string; start_date?: string; end_date?: string; pic?: string }>
     rab_breakdown: Array<{ id: string; category: string; description: string; volume: number; unit: string; unit_price: number; total: number }>
     payment_terms?: Array<{ id?: string; index: number; name: string; percentage: number; amount: number; trigger: string; status?: string }>
+    client_gdrive_url?: string | null
+    custom_milestones?: any[]
     review_note?: string | null
   }
   attachments: AttachmentItem[]
@@ -495,6 +497,35 @@ export function ProjectDirectorConsole({
           {/* TAB 5: LAMPIRAN BERKAS RESMI (DENGAN TAUTAN UNDUH/BUKA) */}
           {activeTab === "lampiran" && (
             <div className="space-y-4">
+              {project.client_gdrive_url && (
+                <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50/80 to-indigo-50/50 p-4 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-blue-600 text-white font-bold text-lg shadow-sm">
+                      📁
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-blue-950 flex items-center gap-1.5">
+                        Google Drive Berkas Klien
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-800">
+                          Folder Bersama Klien
+                        </span>
+                      </h4>
+                      <p className="text-xs text-blue-800 mt-0.5 font-mono line-clamp-1 max-w-xl">
+                        {project.client_gdrive_url}
+                      </p>
+                    </div>
+                  </div>
+                  <a
+                    href={project.client_gdrive_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-blue-700 transition"
+                  >
+                    <ExternalLink className="size-3.5" /> Buka Google Drive Klien ↗
+                  </a>
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
                 <div>
                   <h3 className="font-semibold text-sm text-ink flex items-center gap-2">

@@ -853,7 +853,7 @@ async function TaxRecapLoader({
     supabase
       .from("sales_invoices")
       .select(
-        "id,branch_id,invoice_number,invoice_date,amount,vat_amount,wht_amount,wht_proof_number,total_amount,status",
+        "id,branch_id,invoice_number,invoice_date,tax_invoice_type,tax_invoice_number,is_wapu,amount,vat_amount,wht_amount,wht_proof_number,total_amount,status",
       )
       .eq("organization_id", organizationId)
       .order("invoice_date", { ascending: false })

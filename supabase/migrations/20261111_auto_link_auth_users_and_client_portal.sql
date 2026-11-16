@@ -97,7 +97,7 @@ begin
   end if;
 
   if v_org_id is null then
-    raise exception 'Organisasi tidak ditemukan.';
+    return;
   end if;
 
   -- Iterasi semua user di auth.users yang belum terdaftar di organization_members

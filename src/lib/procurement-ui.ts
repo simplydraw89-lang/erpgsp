@@ -28,7 +28,8 @@ export type SalesDocument = {
 export const jobLabels: Record<string, string> = {
   president: "Direktur Utama", finance_director: "Direktur Keuangan", technical_director: "Direktur Teknis",
   finance: "Finance", accounting_tax: "Accounting & Tax", hr: "SDM", branch_manager: "Manager Cabang",
-  admin: "Admin", project_manager: "Project Manager", marketing: "Marketing", support: "Support", other: "Lainnya",
+  admin: "Admin", project_manager: "Project Manager", project_liaison: "Narahubung Proyek & Instansi (Liaison Officer)",
+  marketing: "Marketing", support: "Support", other: "Lainnya",
 }
 export const relationshipLabels: Record<string, string> = { probation: "Probation", contract: "Kontrak", permanent: "Tetap", consultant: "Konsultan / tenaga ahli", vendor: "Vendor", client: "Klien" }
 export const purchaseStatusLabels: Record<string, string> = {

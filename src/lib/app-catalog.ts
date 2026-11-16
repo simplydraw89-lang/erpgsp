@@ -45,18 +45,18 @@ export const applicationGroups = [
     tone: "amber",
     apps: [
       {
+        name: "Penjualan",
+        href: "/pengajuan/penjualan",
+        icon: BriefcaseBusiness,
+        roles: everyone,
+        description: "Daftar klien, draft SPH dan SPK sesuai urutan persetujuan",
+      },
+      {
         name: "Pembelian",
         href: "/pengajuan/pembelian",
         icon: ReceiptText,
         roles: everyone,
         description: "Invoice vendor, pemeriksaan berjenjang, utang dan pembayaran per cabang",
-      },
-      {
-        name: "Cuti",
-        href: "/pengajuan/cuti",
-        icon: CalendarDays,
-        roles: everyone,
-        description: "Pengajuan cuti karyawan · segera tersedia",
       },
       {
         name: "Perjalanan dinas",
@@ -66,11 +66,11 @@ export const applicationGroups = [
         description: "Pengajuan perjalanan dinas · segera tersedia",
       },
       {
-        name: "Penjualan",
-        href: "/pengajuan/penjualan",
-        icon: BriefcaseBusiness,
+        name: "Cuti",
+        href: "/pengajuan/cuti",
+        icon: CalendarDays,
         roles: everyone,
-        description: "Daftar klien, draft SPH dan SPK sesuai urutan persetujuan",
+        description: "Pengajuan cuti karyawan · segera tersedia",
       },
     ],
   },
