@@ -30,7 +30,7 @@ import { saveProjectPlanningAction } from "@/app/(workspace)/proyek/actions"
 import { DocumentUpload } from "@/components/sales/document-upload"
 import { rupiah } from "@/lib/procurement-ui"
 import { MoneyInput } from "@/components/ui/money-input"
-import { DEFAULT_PROJECT_MILESTONES } from "@/lib/project-milestones"
+import { DEFAULT_PROJECT_MILESTONES } from "@/lib/project-milestone-types"
 
 export type ManpowerItem = {
   id: string
