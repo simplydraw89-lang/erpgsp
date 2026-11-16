@@ -133,7 +133,12 @@ export function ThemeSettingsView({
             return (
               <div
                 key={opt.id}
-                onClick={() => setPreference(opt.id)}
+                onClick={() => {
+                  setPreference(opt.id)
+                  setTimeout(() => {
+                    window.location.reload()
+                  }, 120)
+                }}
                 className={`relative flex flex-col justify-between rounded-2xl border p-5 transition-all cursor-pointer select-none ${
                   isSelected
                     ? "border-teal-600 bg-white shadow-md ring-2 ring-teal-500/30 dark:border-teal-400 dark:bg-slate-900"

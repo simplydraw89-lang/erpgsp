@@ -141,6 +141,9 @@ export function ThemeToggle({ className = "", align = "right" }: ThemeToggleProp
                   onClick={() => {
                     setPreference(opt.id)
                     setIsOpen(false)
+                    setTimeout(() => {
+                      window.location.reload()
+                    }, 120)
                   }}
                   className={`flex w-full items-start gap-3 rounded-xl p-2.5 text-left text-xs transition cursor-pointer ${
                     isSelected

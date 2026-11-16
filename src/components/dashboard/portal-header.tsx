@@ -144,8 +144,8 @@ export function PortalHeader({
               <Link
                 key={app.href}
                 href={app.href}
-                target="_blank"
-                rel="noopener noreferrer"
+                target={app.href === "/pengaturan" ? undefined : "_blank"}
+                rel={app.href === "/pengaturan" ? undefined : "noopener noreferrer"}
                 className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"
               >
                 <app.icon size={16} />
@@ -239,8 +239,8 @@ export function PortalHeader({
               <Link
                 key={app.href}
                 href={app.href}
-                target="_blank"
-                rel="noopener noreferrer"
+                target={app.href === "/pengaturan" ? undefined : "_blank"}
+                rel={app.href === "/pengaturan" ? undefined : "noopener noreferrer"}
                 onClick={() => dialog.current?.close()}
                 className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-slate-50"
               >
