@@ -76,7 +76,7 @@ export function PortalHeader({
       <header className="portal-header">
         <details className="portal-launcher">
           <summary
-            aria-label="Menu aplikasi esperapp by GSP"
+            aria-label="Menu aplikasi uliquapp by GSP"
             className="flex flex-col cursor-pointer list-none items-center justify-center rounded-[13px] bg-slate-600/85 hover:bg-slate-700/90 dark:bg-slate-700/80 dark:hover:bg-slate-600/90 px-1.5 py-1 text-white shadow-sm transition hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500"
           >
             <svg
@@ -130,7 +130,7 @@ export function PortalHeader({
               >S</text>
             </svg>
             <span className="text-[9px] font-bold tracking-tight text-white/95 uppercase mt-0.5 select-none leading-none">
-              esperapp
+              uliquapp
             </span>
           </summary>
           <nav
@@ -139,7 +139,7 @@ export function PortalHeader({
           >
             <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 dark:border-slate-800 mb-1">
               <div>
-                <span className="font-bold text-xs tracking-wide text-slate-900 dark:text-slate-100">esperapp</span>
+                <span className="font-bold text-xs tracking-wide text-slate-900 dark:text-slate-100">uliquapp</span>
                 <span className="block text-[10px] text-slate-500 font-medium">by GSP</span>
               </div>
               <span className="rounded bg-teal-100 dark:bg-teal-950/80 px-1.5 py-0.5 text-[9px] font-bold text-teal-800 dark:text-teal-300">

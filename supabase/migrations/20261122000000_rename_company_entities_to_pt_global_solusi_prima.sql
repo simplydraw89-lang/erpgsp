@@ -1,6 +1,6 @@
 -- ============================================================================
 -- SINKRONISASI NAMA ENTITAS RESMI: PT. GLOBAL SOLUSI PRIMA (Pusat & Cabang)
--- Sistem Pemilik: GSP, Aplikasi: esperapp
+-- Sistem Pemilik: GSP, Aplikasi: uliquapp
 -- Klien Pengguna Sistem: PT. Global Solusi Prima (beserta seluruh cabangnya)
 -- ============================================================================
 
