@@ -3,9 +3,9 @@ import "./globals.css"
 import { ThemeProvider } from "@/lib/theme-context"
 
 export const metadata: Metadata = {
-  title: "GSP Group | Enterprise Workspace",
+  title: "esperapp by GSP | Enterprise Workspace",
   description:
-    "Workspace terpadu Gema Sinergi Peradaban dengan kontrol, persetujuan, dan audit lintas modul.",
+    "esperapp — Enterprise Resource Planning & Client Portal by GSP untuk PT. Global Solusi Prima.",
 }
 
 export default function RootLayout({

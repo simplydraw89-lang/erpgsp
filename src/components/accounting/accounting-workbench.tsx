@@ -78,7 +78,7 @@ type Member = { user_id: string; role: OrganizationRole }
 
 
 function entityLabel(entity: Entity) {
-  return `${entity.entity_code} · ${entity.legal_name}`
+  return `${entity.entity_code} · ${entity.legal_name?.replace(/Gema Sinergi Peradaban/gi, "PT. Global Solusi Prima") ?? ""}`
 }
 
 export function AccountingWorkbench({

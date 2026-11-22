@@ -130,7 +130,10 @@ export default async function ModulePage({
     const reportUnavailable = reportErrors.some(isWorkflowMissing)
     if (reportErrors.some((error) => error && !isWorkflowMissing(error))) throw new Error("Laporan akuntansi gagal dimuat.")
     const statementLines = (bankStatementLinesResult.error ? [] : (bankStatementLinesResult.data ?? [])) as BankStatementLineRow[]
-    const entities = entityResult.data ?? []
+    const entities = (entityResult.data ?? []).map((ent) => ({
+      ...ent,
+      legal_name: ent.legal_name?.replace(/Gema Sinergi Peradaban/gi, "PT. Global Solusi Prima") ?? ent.legal_name,
+    }))
     const formatMoney = (value: number | string | null | undefined) => displayValue(value ?? 0, { name: "amount", label: "Saldo", type: "money" })
     const entityName = (entityId: string) => entities.find((entity) => entity.id === entityId)?.entity_code ?? entityId.slice(0, 8)
     if (!reportUnavailable && !["owner", "director", "finance", "auditor"].includes(role)) return <Card className="p-6">Anda tidak memiliki akses laporan akuntansi.</Card>

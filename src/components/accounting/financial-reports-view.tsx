@@ -125,7 +125,7 @@ export function FinancialReportsView({
             <option value="">Konsolidasi Semua Entitas</option>
             {entities.map((entity) => (
               <option key={entity.id} value={entity.id}>
-                {entity.entity_code} · {entity.legal_name}
+                {entity.entity_code} · {entity.legal_name?.replace(/Gema Sinergi Peradaban/gi, "PT. Global Solusi Prima") ?? ""}
               </option>
             ))}
           </select>

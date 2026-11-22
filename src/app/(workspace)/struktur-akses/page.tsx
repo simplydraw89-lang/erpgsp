@@ -28,6 +28,15 @@ export default async function AccessStructurePage({ searchParams }: { searchPara
   const branches = (units.data ?? []).filter(u => u.kind === "branch")
   const canEdit = actorRole === "owner" && !isReadOnlyPreview
 
+  // Pastikan nama entitas pembukuan (Pusat & Cabang) selalu menggunakan nama resmi PT. Global Solusi Prima
+  if (entities.data && Array.isArray(entities.data)) {
+    for (const ent of entities.data) {
+      if (ent.legal_name) {
+        ent.legal_name = ent.legal_name.replace(/Gema Sinergi Peradaban/gi, "PT. Global Solusi Prima")
+      }
+    }
+  }
+
   // Peta data profil pengguna (email & nama)
   const userMap = new Map<string, { email: string; fullName: string; role: string }>()
   
@@ -375,29 +384,37 @@ export default async function AccessStructurePage({ searchParams }: { searchPara
                 Hubungkan cabang operasional ke unit cabang di pembukuan perusahaan yang sama. Ini diperlukan untuk jurnal utang, pelunasan dan laporan cabang. Pusat tetap menjadi induk pelaporan. Kelola unit pembukuan dan periode melalui <Link href="/modul/akuntansi" className="text-brand">Akuntansi</Link>.
               </p>
             </div>
-            {branches.map(b => (
-              <div key={b.id} className="rounded-lg border border-line p-4">
-                <p className="font-medium">{b.name}</p>
-                <p className="mt-1 text-sm text-muted">
-                  {entities.data?.find(e => e.id === b.entity_id)?.legal_name ?? "Belum terhubung ke pembukuan"}
-                </p>
-                {canEdit && (
-                  <form action={linkBusinessUnit} className="mt-3 flex flex-wrap items-end gap-3">
-                    <input type="hidden" name="branch_id" value={b.id} />
-                    <label className={`${label} min-w-60 flex-1`}>
-                      Unit pembukuan cabang
-                      <select name="entity_id" defaultValue={b.entity_id ?? ""} required className={input}>
-                        <option value="">Pilih unit cabang</option>
-                        {(entities.data ?? []).filter(e => e.entity_type === "branch").map(e => (
-                          <option key={e.id} value={e.id}>{e.entity_code} · {e.legal_name}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <SubmitButton>Hubungkan</SubmitButton>
-                  </form>
-                )}
-              </div>
-            ))}
+            {branches.map(b => {
+              const matchedEntity = entities.data?.find(e => e.id === b.entity_id)
+              const legalName = matchedEntity?.legal_name
+                ? matchedEntity.legal_name.replace(/Gema Sinergi Peradaban/gi, "PT. Global Solusi Prima")
+                : `PT. Global Solusi Prima - ${b.name}`
+              return (
+                <div key={b.id} className="rounded-lg border border-line p-4">
+                  <p className="font-medium">{b.name}</p>
+                  <p className="mt-1 text-sm text-muted">
+                    {legalName}
+                  </p>
+                  {canEdit && (
+                    <form action={linkBusinessUnit} className="mt-3 flex flex-wrap items-end gap-3">
+                      <input type="hidden" name="branch_id" value={b.id} />
+                      <label className={`${label} min-w-60 flex-1`}>
+                        Unit pembukuan cabang
+                        <select name="entity_id" defaultValue={b.entity_id ?? ""} required className={input}>
+                          <option value="">Pilih unit cabang</option>
+                          {(entities.data ?? []).filter(e => e.entity_type === "branch").map(e => (
+                            <option key={e.id} value={e.id}>
+                              {e.entity_code} · {e.legal_name.replace(/Gema Sinergi Peradaban/gi, "PT. Global Solusi Prima")}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <SubmitButton>Hubungkan</SubmitButton>
+                    </form>
+                  )}
+                </div>
+              )
+            })}
           </Card>
         </>
       )}
