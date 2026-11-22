@@ -4,11 +4,9 @@ import React from "react"
 import {
   Sun,
   Moon,
-  Clock,
   CheckCircle2,
   Sparkles,
   ShieldCheck,
-  User,
   Sliders,
   Laptop,
   ArrowRight,
@@ -31,7 +29,7 @@ export function ThemeSettingsView({
   roleLabel,
   organizationName,
 }: ThemeSettingsViewProps) {
-  const { preference, resolvedTheme, setPreference, currentHour, isDaytime } = useTheme()
+  const { preference, resolvedTheme, setPreference } = useTheme()
 
   const themeOptions: {
     id: ThemePreference
@@ -47,36 +45,25 @@ export function ThemeSettingsView({
     {
       id: "light",
       title: "1. Mode Terang",
-      subtitle: "Selalu Cerah (Light Mode)",
+      subtitle: "Standar Default (Direkomendasikan)",
       description:
-        "Tampilan visual cerah dengan latar belakang putih bersih dan kontras standar. Direkomendasikan untuk aktivitas kerja di siang hari atau ruangan dengan pencahayaan terang.",
+        "Tampilan visual cerah dengan latar belakang putih bersih dan kontras standar. Sangat nyaman untuk aktivitas operasional harian, akuntansi, dan penginputan data.",
       icon: Sun,
       accentColor: "text-amber-500",
+      badgeText: "Default Sistem",
       previewBg: "bg-gradient-to-br from-slate-50 to-white",
       previewBorder: "border-amber-300",
     },
     {
       id: "dark",
       title: "2. Mode Gelap",
-      subtitle: "Selalu Gelap (Dark Mode)",
+      subtitle: "Deep Slate (Nyaman di Mata)",
       description:
-        "Tampilan visual bernuansa deep slate yang teduh di mata dan hemat daya. Mengurangi ketegangan mata saat lembur atau penggunaan di ruangan redup.",
+        "Tampilan visual bernuansa deep slate modern yang teduh di mata dan hemat daya. Mengurangi ketegangan mata saat bekerja di ruangan redup tanpa merusak kontras formulir.",
       icon: Moon,
       accentColor: "text-indigo-400",
       previewBg: "bg-gradient-to-br from-slate-900 to-slate-950",
       previewBorder: "border-indigo-500",
-    },
-    {
-      id: "time",
-      title: "3. Mode Sesuai Waktu",
-      subtitle: "Otomatis Siang & Malam",
-      description:
-        "Sistem berpindah secara dinamis mengikuti jam lokal Anda: Mode Terang dari pukul 06:00 s/d 18:00, dan otomatis berganti ke Mode Gelap dari pukul 18:00 s/d 06:00.",
-      icon: Clock,
-      accentColor: "text-teal-600 dark:text-teal-400",
-      badgeText: isDaytime ? "Sedang Siang (Terang)" : "Sedang Malam (Gelap)",
-      previewBg: "bg-gradient-to-br from-teal-900/30 via-slate-900/40 to-amber-900/20",
-      previewBorder: "border-teal-500",
     },
   ]
 
@@ -97,15 +84,15 @@ export function ThemeSettingsView({
               Pengaturan Tampilan & Sistem
             </h1>
             <p className="mt-1 text-sm text-muted max-w-2xl leading-relaxed">
-              Sesuaikan preferensi visual (mode terang, mode gelap, atau otomatis sesuai waktu) untuk kenyamanan kerja optimal Anda di seluruh modul ERP GSP.
+              Sesuaikan preferensi visual (mode terang atau mode gelap) untuk kenyamanan kerja optimal Anda di seluruh modul ERP GSP.
             </p>
           </div>
 
           <div className="flex items-center gap-2 rounded-xl border border-line bg-white/80 px-4 py-2 text-xs shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
             <Sparkles className="size-4 text-teal-600 dark:text-teal-400" />
             <div>
-              <p className="font-semibold text-ink">Waktu Sistem Lokal:</p>
-              <p className="text-muted">{String(currentHour).padStart(2, "0")}:00 WIB ({isDaytime ? "Siang" : "Malam"})</p>
+              <p className="font-semibold text-ink">Status Tampilan:</p>
+              <p className="text-muted capitalize">Mode {resolvedTheme === "dark" ? "Gelap (Dark)" : "Terang (Light)"} Aktif</p>
             </div>
           </div>
         </div>
@@ -121,11 +108,11 @@ export function ThemeSettingsView({
             </span>
           </h2>
           <p className="text-xs text-muted">
-            Perubahan diterapkan secara instan tanpa perlu memuat ulang halaman dan tersimpan permanen di perangkat ini.
+            Perubahan diterapkan secara instan tanpa perlu memuat ulang halaman secara manual.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {themeOptions.map((opt) => {
             const isSelected = preference === opt.id
             const Icon = opt.icon
@@ -133,78 +120,66 @@ export function ThemeSettingsView({
             return (
               <div
                 key={opt.id}
-                onClick={() => {
-                  setPreference(opt.id)
-                  setTimeout(() => {
-                    window.location.reload()
-                  }, 120)
+                role="button"
+                tabIndex={0}
+                onClick={() => setPreference(opt.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    setPreference(opt.id)
+                  }
                 }}
-                className={`relative flex flex-col justify-between rounded-2xl border p-5 transition-all cursor-pointer select-none ${
+                className={`relative flex flex-col justify-between rounded-2xl border p-5 transition-all duration-200 cursor-pointer text-left select-none ${
                   isSelected
-                    ? "border-teal-600 bg-white shadow-md ring-2 ring-teal-500/30 dark:border-teal-400 dark:bg-slate-900"
-                    : "border-line bg-white/70 hover:border-slate-300 hover:bg-white dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-slate-700 dark:hover:bg-slate-900"
+                    ? "border-teal-600 bg-teal-50/40 shadow-lg shadow-teal-500/10 ring-2 ring-teal-500/30 dark:border-teal-500 dark:bg-teal-950/30"
+                    : "border-line bg-white hover:border-slate-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
                 }`}
               >
                 <div>
-                  {/* Top Header of Card */}
-                  <div className="flex items-center justify-between gap-2 pb-3 border-b border-line dark:border-slate-800">
-                    <div className="flex items-center gap-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
                       <div
-                        className={`flex size-9 items-center justify-center rounded-xl border ${opt.previewBorder} ${opt.previewBg}`}
+                        className={`flex size-11 items-center justify-center rounded-xl border ${opt.previewBorder} ${opt.previewBg} shadow-sm`}
                       >
                         <Icon className={`size-5 ${opt.accentColor}`} />
                       </div>
                       <div>
-                        <h3 className="font-bold text-sm text-ink">{opt.title}</h3>
-                        <p className="text-[11px] text-muted">{opt.subtitle}</p>
+                        <h3 className="font-bold text-ink text-sm sm:text-base">
+                          {opt.title}
+                        </h3>
+                        <p className="text-xs text-muted">{opt.subtitle}</p>
                       </div>
                     </div>
 
-                    <div
-                      className={`flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                        isSelected
-                          ? "border-teal-600 bg-teal-600 text-white dark:border-teal-400 dark:bg-teal-400 dark:text-slate-950"
-                          : "border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-800"
-                      }`}
-                    >
-                      {isSelected && <CheckCircle2 className="size-4" />}
+                    <div className="flex items-center gap-2">
+                      {opt.badgeText && (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                          {opt.badgeText}
+                        </span>
+                      )}
+                      {isSelected ? (
+                        <CheckCircle2 className="size-5 text-teal-600 dark:text-teal-400" />
+                      ) : (
+                        <div className="size-5 rounded-full border border-slate-300 dark:border-slate-700" />
+                      )}
                     </div>
                   </div>
 
-                  {/* Narasi Penjelasan */}
-                  <p className="mt-3 text-xs leading-relaxed text-muted">
+                  <p className="mt-4 text-xs text-muted leading-relaxed">
                     {opt.description}
                   </p>
-
-                  {/* Info Khusus Mode Waktu */}
-                  {opt.id === "time" && (
-                    <div className="mt-3 rounded-xl border border-teal-200/80 bg-teal-50/70 p-2.5 text-[11px] text-teal-900 dark:border-teal-900/60 dark:bg-teal-950/40 dark:text-teal-200">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold flex items-center gap-1">
-                          <Clock className="size-3.5" /> Status Otomatis:
-                        </span>
-                        <span className="font-bold">
-                          {isDaytime ? "☀️ Terang (06-18)" : "🌙 Gelap (18-06)"}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[10px] text-teal-700 dark:text-teal-300">
-                        Jam saat ini: <strong>{String(currentHour).padStart(2, "0")}:00 WIB</strong>. Tampilan aktif: <strong>{resolvedTheme === "light" ? "Mode Terang" : "Mode Gelap"}</strong>.
-                      </p>
-                    </div>
-                  )}
                 </div>
 
-                {/* Footer status button */}
-                <div className="mt-4 pt-3 border-t border-line dark:border-slate-800 flex items-center justify-between text-xs">
-                  <span className="text-[11px] font-medium text-muted">
-                    {isSelected ? "Sedang Digunakan" : "Klik untuk Pilih"}
+                <div className="mt-5 pt-3 border-t border-line/60 dark:border-slate-800/80 flex items-center justify-between text-xs">
+                  <span className="text-muted">
+                    {isSelected ? "Sedang Digunakan" : "Klik untuk memilih"}
                   </span>
                   <span
-                    className={`font-semibold text-xs ${
-                      isSelected ? "text-teal-600 dark:text-teal-400" : "text-slate-400"
+                    className={`font-semibold ${
+                      isSelected ? "text-teal-600 dark:text-teal-400" : "text-muted"
                     }`}
                   >
-                    {isSelected ? "Aktif ✓" : "Gunakan →"}
+                    {isSelected ? "Aktif ✓" : "Pilih Mode"}
                   </span>
                 </div>
               </div>
@@ -212,18 +187,22 @@ export function ThemeSettingsView({
           })}
         </div>
 
-        <div className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-xs text-slate-600 dark:bg-slate-800/80 dark:text-slate-300">
-          <Info className="size-4 shrink-0 text-teal-600 dark:text-teal-400" />
-          <span>
-            <strong>Tips:</strong> Anda juga dapat mengganti tema secara cepat kapan saja melalui <strong>tombol tema</strong> yang ada di bar navigasi kanan atas.
-          </span>
+        {/* Info Box Kenyamanan Tampilan */}
+        <div className="flex items-start gap-3 rounded-xl border border-blue-200/80 bg-blue-50/70 p-4 text-xs text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200">
+          <Info className="size-4 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
+          <div className="space-y-1">
+            <p className="font-semibold">Catatan Kenyamanan Penggunaan:</p>
+            <p className="text-blue-800/90 dark:text-blue-300/90 leading-relaxed">
+              Preferensi mode tampilan disimpan otomatis pada browser Anda. Anda juga dapat mengganti tema kapan saja melalui ikon matahari/bulan pada bilah atas (topbar) di setiap halaman.
+            </p>
+          </div>
         </div>
       </section>
 
-      {/* Bagian 2: Profil & Lingkup Akun */}
+      {/* Bagian 2: Profil & Hak Akses Pengguna */}
       <section className="space-y-4 pt-2">
         <div>
-          <h2 className="text-lg font-bold text-ink">Profil & Status Akses</h2>
+          <h2 className="text-lg font-bold text-ink">Informasi Akun & Peran Pengguna</h2>
           <p className="text-xs text-muted">
             Informasi akun yang saat ini terautentikasi pada workspace ERP.
           </p>

@@ -21,9 +21,8 @@ export default function RootLayout({
             __html: `
               (function() {
                 try {
-                  var pref = localStorage.getItem('gsp_theme_preference') || 'time';
-                  var hour = new Date().getHours();
-                  var isDark = pref === 'dark' || (pref === 'time' && (hour < 6 || hour >= 18));
+                  var pref = localStorage.getItem('gsp_theme_preference') || 'light';
+                  var isDark = pref === 'dark';
                   if (isDark) {
                     document.documentElement.classList.add('dark');
                     document.documentElement.setAttribute('data-theme', 'dark');

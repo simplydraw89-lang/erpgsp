@@ -163,7 +163,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
 
         {/* Input Email / Username */}
         <div className="relative">
-          <User className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+          <User className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-slate-400 dark:text-slate-500" />
           <input
             required
             disabled={busy}
@@ -173,13 +173,13 @@ export function LoginForm({ initialError }: { initialError?: string }) {
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
             placeholder="Username or email address"
-            className="h-11 w-full rounded-xl border border-slate-200/90 bg-slate-50/70 pl-10 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 disabled:bg-slate-100"
+            className="h-11 w-full rounded-xl border border-slate-200/90 bg-slate-50/70 pl-10 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:bg-slate-800 dark:disabled:bg-slate-900"
           />
         </div>
 
         {/* Input Password dengan toggle show/hide */}
         <div className="relative">
-          <Lock className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+          <Lock className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-slate-400 dark:text-slate-500" />
           <input
             required
             disabled={busy}
@@ -189,13 +189,13 @@ export function LoginForm({ initialError }: { initialError?: string }) {
             onChange={(e) => setPassword(e.target.value)}
             autoComplete={email.trim().toLowerCase() === "demo@gsp.test" ? "off" : "current-password"}
             placeholder="Password"
-            className="h-11 w-full rounded-xl border border-slate-200/90 bg-slate-50/70 pl-10 pr-10 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 disabled:bg-slate-100"
+            className="h-11 w-full rounded-xl border border-slate-200/90 bg-slate-50/70 pl-10 pr-10 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:bg-slate-800 dark:disabled:bg-slate-900"
           />
           <button
             type="button"
             disabled={busy}
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition"
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition dark:text-slate-500 dark:hover:text-slate-300"
             aria-label={showPassword ? "Sembunyikan password" : "Lihat password"}
           >
             {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -204,19 +204,19 @@ export function LoginForm({ initialError }: { initialError?: string }) {
 
         {/* Remember Me & Forgot Password */}
         <div className="flex items-center justify-between text-xs pt-0.5">
-          <label className="flex items-center gap-1.5 cursor-pointer select-none text-slate-600">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none text-slate-600 dark:text-slate-300">
             <input
               type="checkbox"
               name="remember"
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              className="size-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              className="size-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800"
             />
             <span>Remember Me</span>
           </label>
           <Link
             href="/forgot-password"
-            className="font-medium text-blue-600 hover:text-blue-700 hover:underline"
+            className="font-medium text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
           >
             Forgot Password?
           </Link>
@@ -226,9 +226,9 @@ export function LoginForm({ initialError }: { initialError?: string }) {
         {errorMessage && (
           <div
             role="alert"
-            className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700"
+            className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
           >
-            <ShieldAlert size={15} className="mt-0.5 shrink-0 text-red-600" />
+            <ShieldAlert size={15} className="mt-0.5 shrink-0 text-red-600 dark:text-red-400" />
             <span>{errorMessage}</span>
           </div>
         )}
@@ -237,7 +237,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
         <Button
           type="submit"
           disabled={busy}
-          className="h-11 w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 transition active:scale-[0.99]"
+          className="h-11 w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 transition active:scale-[0.99] dark:bg-blue-600 dark:hover:bg-blue-500"
         >
           <span>{busy ? "Memproses..." : "Login"}</span>
           <ArrowRight size={16} />
@@ -247,9 +247,9 @@ export function LoginForm({ initialError }: { initialError?: string }) {
       {/* OR CONTINUE WITH */}
       <div className="relative my-4 flex items-center justify-center">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-slate-200/80" />
+          <div className="w-full border-t border-slate-200/80 dark:border-slate-800" />
         </div>
-        <span className="relative bg-white px-2.5 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">
+        <span className="relative bg-white px-2.5 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:bg-slate-900 dark:text-slate-400">
           Or Continue With
         </span>
       </div>
@@ -260,7 +260,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
         variant="secondary"
         onClick={handleGoogleLogin}
         disabled={busy}
-        className="h-11 w-full rounded-xl border border-slate-200/90 bg-white hover:bg-slate-50 text-slate-700 font-medium text-sm flex items-center justify-center gap-2 shadow-sm transition active:scale-[0.99]"
+        className="h-11 w-full rounded-xl border border-slate-200/90 bg-white hover:bg-slate-50 text-slate-700 font-medium text-sm flex items-center justify-center gap-2 shadow-sm transition active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-200 dark:hover:bg-slate-700"
       >
         <svg className="size-4 shrink-0" viewBox="0 0 24 24">
           <path
@@ -285,8 +285,8 @@ export function LoginForm({ initialError }: { initialError?: string }) {
 
       {/* Akses Cepat Tamu / Akun Demo (Hanya Lihat - Dikunci di Aplikasi & RLS Database) */}
       {process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN !== "false" && (
-        <div className="mt-4 pt-3.5 border-t border-slate-100 flex flex-col items-center gap-1.5 text-center">
-          <p className="text-[11px] text-slate-400 font-medium">Ingin melihat pratinjau sistem (Hanya Lihat)?</p>
+        <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800 flex flex-col items-center gap-1.5 text-center">
+          <p className="text-[11px] text-slate-400 dark:text-slate-400 font-medium">Ingin melihat pratinjau sistem (Hanya Lihat)?</p>
           <button
             type="button"
             onClick={() => {
@@ -295,7 +295,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
               setErrorMessage("")
             }}
             disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 active:scale-95"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 active:scale-95 dark:border-emerald-800/60 dark:bg-emerald-950/50 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
           >
             <span>Gunakan Akun Demo (Read-Only)</span>
           </button>

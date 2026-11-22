@@ -15,6 +15,7 @@ interface ThemeContextType {
   preference: ThemePreference
   resolvedTheme: ResolvedTheme
   setPreference: (pref: ThemePreference) => void
+  toggleTheme: () => void
   currentHour: number
   isDaytime: boolean
 }
@@ -22,38 +23,26 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [preference, setPreferenceState] = useState<ThemePreference>("time")
-  const [currentHour, setCurrentHour] = useState<number>(() => new Date().getHours())
+  // Default selalu "light" (Terang), tidak ada paksaan otomatis berdasarkan waktu
+  const [preference, setPreferenceState] = useState<ThemePreference>("light")
   const [mounted, setMounted] = useState(false)
 
   // Baca preferensi dari localStorage saat pertama kali dimuat
   useEffect(() => {
     try {
       const saved = localStorage.getItem(THEME_STORAGE_KEY) as ThemePreference | null
-      if (saved && (saved === "light" || saved === "dark" || saved === "time")) {
-        setPreferenceState(saved)
+      if (saved === "dark") {
+        setPreferenceState("dark")
       } else {
-        setPreferenceState("time")
+        setPreferenceState("light")
       }
     } catch {
-      setPreferenceState("time")
+      setPreferenceState("light")
     }
-    setCurrentHour(new Date().getHours())
     setMounted(true)
   }, [])
 
-  // Timer berkala untuk memperbarui jam dan tema jika dalam mode "time" (setiap 30 detik)
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const h = new Date().getHours()
-      setCurrentHour(h)
-    }, 30000)
-
-    return () => clearInterval(timer)
-  }, [])
-
-  const resolvedTheme = getResolvedTheme(preference, currentHour)
-  const isDaytime = currentHour >= 6 && currentHour < 18
+  const resolvedTheme = getResolvedTheme(preference)
 
   // Sinkronkan class 'dark' ke tag <html> dan atribut data-theme
   useEffect(() => {
@@ -80,14 +69,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  function toggleTheme() {
+    const nextPref = preference === "dark" ? "light" : "dark"
+    setPreference(nextPref)
+  }
+
+  const hour = typeof window !== "undefined" ? new Date().getHours() : 12
+
   return (
     <ThemeContext.Provider
       value={{
         preference,
         resolvedTheme,
         setPreference,
-        currentHour,
-        isDaytime,
+        toggleTheme,
+        currentHour: hour,
+        isDaytime: hour >= 6 && hour < 18,
       }}
     >
       {children}
@@ -98,14 +95,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 export function useTheme() {
   const context = useContext(ThemeContext)
   if (!context) {
-    // Fallback aman jika digunakan di luar provider
-    const hour = typeof window !== "undefined" ? new Date().getHours() : 12
     return {
-      preference: "time" as ThemePreference,
-      resolvedTheme: (hour >= 6 && hour < 18 ? "light" : "dark") as ResolvedTheme,
+      preference: "light" as ThemePreference,
+      resolvedTheme: "light" as ResolvedTheme,
       setPreference: () => {},
-      currentHour: hour,
-      isDaytime: hour >= 6 && hour < 18,
+      toggleTheme: () => {},
+      currentHour: 12,
+      isDaytime: true,
     }
   }
   return context
