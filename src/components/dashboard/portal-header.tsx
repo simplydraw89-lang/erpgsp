@@ -40,6 +40,8 @@ export function PortalHeader({
   const [query, setQuery] = useState("")
   const dialog = useRef<HTMLDialogElement>(null)
   const searchInput = useRef<HTMLInputElement>(null)
+  const launcherRef = useRef<HTMLDetailsElement>(null)
+  const profileMenuRef = useRef<HTMLDetailsElement>(null)
   const apps = getApplications(navigationRoles)
   const results = apps.filter((app) =>
     `${app.name} ${app.group} ${app.description}`
@@ -60,9 +62,32 @@ export function PortalHeader({
           searchInput.current?.focus()
         }
       }
+      if (event.key === "Escape") {
+        if (launcherRef.current?.open) {
+          launcherRef.current.open = false
+        }
+        if (profileMenuRef.current?.open) {
+          profileMenuRef.current.open = false
+        }
+      }
     }
+
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node
+      if (launcherRef.current?.open && !launcherRef.current.contains(target)) {
+        launcherRef.current.open = false
+      }
+      if (profileMenuRef.current?.open && !profileMenuRef.current.contains(target)) {
+        profileMenuRef.current.open = false
+      }
+    }
+
     window.addEventListener("keydown", shortcut)
-    return () => window.removeEventListener("keydown", shortcut)
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      window.removeEventListener("keydown", shortcut)
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
   }, [])
   const initials = userName
     .split(/[\s._-]+/)
@@ -74,7 +99,7 @@ export function PortalHeader({
   return (
     <>
       <header className="portal-header">
-        <details className="portal-launcher">
+        <details ref={launcherRef} className="portal-launcher">
           <summary
             aria-label="Menu aplikasi uliquapp by GSP"
             className="flex flex-col cursor-pointer list-none items-center justify-center rounded-[13px] bg-slate-600/85 hover:bg-slate-700/90 dark:bg-slate-700/80 dark:hover:bg-slate-600/90 px-1.5 py-1 text-white shadow-sm transition hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500"
@@ -148,6 +173,9 @@ export function PortalHeader({
             </div>
             <Link
               href="/dashboard"
+              onClick={() => {
+                if (launcherRef.current) launcherRef.current.open = false
+              }}
               className="block rounded-lg px-3 py-2 text-sm font-semibold hover:bg-slate-50"
             >
               Beranda workspace
@@ -158,6 +186,9 @@ export function PortalHeader({
                 href={app.href}
                 target={app.href === "/pengaturan" ? undefined : "_blank"}
                 rel={app.href === "/pengaturan" ? undefined : "noopener noreferrer"}
+                onClick={() => {
+                  if (launcherRef.current) launcherRef.current.open = false
+                }}
                 className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-slate-50"
               >
                 <app.icon size={16} />
@@ -192,7 +223,7 @@ export function PortalHeader({
         <div className="portal-account-actions">
           <ThemeToggle align="right" />
           <SalesNotificationBell disabled={isReadOnlyPreview} />
-          <details className="relative">
+          <details ref={profileMenuRef} className="relative">
             <summary
               aria-label="Menu akun"
               className="flex size-9 cursor-pointer list-none items-center justify-center rounded-full bg-emerald-100 text-sm font-medium text-emerald-800"
