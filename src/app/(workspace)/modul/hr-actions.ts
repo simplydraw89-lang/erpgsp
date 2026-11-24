@@ -88,15 +88,29 @@ export async function recordAttendanceAction(data: FormData) {
     finish("error", "Mode lihat sebagai aktif: absensi dinonaktifkan.")
   }
 
+  const attendanceType = String(data.get("attendance_type") ?? "office").trim()
   const status = String(data.get("attendance_status") ?? "present").trim()
   const summary = String(data.get("work_summary") ?? "").trim()
   const location = String(data.get("location_note") ?? "").trim()
+  const reason = String(data.get("reason") ?? "").trim()
+  const photoData = String(data.get("photo_data") ?? "").trim()
+  const latitude = Number(data.get("latitude") ?? 0) || null
+  const longitude = Number(data.get("longitude") ?? 0) || null
 
-  const { data: res, error } = await supabase.rpc("record_attendance_entry", {
+  if (attendanceType === "site" && !reason && !location) {
+    finish("error", "Untuk absensi di site/lapangan, wajib mengisi nama site proyek atau alasan.")
+  }
+
+  const { data: res, error } = await supabase.rpc("record_attendance_entry_v2", {
     p_org: organizationId,
+    p_attendance_type: attendanceType,
     p_status: status,
     p_work_summary: summary || null,
     p_location_note: location || null,
+    p_latitude: latitude,
+    p_longitude: longitude,
+    p_photo_data: photoData || null,
+    p_reason: reason || null,
   })
 
   if (error) {
@@ -114,8 +128,13 @@ export async function recordAttendanceAction(data: FormData) {
         .update({
           clock_out: new Date().toISOString(),
           attendance_status: status,
+          attendance_type: attendanceType,
           work_summary: summary || null,
           location_note: location || null,
+          latitude,
+          longitude,
+          photo_data: photoData || null,
+          reason: reason || null,
         })
         .eq("id", existing.id)
       if (updateErr) finish("error", updateErr.message)
@@ -128,13 +147,23 @@ export async function recordAttendanceAction(data: FormData) {
           organization_id: organizationId,
           work_date: today,
           clock_in: new Date().toISOString(),
+          attendance_type: attendanceType,
           attendance_status: status,
           work_summary: summary || null,
           location_note: location || null,
+          latitude,
+          longitude,
+          photo_data: photoData || null,
+          reason: reason || null,
         })
       if (insertErr) finish("error", insertErr.message)
       revalidatePath(sdmPath)
-      finish("notice", "Absen masuk berhasil dicatat.")
+      finish(
+        "notice",
+        attendanceType === "site"
+          ? "Absen masuk di site lapangan berhasil dicatat."
+          : "Absen masuk di kantor berhasil diverifikasi."
+      )
     }
   }
 

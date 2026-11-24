@@ -828,6 +828,8 @@ export default async function ModulePage({
           actorRole={workspace.actorRole}
           currentUserId={workspace.user.id}
           userName={getDisplayName(workspace.user)}
+          userEmail={workspace.user.email ?? ""}
+          roleLabel={workspace.roleLabel}
           isReadOnly={workspace.isReadOnlyPreview}
         />
       )}
@@ -914,6 +916,8 @@ async function SdmLoader({
   actorRole,
   currentUserId,
   userName,
+  userEmail,
+  roleLabel,
   isReadOnly,
 }: {
   supabase: Awaited<ReturnType<typeof requireWorkspace>>["supabase"]
@@ -923,52 +927,91 @@ async function SdmLoader({
   actorRole: string
   currentUserId: string
   userName: string
+  userEmail: string
+  roleLabel?: string | null
   isReadOnly: boolean
 }) {
   const today = new Date().toISOString().slice(0, 10)
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
-  const [runsRes, attendanceRes, todayAttRes, payslipsRes, leaveBalancesRes, leaveRequestsRes] =
-    await Promise.all([
-      supabase
-        .from("payroll_runs")
-        .select("id,period_month,title,status,total_gross,total_deductions,total_net,created_by,created_at")
-        .eq("organization_id", organizationId)
-        .order("period_month", { ascending: false })
-        .limit(24),
-      supabase
-        .from("hr_attendance")
-        .select("id,work_date,clock_in,clock_out,attendance_status,work_summary,location_note")
-        .eq("organization_id", organizationId)
-        .order("work_date", { ascending: false })
-        .limit(30),
-      supabase
-        .from("hr_attendance")
-        .select("id,work_date,clock_in,clock_out,attendance_status,work_summary,location_note")
-        .eq("organization_id", organizationId)
-        .eq("work_date", today)
-        .eq("user_id", currentUserId)
-        .maybeSingle(),
-      supabase
-        .from("payroll_items")
-        .select("id,payroll_run_id,base_salary,allowances,deductions,pph21_amount,net_pay,notes,created_at")
-        .eq("organization_id", organizationId)
-        .order("created_at", { ascending: false })
-        .limit(30),
-      supabase
-        .from("leave_balances")
-        .select("annual_quota,used_days")
-        .eq("organization_id", organizationId)
-        .eq("user_id", currentUserId)
-        .eq("leave_year", new Date().getFullYear())
-        .maybeSingle(),
-      supabase
-        .from("leave_requests")
-        .select("id,leave_type,starts_on,ends_on,total_days,reason,status,created_at")
-        .eq("organization_id", organizationId)
-        .order("created_at", { ascending: false })
-        .limit(20),
-    ])
+  const [
+    runsRes,
+    todayAttRes,
+    yesterdayAttRes,
+    payslipsRes,
+    leaveBalancesRes,
+    leaveRequestsRes,
+    myProjectsRes,
+    myTasksRes,
+    branchesRes,
+    employeeProfileRes,
+  ] = await Promise.all([
+    supabase
+      .from("payroll_runs")
+      .select("id,period_month,title,status,total_gross,total_deductions,total_net,created_by,created_at")
+      .eq("organization_id", organizationId)
+      .order("period_month", { ascending: false })
+      .limit(24),
+    supabase
+      .from("hr_attendance")
+      .select("id,work_date,clock_in,clock_out,attendance_status,attendance_type,work_summary,location_note,photo_data,reason")
+      .eq("organization_id", organizationId)
+      .eq("work_date", today)
+      .eq("user_id", currentUserId)
+      .maybeSingle(),
+    supabase
+      .from("hr_attendance")
+      .select("id,work_date,clock_in,clock_out,attendance_status,attendance_type,work_summary,location_note,photo_data,reason")
+      .eq("organization_id", organizationId)
+      .eq("work_date", yesterday)
+      .eq("user_id", currentUserId)
+      .maybeSingle(),
+    supabase
+      .from("payroll_items")
+      .select("id,payroll_run_id,base_salary,allowances,deductions,pph21_amount,net_pay,notes,created_at")
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false })
+      .limit(30),
+    supabase
+      .from("leave_balances")
+      .select("annual_quota,used_days")
+      .eq("organization_id", organizationId)
+      .eq("user_id", currentUserId)
+      .eq("leave_year", new Date().getFullYear())
+      .maybeSingle(),
+    supabase
+      .from("leave_requests")
+      .select("id,leave_type,starts_on,ends_on,total_days,reason,status,created_at")
+      .eq("organization_id", organizationId)
+      .eq("user_id", currentUserId)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("crm_projects")
+      .select("id,code,name,status,branch_id,client_snapshot")
+      .eq("organization_id", organizationId)
+      .limit(20),
+    supabase
+      .from("operational_work_items")
+      .select("id,title,description,status,priority,due_on,project_id")
+      .eq("organization_id", organizationId)
+      .eq("assigned_to", currentUserId)
+      .order("created_at", { ascending: false })
+      .limit(30),
+    supabase
+      .from("business_units")
+      .select("id,code,name")
+      .eq("organization_id", organizationId),
+    supabase
+      .from("hr_employees")
+      .select("id,employee_number,full_name,email,job_title,department,employment_status,started_on")
+      .eq("organization_id", organizationId)
+      .or(`created_by.eq.${currentUserId},email.ilike.${userEmail}`)
+      .limit(1)
+      .maybeSingle(),
+  ])
 
+  const branches = branchesRes.data ?? []
   const runs = (runsRes.data ?? []) as PayrollRunRow[]
 
   const payslips = (payslipsRes.data ?? []).map((p) => {
@@ -986,25 +1029,67 @@ async function SdmLoader({
       notes: p.notes,
       created_at: p.created_at,
       employee_name: userName,
+      job_title: employeeProfileRes.data?.job_title,
+      department: employeeProfileRes.data?.department,
+      employee_number: employeeProfileRes.data?.employee_number,
     }
   })
 
+  const myProjects = (myProjectsRes.data ?? []).map((p) => {
+    const branch = branches.find((b) => b.id === p.branch_id)
+    return {
+      id: p.id,
+      code: p.code,
+      name: p.name,
+      status: p.status,
+      clientName: (p.client_snapshot as { name?: string })?.name,
+      branchName: branch?.name,
+    }
+  })
+
+  const myTasks = (myTasksRes.data ?? []).map((t) => ({
+    id: t.id,
+    title: t.title,
+    description: t.description,
+    status: t.status,
+    priority: t.priority,
+    dueOn: t.due_on,
+  }))
+
+  const profileData = {
+    id: employeeProfileRes.data?.id,
+    employeeNumber: employeeProfileRes.data?.employee_number || "GSP-EMP-2026",
+    fullName: employeeProfileRes.data?.full_name || userName,
+    email: userEmail,
+    jobTitle: employeeProfileRes.data?.job_title || "Staf Teknis",
+    department: employeeProfileRes.data?.department || "Operasional",
+    employmentStatus: employeeProfileRes.data?.employment_status || "permanent",
+    startedOn: employeeProfileRes.data?.started_on || "2026-01-01",
+    branchName: branches[0]?.name || "Kantor Pusat Jakarta",
+    roleLabel: roleLabel || "Staf Operasional",
+  }
+
+  const canManageHR = !isReadOnly && (actorRole === "owner" || ["hr", "director"].includes(role))
   const canManagePayroll = !isReadOnly && (actorRole === "owner" || ["hr", "finance"].includes(role))
   const canApprovePayroll = !isReadOnly && (actorRole === "owner" || ["director", "finance"].includes(role))
 
   return (
     <SdmTabShell
+      profile={profileData}
       todayAttendance={todayAttRes.data ?? null}
-      attendanceRecords={attendanceRes.data ?? []}
-      payslips={payslips}
-      employees={employees}
-      payrollRuns={runs}
+      yesterdayAttendance={yesterdayAttRes.data ?? null}
+      personalPayslips={payslips}
+      myProjects={myProjects}
+      myTasks={myTasks}
       leaveQuota={leaveBalancesRes.data?.annual_quota ?? 12}
       leaveUsed={leaveBalancesRes.data?.used_days ?? 0}
-      leaveRequests={leaveRequestsRes.data ?? []}
+      myLeaveRequests={(leaveRequestsRes.data ?? []) as any}
       userName={userName}
+      canManageHR={canManageHR}
       canManagePayroll={canManagePayroll}
       canApprovePayroll={canApprovePayroll}
+      allEmployees={employees}
+      allPayrollRuns={runs}
       currentUserId={currentUserId}
       isOwner={actorRole === "owner"}
     />
