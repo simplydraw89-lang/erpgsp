@@ -59,7 +59,40 @@ export async function saveProjectPlanningAction(prevState: { error?: string } | 
   })
 
   if (error) {
-    return { error: error.message || "Gagal menyimpan perencanaan proyek." }
+    if (error.message.includes("project_milestones")) {
+      // Fallback: simpan langsung ke crm_projects jika tabel project_milestones belum dibuat di database Supabase
+      const updateData: Record<string, unknown> = {
+        work_details,
+        manpower,
+        timesheet_schedule,
+        rab_breakdown,
+        rab_total,
+        payment_terms,
+        client_gdrive_url: client_gdrive_url || null,
+        starts_on,
+        ends_on,
+        approval_status: submit ? "director_review" : "draft",
+        version: version + 1,
+        updated_at: new Date().toISOString(),
+      }
+      if (custom_milestones.length > 0) {
+        updateData.custom_milestones = custom_milestones
+      }
+      if (submit) {
+        updateData.submitted_at = new Date().toISOString()
+      }
+
+      const { error: directErr } = await supabase
+        .from("crm_projects")
+        .update(updateData)
+        .eq("id", id)
+
+      if (directErr) {
+        return { error: directErr.message }
+      }
+    } else {
+      return { error: error.message || "Gagal menyimpan perencanaan proyek." }
+    }
   }
 
   await supabase.from("crm_projects").update({
