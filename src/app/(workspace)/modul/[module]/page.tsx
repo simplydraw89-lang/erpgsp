@@ -224,6 +224,52 @@ export default async function ModulePage({
       </div>
     )
   }
+  if (key === "sdm") {
+    const { data: employeesData } = await supabase
+      .from("hr_employees")
+      .select("id,employee_number,full_name,job_title,employment_status")
+      .eq("organization_id", organizationId)
+      .limit(100)
+
+    return (
+      <div className="space-y-6">
+        {query.error && (
+          <Card role="alert" className="border-red-300 bg-red-50 p-4 text-sm text-red-900">
+            {query.error}
+          </Card>
+        )}
+        {query.notice && (
+          <Card role="status" className="border-green-300 bg-green-50 p-4 text-sm text-green-900">
+            {query.notice}
+          </Card>
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <Icon className="text-brand" size={26} />
+              <h1 className="text-2xl font-bold text-ink">Portal SDM & Layanan Mandiri Karyawan</h1>
+            </div>
+            <p className="mt-1 text-xs text-muted">
+              Layanan mandiri karyawan (ESS): Presensi selfie & geofencing kantor/site, rekap slip gaji 1 tahun, cuti, reimbursement, dan berkas kepegawaian.
+            </p>
+          </div>
+        </div>
+
+        <SdmLoader
+          supabase={supabase}
+          organizationId={organizationId}
+          employees={(employeesData ?? []) as unknown as EmployeeOption[]}
+          role={role}
+          actorRole={workspace.actorRole}
+          currentUserId={workspace.user.id}
+          userName={getDisplayName(workspace.user)}
+          userEmail={workspace.user.email ?? ""}
+          roleLabel={workspace.roleLabel}
+          isReadOnly={workspace.isReadOnlyPreview}
+        />
+      </div>
+    )
+  }
   const types = (Object.keys(recordSpecs) as RecordType[]).filter(
     (type) => recordSpecs[type].module === key,
   )
@@ -817,20 +863,6 @@ export default async function ModulePage({
                 ["accounting_tax", "finance"].includes(j.job_role),
               ))
           }
-        />
-      )}
-      {key === "sdm" && (
-        <SdmLoader
-          supabase={supabase}
-          organizationId={organizationId}
-          employees={(recordsResult.data ?? []) as unknown as EmployeeOption[]}
-          role={role}
-          actorRole={workspace.actorRole}
-          currentUserId={workspace.user.id}
-          userName={getDisplayName(workspace.user)}
-          userEmail={workspace.user.email ?? ""}
-          roleLabel={workspace.roleLabel}
-          isReadOnly={workspace.isReadOnlyPreview}
         />
       )}
       {key === "asset" && (
