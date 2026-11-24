@@ -229,6 +229,7 @@ async function extractWithGeminiProject(
   // Daftar model yang aktif & didukung saat ini (termasuk gemini-3.1-flash-lite & gemini-flash-latest)
   const candidateModels = [
     process.env.GEMINI_MODEL?.trim(),
+    "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
     "gemini-3.1-flash-lite-preview",
     "gemini-3-flash-preview",
