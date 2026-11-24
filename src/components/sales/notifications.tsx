@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Bell, X } from "lucide-react"
+import { Bell, CheckCheck, CheckCircle2, X } from "lucide-react"
 import { NavigationLink as Link } from "@/components/ui/navigation-link"
 import type { SalesNotifications } from "@/lib/sales"
 import { sphStatusLabels, spkStatusLabels, projectStatusLabels } from "@/lib/sales"
@@ -10,8 +10,46 @@ export function SalesNotificationBell({ disabled = false }: { disabled?: boolean
   const [data, setData] = useState<SalesNotifications | null>(null)
   const [error, setError] = useState("")
   const [open, setOpen] = useState(false)
+  const [readIds, setReadIds] = useState<Set<string>>(new Set())
   const root = useRef<HTMLDivElement>(null)
   const controller = useRef<AbortController | null>(null)
+
+  // Load read notification IDs from local storage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("gsp_read_notifications")
+      if (stored) {
+        setReadIds(new Set(JSON.parse(stored)))
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const markAllAsRead = () => {
+    if (!data?.items) return
+    const allIds = new Set([...readIds, ...data.items.map((i) => i.id)])
+    setReadIds(allIds)
+    try {
+      localStorage.setItem("gsp_read_notifications", JSON.stringify([...allIds]))
+    } catch {
+      // ignore
+    }
+  }
+
+  const markItemAsRead = (id: string) => {
+    const updated = new Set(readIds).add(id)
+    setReadIds(updated)
+    try {
+      localStorage.setItem("gsp_read_notifications", JSON.stringify([...updated]))
+    } catch {
+      // ignore
+    }
+  }
+
+  const unreadCount = data?.items
+    ? data.items.filter((i) => !readIds.has(i.id)).length
+    : (data?.total ?? 0)
 
   const refresh = useCallback(async () => {
     if (disabled) return
@@ -79,7 +117,7 @@ export function SalesNotificationBell({ disabled = false }: { disabled?: boolean
       <button
         type="button"
         disabled={disabled}
-        aria-label={`Notifikasi${data?.total ? `, ${data.total} perlu tindakan` : ""}`}
+        aria-label={`Notifikasi${unreadCount ? `, ${unreadCount} baru` : ""}`}
         aria-expanded={open}
         onClick={() => {
           setOpen((value) => !value)
@@ -88,15 +126,15 @@ export function SalesNotificationBell({ disabled = false }: { disabled?: boolean
         className="relative flex size-10 items-center justify-center rounded-lg border border-line bg-white text-muted transition hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
       >
         <Bell size={18} />
-        {Boolean(data?.total) && (
+        {Boolean(unreadCount) && (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white shadow-sm">
-            {data!.total > 99 ? "99+" : data!.total}
+            {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
         {error && <span className="absolute right-0.5 top-0.5 size-2 rounded-full bg-amber-500" />}
       </button>
 
-      {/* Backdrop di mobile (portrait & landscape) agar fokus dan mudah ditutup */}
+      {/* Backdrop di mobile agar fokus dan mudah ditutup */}
       {open && (
         <div
           className="fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-[2px] sm:hidden"
@@ -111,7 +149,7 @@ export function SalesNotificationBell({ disabled = false }: { disabled?: boolean
           className="
             fixed inset-x-3 top-[68px] z-50 mx-auto flex max-w-[420px] flex-col
             max-h-[calc(100dvh-80px)] rounded-2xl border border-line bg-white shadow-2xl
-            sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[380px]
+            sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[400px]
             sm:max-h-[min(75vh,calc(100dvh-80px))] sm:rounded-xl sm:shadow-xl
           "
         >
@@ -120,20 +158,33 @@ export function SalesNotificationBell({ disabled = false }: { disabled?: boolean
             <div className="flex items-center gap-2">
               <Bell size={16} className="text-brand" />
               <h2 className="font-semibold text-sm text-ink">Notifikasi Dokumen</h2>
-              {Boolean(data?.total) && (
-                <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-bold text-brand">
-                  {data!.total}
+              {Boolean(unreadCount) && (
+                <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700 dark:bg-red-950 dark:text-red-300">
+                  {unreadCount} baru
                 </span>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-lg p-1 text-muted hover:bg-slate-200/60 hover:text-ink sm:hidden"
-              aria-label="Tutup notifikasi"
-            >
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-1.5">
+              {Boolean(unreadCount) && (
+                <button
+                  type="button"
+                  onClick={markAllAsRead}
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-brand hover:bg-brand/10 transition"
+                  title="Tandai semua notifikasi sudah dibaca"
+                >
+                  <CheckCheck size={13} />
+                  <span>Tandai Dibaca</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-lg p-1 text-muted hover:bg-slate-200/60 hover:text-ink sm:hidden"
+                aria-label="Tutup notifikasi"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
           {/* Isi Notifikasi (scrollable, responsive) */}
@@ -164,6 +215,9 @@ export function SalesNotificationBell({ disabled = false }: { disabled?: boolean
                     ? `SPK`
                     : `SPH No. ${item.sph_number ?? ""}`
 
+                  const isApproved = item.status === "active" || item.label.includes("di-ACC")
+                  const isRead = readIds.has(item.id)
+
                   const statusText = isProject
                     ? (projectStatusLabels[item.status] ?? item.status)
                     : isSpk
@@ -171,23 +225,48 @@ export function SalesNotificationBell({ disabled = false }: { disabled?: boolean
                     : (sphStatusLabels[item.status] ?? item.status)
 
                   return (
-                    <li key={item.id} className="py-3 first:pt-0 last:pb-0">
+                    <li
+                      key={item.id}
+                      className={`py-3 first:pt-0 last:pb-0 transition ${
+                        isRead ? "opacity-60" : "opacity-100"
+                      }`}
+                    >
                       <Link
                         href={href}
-                        onClick={() => setOpen(false)}
+                        onClick={() => {
+                          markItemAsRead(item.id)
+                          setOpen(false)
+                        }}
                         className="group block"
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <span className="text-xs font-bold text-brand group-hover:underline break-words">
-                            {item.label}
+                          <span className="text-xs font-bold text-ink group-hover:text-brand break-words flex items-center gap-1.5">
+                            {isApproved && (
+                              <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                            )}
+                            <span>{item.label}</span>
                           </span>
-                          <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-700">
-                            {docLabel}
-                          </span>
+                          {isApproved ? (
+                            <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                              Disetujui
+                            </span>
+                          ) : (
+                            <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-700">
+                              {docLabel}
+                            </span>
+                          )}
                         </div>
+
                         <p className="mt-1 text-xs text-muted break-words">
                           {statusText}
                         </p>
+
+                        {isApproved && (
+                          <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
+                            ✓ Rencana kerja & RAB telah disetujui Dirut. Tim cabang dapat mengeksekusi proyek.
+                          </p>
+                        )}
+
                         {item.review_note && (
                           <p className="mt-2 whitespace-pre-wrap rounded-lg bg-canvas p-2 text-xs text-ink border border-line break-words">
                             {item.review_note}
