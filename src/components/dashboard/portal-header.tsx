@@ -182,7 +182,7 @@ export function PortalHeader({
             </Link>
             {apps.map((app) => (
               <Link
-                key={app.href}
+                key={`${app.name}-${app.href}`}
                 href={app.href}
                 target={app.href === "/pengaturan" ? undefined : "_blank"}
                 rel={app.href === "/pengaturan" ? undefined : "noopener noreferrer"}
@@ -280,7 +280,7 @@ export function PortalHeader({
           {results.length ? (
             results.map((app) => (
               <Link
-                key={app.href}
+                key={`${app.name}-${app.href}`}
                 href={app.href}
                 target={app.href === "/pengaturan" ? undefined : "_blank"}
                 rel={app.href === "/pengaturan" ? undefined : "noopener noreferrer"}

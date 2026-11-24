@@ -211,7 +211,7 @@ export function ModuleDock({ role, navigationRoles = [role] }: { role: Organizat
         <div className="max-h-[55vh] overflow-y-auto p-2">
           {results.length ? results.map((app) => (
             <Link
-              key={app.href}
+              key={`${app.name}-${app.href}`}
               href={app.href}
               onNavigate={() => searchDialogRef.current?.close()}
               className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-slate-50"

@@ -63,6 +63,7 @@ interface SdmTabShellProps {
   disciplinaryRecords: DisciplinaryActionItem[]
   currentUserId: string
   isOwner: boolean
+  initialTab?: string
 }
 
 export function SdmTabShell({
@@ -90,7 +91,27 @@ export function SdmTabShell({
   disciplinaryRecords,
   currentUserId,
   isOwner,
+  initialTab,
 }: SdmTabShellProps) {
+  const validTabs = [
+    "attendance",
+    "profile",
+    "payslip",
+    "work",
+    "leave",
+    "reimbursement",
+    "sppd",
+    "timesheet",
+    "vault",
+    "hr_leave_approval",
+    "hr_monitoring",
+    "hr_contracts",
+    "hr_discipline",
+    "hr_payroll",
+    "hr_employees",
+    "hr_kpi",
+  ]
+  const resolvedTab = initialTab && validTabs.includes(initialTab) ? (initialTab as any) : "attendance"
   const [activeTab, setActiveTab] = useState<
     | "attendance"
     | "profile"
@@ -108,7 +129,7 @@ export function SdmTabShell({
     | "hr_payroll"
     | "hr_employees"
     | "hr_kpi"
-  >("attendance")
+  >(resolvedTab)
 
   return (
     <div className="space-y-6">

@@ -62,14 +62,14 @@ export const applicationGroups = [
       },
       {
         name: "Perjalanan dinas",
-        href: "/modul/sdm",
+        href: "/modul/sdm?tab=sppd",
         icon: Plane,
         roles: everyone,
         description: "Surat tugas SPPD penugasan luar kota, per diem, dan kasbon dinas",
       },
       {
         name: "Cuti & Izin",
-        href: "/modul/sdm",
+        href: "/modul/sdm?tab=leave",
         icon: CalendarDays,
         roles: everyone,
         description: "Pengajuan cuti tahunan, izin sakit, dan pantau kuota saldo 1 tahun",
@@ -174,14 +174,14 @@ export const applicationGroups = [
       },
       {
         name: "Absen Sekarang",
-        href: "/modul/sdm",
+        href: "/modul/sdm?tab=attendance",
         icon: Clock,
         roles: everyone,
         description: "Presensi live kamera selfie & GPS kantor (100m) atau site se-Indonesia",
       },
       {
         name: "Slip Gaji Saya",
-        href: "/modul/sdm",
+        href: "/modul/sdm?tab=payslip",
         icon: CreditCard,
         roles: everyone,
         description: "Rekap penerimaan gaji bulanan personal 1 tahun dan cetak format resmi",

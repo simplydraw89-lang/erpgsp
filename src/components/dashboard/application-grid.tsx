@@ -34,7 +34,7 @@ export function ApplicationGrid({
               {group.apps.map((app) =>
                 app.href === "/pengajuan/penjualan" ? (
                   <SalesMenu
-                    key={app.href}
+                    key={`${app.name}-${app.href}`}
                     openInNewTab
                     triggerClassName="portal-application group"
                     triggerLabel="Penjualan"
@@ -48,7 +48,7 @@ export function ApplicationGrid({
                   </SalesMenu>
                 ) : app.href === "/pengaturan" ? (
                   <button
-                    key={app.href}
+                    key={`${app.name}-${app.href}`}
                     type="button"
                     onClick={() => setIsSettingsModalOpen(true)}
                     title={`${app.description} · Buka Pengaturan`}
@@ -63,7 +63,7 @@ export function ApplicationGrid({
                   </button>
                 ) : (
                   <a
-                    key={app.href}
+                    key={`${app.name}-${app.href}`}
                     href={app.href}
                     target="_blank"
                     rel="noopener noreferrer"

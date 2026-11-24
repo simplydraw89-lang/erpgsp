@@ -74,6 +74,7 @@ export default async function ModulePage({
   searchParams: Promise<{
     type?: string
     edit?: string
+    tab?: string
     q?: string
     field?: string
     dateField?: string
@@ -266,6 +267,7 @@ export default async function ModulePage({
           userEmail={workspace.user.email ?? ""}
           roleLabel={workspace.roleLabel}
           isReadOnly={workspace.isReadOnlyPreview}
+          tab={query.tab}
         />
       </div>
     )
@@ -951,6 +953,7 @@ async function SdmLoader({
   userEmail,
   roleLabel,
   isReadOnly,
+  tab,
 }: {
   supabase: Awaited<ReturnType<typeof requireWorkspace>>["supabase"]
   organizationId: string
@@ -962,6 +965,7 @@ async function SdmLoader({
   userEmail: string
   roleLabel?: string | null
   isReadOnly: boolean
+  tab?: string
 }) {
   const today = new Date().toISOString().slice(0, 10)
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
@@ -1239,6 +1243,7 @@ async function SdmLoader({
       disciplinaryRecords={disciplinaryRecords}
       currentUserId={currentUserId}
       isOwner={actorRole === "owner"}
+      initialTab={tab}
     />
   )
 }
