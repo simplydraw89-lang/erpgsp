@@ -327,3 +327,217 @@ Lampiran tetap pada `procurement_attachments` dan bucket privat yang sama. POST 
 5. `supabase/migrations/20261104092327_hierarchical_coa_and_posting_guards.sql`: COA berjenjang, template, RPC pengelolaan, audit dan guard akun jurnal/pembayaran.
 
 Jangan menjalankan ulang migration lama pada project berisi data. Cocokkan ledger dan schema aktif terlebih dahulu. Diagram harus diperbarui ketika perubahan migration mengubah relasi, cakupan atau status bisnis.
+
+## Model Data SDM (ESS & Manajemen), Keamanan, dan Perencanaan Proyek
+
+Bagian ini memetakan entitas basis data untuk modul Kepegawaian (SDM), presensi geofencing, audit keamanan autentikasi, serta struktur perencanaan proyek terpadu.
+
+`mermaid
+erDiagram
+  ORGANIZATIONS ||--o{ EMPLOYEE_PROFILES : memiliki
+  AUTH_USERS ||--o| EMPLOYEE_PROFILES : akun
+  BUSINESS_UNITS ||--o{ EMPLOYEE_PROFILES : cabang_penugasan
+  
+  EMPLOYEE_PROFILES ||--o{ EMPLOYEE_ATTENDANCE : presensi_harian
+  EMPLOYEE_PROFILES ||--o{ EMPLOYEE_LEAVES : pengajuan_cuti
+  EMPLOYEE_PROFILES ||--o{ EMPLOYEE_REIMBURSEMENTS : klaim_biaya
+  EMPLOYEE_PROFILES ||--o{ EMPLOYEE_SPPD : perjalanan_dinas
+  EMPLOYEE_PROFILES ||--o{ EMPLOYEE_TIMESHEETS : pencatatan_jam
+  EMPLOYEE_PROFILES ||--o{ EMPLOYEE_DOCUMENTS : arsip_berkas
+  EMPLOYEE_PROFILES ||--o{ EMPLOYEE_CONTRACTS : riwayat_pkwt
+  EMPLOYEE_PROFILES ||--o{ EMPLOYEE_DISCIPLINE_RECORDS : surat_peringatan
+  EMPLOYEE_PROFILES ||--o{ PAYROLL_RECORDS : slip_gaji
+
+  CRM_PROJECTS ||--o{ EMPLOYEE_TIMESHEETS : alokasi_proyek
+  CRM_PROJECTS ||--o{ EMPLOYEE_REIMBURSEMENTS : pembebanan_biaya
+  
+  EMPLOYEE_PROFILES {
+    uuid user_id PK,FK
+    uuid organization_id FK
+    uuid branch_id FK
+    text full_name
+    text nik
+    text npwp
+    text bpjs_tk
+    text bpjs_kes
+    text bank_name
+    text bank_account
+    text emergency_contact
+    text position
+    text department
+    text employment_status  permanent contract probation intern
+    timestamptz created_at
+  }
+
+  EMPLOYEE_ATTENDANCE {
+    uuid id PK
+    uuid user_id FK
+    uuid organization_id FK
+    uuid branch_id FK
+    date attendance_date
+    timestamptz check_in_time
+    text check_in_photo_url
+    numeric check_in_lat
+    numeric check_in_lng
+    timestamptz check_out_time
+    text check_out_photo_url
+    numeric check_out_lat
+    numeric check_out_lng
+    boolean is_within_geofence
+    text location_type branch site
+    text site_name
+    text notes
+  }
+
+  EMPLOYEE_LEAVES {
+    uuid id PK
+    uuid user_id FK
+    uuid organization_id FK
+    text leave_type annual sick maternity unpaid special
+    date start_date
+    date end_date
+    integer total_days
+    text reason
+    text attachment_url
+    text status submitted branch_reviewed hr_approved director_approved rejected
+    text rejection_reason
+    uuid approved_by FK
+  }
+
+  EMPLOYEE_REIMBURSEMENTS {
+    uuid id PK
+    uuid user_id FK
+    uuid organization_id FK
+    uuid branch_id FK
+    uuid project_id FK nullable
+    text category fuel toll parking meals medical project_supplies other
+    date claim_date
+    numeric amount
+    text description
+    text receipt_url
+    text status submitted reviewed approved paid rejected
+    uuid approved_by FK
+    timestamptz paid_at
+  }
+
+  EMPLOYEE_SPPD {
+    uuid id PK
+    uuid user_id FK
+    uuid organization_id FK
+    uuid branch_id FK
+    text destination_city
+    date departure_date
+    date return_date
+    text purpose
+    numeric daily_allowance
+    numeric transport_budget
+    numeric lodging_budget
+    numeric total_budget
+    text status draft submitted approved completed
+    uuid approved_by FK
+  }
+
+  EMPLOYEE_TIMESHEETS {
+    uuid id PK
+    uuid user_id FK
+    uuid organization_id FK
+    uuid project_id FK
+    date log_date
+    numeric hours_spent
+    text task_description
+    text deliverables_achieved
+    text approval_status draft submitted approved
+  }
+
+  EMPLOYEE_DOCUMENTS {
+    uuid id PK
+    uuid user_id FK
+    uuid organization_id FK
+    text doc_type ktp npwp ijazah cv ska_skt certificate k3 other
+    text doc_number
+    text title
+    date expiry_date
+    text file_url
+  }
+
+  EMPLOYEE_CONTRACTS {
+    uuid id PK
+    uuid user_id FK
+    uuid organization_id FK
+    text contract_type pkwt pkwtt probation consultant
+    date start_date
+    date end_date
+    text job_title
+    numeric salary_baseline
+    boolean alert_h30_sent
+    boolean alert_h14_sent
+    text status active nearing_expiry renewed terminated
+  }
+
+  EMPLOYEE_DISCIPLINE_RECORDS {
+    uuid id PK
+    uuid user_id FK
+    uuid organization_id FK
+    text warning_level teguran_lisan sp1 sp2 sp3 sk_pemutusan
+    date issued_date
+    date valid_until
+    text infraction_details
+    text minutes_document_url
+    text issued_by_role hr director
+    text status active resolved archived
+  }
+
+  PAYROLL_RECORDS {
+    uuid id PK
+    uuid user_id FK
+    uuid organization_id FK
+    integer period_month
+    integer period_year
+    numeric basic_salary
+    jsonb allowances_breakdown
+    numeric overtime_pay
+    numeric gross_salary
+    numeric tax_pph21
+    jsonb deductions_breakdown
+    numeric net_salary
+    text payment_status draft approved paid
+    timestamptz paid_at
+  }
+
+  LOGIN_ATTEMPTS {
+    uuid id PK
+    text email
+    text status success failed
+    text method password google_oauth demo_button
+    text failure_reason
+    text ip_address
+    text user_agent
+    timestamptz attempted_at
+  }
+
+  CRM_PROJECTS {
+    uuid id PK
+    uuid organization_id FK
+    uuid branch_id FK
+    uuid contract_spk_id FK
+    text project_number
+    text project_name
+    numeric contract_amount
+    numeric rab_total
+    text approval_status draft director_review active revision_requested rejected
+    jsonb work_details Rincian lingkup teknis pengerjaan
+    jsonb deliverables Tahapan serah terima dan kriteria penerimaan
+    jsonb manpower Alokasi personil tim ahli sertifikasi SKA dan durasi
+    jsonb timesheet_schedule Jadwal tahapan kerja proyek mingguan/bulanan
+    jsonb rab_breakdown Pos anggaran RAB volume satuan dan harga satuan
+    jsonb payment_terms Rencana tahapan termin penagihan klien
+    jsonb custom_milestones Target capaian khusus proyek
+  }
+`
+
+### Arsitektur Penyimpanan Perencanaan Proyek (Resilient Dual-Mode)
+
+Untuk menjamin ketersediaan sistem dan mencegah gangguan operasional saat migrasi tabel relasional belum dijalankan:
+1. **Penyimpanan Terpadu di crm_projects:** Form Perencanaan Proyek menyimpan seluruh struktur data multi-tab (SDM/Manpower, Rincian Teknis & Deliverables, Alur Proses, Jadwal & Timesheet, Pagu Anggaran RAB, dan Termin Pembayaran) langsung ke dalam kolom-kolom jsonb pada baris proyek terkait di tabel crm_projects.
+2. **Graceful Fallback:** Apabila RPC eksekusi atau tabel relasional project_milestones belum dimigrasikan pada instance Supabase aktif, Server Actions (proyek/actions.ts) secara otomatis mengalihkan penyimpanan ke kolom JSONB crm_projects tanpa menampilkan layar galat ke pengguna.
+

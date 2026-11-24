@@ -184,3 +184,62 @@ Pencatatan pembayaran membutuhkan tanggal aktual, referensi bukti, akun kas/bank
 | AC-08 | Perubahan kebutuhan memperbarui PRD/ERD/rules yang sama; dokumen baru hanya jika jenisnya belum ada. |
 
 Kode dan tes lokal untuk fondasi tersedia. Migration pengajuan dan storage sudah diterapkan melalui CLI ke project `cjxsdoxlrnpyhigkudha`; RLS, RPC, bucket privat dan ledger sudah diverifikasi. Karena pembukuan sebelumnya kosong, Super Admin mendapat konfigurasi awal yang dapat ditinjau sebelum invoice pertama. Pembuktian transaksi bisnis nyata tetap memerlukan bukti yang diberikan pengguna; jangan menandai lifecycle produksi selesai hanya berdasarkan build/PGlite. Lihat status implementasi untuk bukti terbaru.
+
+## SDM — Kepegawaian & Employee Self-Service (ESS)
+
+Sistem SDM dirancang dengan arsitektur dua lapis: **Employee Self-Service (ESS)** yang dapat diakses oleh seluruh tingkatan pengguna (Staf, PKWT, Tim Lapangan, Pegawai Tetap, Konsultan), serta **Management Suite** yang dilindungi hak akses ketat (Super Admin, Direktur, Manager HR/SDM, dan Keuangan).
+
+### 1. Employee Self-Service (ESS) — Akses Seluruh Pegawai (/modul/sdm)
+- **SDM-ESS-01 (Data Diri & Profil Pegawai):** Pegawai dapat meninjau dan memperbarui informasi identitas pribadi (NIK, NPWP, BPJS Ketenagakerjaan & Kesehatan, rekening bank penggajian, nomor kontak darurat keluarga).
+- **SDM-ESS-02 (Presensi Live Selfie & Geofencing Pintar):**
+  - **Kamera Selfie:** Validasi foto wajah langsung melalui webcam/kamera smartphone saat Check-in (Masuk) dan Check-out (Pulang).
+  - **Geofencing Dual-Mode:**
+    - *Mode Kantor Cabang:* Memverifikasi koordinat GPS pengguna berada dalam radius maksimal 100 meter dari titik koordinat kantor cabang yang ditugaskan (Surabaya, Jogjakarta, Jakarta).
+    - *Mode Site / Lapangan:* Fleksibilitas bebas lokasi presensi bagi tim survei/teknis di seluruh Indonesia dengan mencantumkan nama site/proyek aktif.
+- **SDM-ESS-03 (Slip Gaji Digital 1 Tahun Penuh):** Pegawai dapat melihat, memeriksa rincian, dan mengunduh slip gaji bulanan mereka secara mandiri selama 12 bulan terakhir (Gaji Pokok, Tunjangan Jabatan/Makan/Transport, Uang Lembur, potongan PPh 21, potongan BPJS TK & Kesehatan, serta Net Take Home Pay).
+- **SDM-ESS-04 (Pengajuan Cuti & Izin Sakit):** Formulir pengajuan cuti tahunan, cuti melahirkan, izin dinas, atau izin sakit dengan kewajiban melampirkan berkas bukti (surat keterangan dokter/dokumen pendukung) dan pemantauan sisa kuota cuti.
+- **SDM-ESS-05 (Klaim Reimbursement Operasional):** Pegawai lapangan/kantor dapat mengajukan klaim penggantian dana (BBM, tiket tol, parkir, konsumsi lembur/proyek, perlengkapan lapangan, pengobatan darurat) dengan melampirkan foto nota/struk asli.
+- **SDM-ESS-06 (Surat Perintah Perjalanan Dinas / SPPD):** Pengajuan perjalanan dinas luar kota/site mencakup kota tujuan, tanggal keberangkatan/kepulangan, keperluan dinas, dan pengajuan pagu uang harian, akomodasi, serta transportasi.
+- **SDM-ESS-07 (Timesheet Jam Kerja Harian):** Pencatatan jam kerja riil harian pegawai, rincian aktivitas pekerjaan, serta penautan otomatis ke proyek aktif untuk perhitungan cost per man-hour.
+- **SDM-ESS-08 (Vault Dokumen & SKA/SKT):** Tempat penyimpanan berkas resmi kepegawaian (KTP, NPWP, Ijazah, CV, Sertifikat Keahlian Kerja SKA/SKT LPJK, sertifikasi K3, dsb.) dengan pemantauan masa kedaluwarsa dokumen sertifikasi.
+
+### 2. Protected Management Suite — Akses Terbatas (Direksi & HR)
+- **SDM-MGT-01 (Persetujuan Cuti Tim):** Antrean verifikasi cuti tim cabang secara bertingkat: verifikasi awal oleh Manager Cabang, validasi kuota oleh HR Pusat, dan persetujuan akhir oleh Direksi.
+- **SDM-MGT-02 (Live Monitoring Presensi & Peta GPS):** Tampilan dasbor pemantauan kehadiran harian realtime seluruh cabang, dilengkapi peta titik koordinat GPS pegawai saat absen dan verifikasi visual foto selfie.
+- **SDM-MGT-03 (Manajemen & Early Warning Kontrak PKWT):** Pengawasan masa kerja pegawai kontrak (PKWT) dengan radar peringatan otomatis H-30 dan H-14 hari sebelum kontrak berakhir agar manajemen dapat memutuskan perpanjangan atau penyelesaian kontrak tepat waktu.
+- **SDM-MGT-04 (Disiplin & Surat Peringatan / SP):** Ruang pencatatan dan penerbitan Surat Peringatan (SP 1, SP 2, SP 3) bersifat rahasia (*strictly confidential*) yang hanya dapat diakses oleh Direktur dan HR, lengkap dengan alasan pelanggaran, dokumen berita acara, dan sanksi.
+- **SDM-MGT-05 (Payroll & Rekap Penggajian Perusahaan):** Penyusunan dan rekapitulasi daftar penggajian bulanan lintas cabang, penghitungan komponen gaji bruto, iuran BPJS ketenagakerjaan/kesehatan, PPh 21 terutang, serta pengesahan pembayaran gaji bersama bagian Keuangan.
+- **SDM-MGT-06 (Direktori Seluruh Karyawan & KPI Kinerja):** Master database seluruh personil perusahaan (organigram, status kepegawaian, riwayat penugasan proyek) serta modul evaluasi pencapaian Key Performance Indicator (KPI).
+
+---
+
+## AI — Smart OCR & Dokumen Cerdas
+
+- **AI-01 (Engine OCR Hybrid):**
+  - **Tingkat 1 (AI Vision):** Menggunakan Google Gemini Vision API dengan model terdepan berbiaya rendah dan berkecepatan tinggi: gemini-3.5-flash-lite (prioritas utama), dengan fallback ke gemini-2.5-flash dan gemini-flash-latest. Mendukung autentikasi Google AI Studio (AIza...) maupun Google Vertex AI Express (AQ...).
+  - **Tingkat 2 (Coordinate-Aware PDF Text Parser):** Rekonstruksi lapisan teks digital PDF berdasarkan koordinat bounding-box spasial secara lokal di server.
+  - **Tingkat 3 (Local Windows OCR):** Engine OCR lokal berbasis Windows Media Ocr API untuk berkas gambar di server lokal Windows saat koneksi eksternal tidak aktif.
+- **AI-02 (Ekstraksi Otomatis Dokumen Pembelian):** Ekstraksi cerdas dokumen invoice vendor dan faktur pajak DJP: nomor tagihan, tanggal terbit, tanggal jatuh tempo, identitas resmi vendor, NPWP, rekening tujuan transfer, pemisahan tegas antara pihak penerbit dan pihak ditagih, perlakuan PPN (Include/Exclude/None), serta rincian item transaksi.
+- **AI-03 (Ekstraksi Dokumen Proyek):** Pembacaan berkas notula rapat (MoM), jadwal kerja, draft penawaran, dan rincian RAB ke dalam struktur perencanaan proyek.
+- **AI-04 (Proteksi Prompt Injection & AI Safety):**
+  - Prompt sistem dikunci menggunakan instruksi deterministik terisolasi dengan parameter esponseMimeType:  application/json dan 	emperature: 0.1.
+  - Berkas pengguna diperlakukan murni sebagai citra data (*passive multimodal input*), bukan instruksi sistem yang dieksekusi.
+  - Seluruh keluaran JSON melalui tahapan validasi skema tipe, pembersihan teks jahat, dan normalisasi format (tanggal ISO, nilai numerik kanonis).
+  - Hasil AI tidak pernah langsung menulis atau mengeksekusi SQL ke basis data; melainkan disajikan pada formulir antarmuka untuk ditinjau dan dikonfirmasi secara sadar oleh manusia (*human-in-the-loop*).
+
+---
+
+## SEC — Autentikasi Modern, Keamanan, & Audit
+
+- **SEC-01 (Google OAuth Single Sign-On):**
+  - Mendukung login satu klik menggunakan akun Google resmi pengguna via Supabase Auth Provider.
+  - Arsitektur callback multi-origin terpadu mendukung pengujian lokal (http://localhost:3000) dan domain produksi (https://uliquapp.ardiekumara.com).
+  - Penukaran kode sesi (exchangeCodeForSession) ditangani secara aman di sisi server Next.js App Router (/auth/callback).
+- **SEC-02 (Audit & Telemetri Percobaan Akses):**
+  - Setiap upaya autentikasi (berhasil maupun gagal) dicatat ke dalam audit telemetri mencakup alamat IP (dengan dukungan header reverse proxy Cloudflare/Nginx), User-Agent peramban, metode autentikasi, serta alasan kegagalan guna mendeteksi upaya brute-force sedini mungkin.
+- **SEC-03 (Pusat Notifikasi Dokumen & Pengajuan):**
+  - Indikator lonceng notifikasi interaktif yang menampilkan status persetujuan dokumen (contoh: persetujuan SPK oleh Direktur Utama atau SPH oleh Direktur Keuangan).
+  - Dilengkapi tanda visual status sukses (hijau) dan tombol aksi lokal Tandai Dibaca untuk menjaga kejelasan status kerja pengguna.
+- **SEC-04 (Resiliensi Skema & Graceful Fallback Proyek):**
+  - Penyimpanan perencanaan proyek multi-tab (SDM, Deliverables, Alur, Timesheet, RAB, Termin) memiliki mekanisme *fail-safe* otomatis yang menyimpan data ke kolom JSONB crm_projects apabila tabel relasional project_milestones belum selesai dimigrasikan pada basis data aktif.
+

@@ -127,3 +127,39 @@ Lihat [dasar pajak dan jurnal](pajak-dan-jurnal-pembelian.md) serta [status impl
    - Dokumen pengajuan (SPH, SPK, Pengajuan Pembelian / Invoice, Proyek / RAB) adalah objek transaksional yang **terikat pada cabang pengaju (branch_id)**.
    - Pengguna cabang hanya dapat melihat dan menindaklanjuti dokumen transaksi milik cabangnya sendiri dan hierarki reviewer-nya.
    - Super Admin dan Direksi memiliki akses pengawasan global lintas cabang.
+
+## Aturan Pengembangan SDM (ESS & Manajemen), Keamanan, dan Resiliensi Sistem
+
+### 1. Arsitektur Dua Lapis Modul SDM (Pemisahan Tegas ESS vs Manajemen)
+- **Akses ESS (Employee Self-Service) Terbuka untuk Seluruh Pegawai:**
+  - Halaman dan tab ESS (Data Diri, Absensi Selfie, Slip Gaji, Cuti, Reimbursement, SPPD, Timesheet, Vault Dokumen) wajib dapat diakses oleh seluruh pengguna aktif tanpa memandang peran (everyone / Staf, PKWT, Tim Lapangan, Konsultan).
+  - Akses data pada tab ESS wajib dibatasi secara otomatis pada data milik pengguna yang sedang aktif (user_id = auth.uid() dan organization_id). Dilarang keras menampilkan data slip gaji, berkas pribadi, atau riwayat izin pegawai lain pada tampilan ESS.
+- **Akses Tab Manajemen Terkunci Ketat (Role-Guarded):**
+  - Tab Manajemen (Approval Cuti, Live Monitoring Presensi, Kontrak PKWT, Disiplin/SP, Payroll Perusahaan, Direktori Seluruh Karyawan) **hanya boleh diakses oleh peran eksekutif dan fungsional:** owner, director (Direktur Utama, Keuangan, Teknis), hr, dan inance.
+  - Jika pengguna dengan peran non-manajemen (misal: Staf / Admin Cabang) mencoba membuka tab manajemen, sistem wajib menolak atau menyembunyikan tab tersebut secara anggun tanpa menyebabkan galat aplikasi.
+
+### 2. Standar Integritas Presensi Geofencing & Selfie
+- **Validasi Geofencing:** Jarak lokasi presensi dihitung menggunakan formula Haversine antara koordinat GPS perangkat pegawai dengan titik koordinat resmi kantor cabang penugasan (Surabaya, Jogjakarta, Jakarta). Toleransi radius maksimal adalah 100 meter.
+- **Mode Site / Lapangan:** Bagi pegawai yang ditugaskan di proyek site luar kantor di seluruh wilayah Indonesia, presensi dapat dilakukan di luar radius kantor cabang dengan kewajiban memilih mode  Site / Lapangan dan mencantumkan nama site/kegiatan aktif.
+- **Foto Selfie Wajib:** Presensi wajib menyertakan foto wajah langsung (*live selfie capture*); dilarang mengizinkan unggah berkas foto dari galeri/penyimpanan lokal untuk mencegah kecurangan kehadiran (*fake attendance*).
+
+### 3. Keamanan AI OCR & Proteksi Terhadap Prompt Injection
+- **Prinsip Input Pasif:** Dokumen yang diunggah pengguna (PDF/gambar) diperlakukan murni sebagai input data citra pasif (*multimodal image data*). Teks di dalam dokumen tidak boleh digabungkan langsung ke dalam instruksi sistem (*system instruction*) tanpa pembatas yang aman.
+- **Keluaran Terstruktur Ketat (JSON Schema Enforcement):**
+  - Panggilan API AI (Gemini Vision) wajib menetapkan parameter esponseMimeType: application/json dan 	emperature: 0.1.
+  - Struktur respon AI wajib diuraikan menggunakan parser deterministik berjenis skema tipe tetap.
+  - Nilai-nilai hasil ekstraksi wajib dinormalisasi (contoh: tanggal menjadi format ISO YYYY-MM-DD, nominal angka dibersihkan dari simbol mata uang menjadi desimal numerik murni).
+- **Human-in-the-Loop (Tanpa Eksekusi Basis Data Otomatis):**
+  - Hasil pembacaan AI OCR hanya difungsikan sebagai pengisi otomatis (*autofill / draft helper*) pada antarmuka formulir pengguna.
+  - Sistem dilarang mengeksekusi perintah SQL atau menyimpan transaksi secara otomatis ke basis data langsung dari hasil AI tanpa adanya peninjauan, penyesuaian, dan penekanan tombol simpan secara sadar oleh manusia.
+
+### 4. Larangan Backdoor, Akun Siluman, dan Eksekusi Kode Dinamis
+- **Nol Akun Siluman (Zero Backdoor Accounts):** Dilarang keras menanamkan akun cadangan tersembunyi, kredensial statis *hardcoded*, atau bypass login pada kode sumber aplikasi. Seluruh akses wajib melalui Supabase Auth resmi atau Google OAuth resmi.
+- **Nol Eksekusi Kode Dinamis (Zero Dynamic Code Execution):** Dilarang menggunakan fungsi berbahaya seperti eval(), 
+ew Function(), atau execSync yang mengeksekusi string dinamis sebagai kode di lingkungan server.
+- **Nol Telemetri Tak Berizin (Zero Unauthorized Egress):** Dilarang mengirimkan data pengguna, dokumen transaksi, atau metadata sistem ke server pihak ketiga di luar infrastruktur yang telah disetujui (Supabase, Google Cloud OAuth, dan Google Gemini API).
+
+### 5. Resiliensi Skema & Graceful Fallback Migrasi Basis Data
+- Ketika fitur baru membutuhkan tabel relasional tambahan (contoh: project_milestones atau tabel migrasi lainnya), kode Server Actions Next.js wajib memiliki mekanisme penanganan galat (*graceful fallback*) yang menyimpan data ke kolom cadangan (seperti kolom jsonb pada tabel induk crm_projects).
+- Hal ini memastikan bahwa operasional bisnis perusahaan di lapangan tidak terhenti hanya karena skema DDL di database produksi sedang dalam proses antrean eksekusi migrasi.
+

@@ -135,3 +135,140 @@ PGlite memiliki satu koneksi eksekusi; tes ini tidak menggantikan pengujian kont
 4. **Eksekusi Lapangan & Kontrol Pagu Anggaran:**
    - Proyek aktif dapat diakses melalui Portal Proyek (`/portal-proyek`) untuk komunikasi berkala dan Minutes of Meeting (MoM).
    - Pengajuan pembelian barang/jasa atau kasbon lapangan yang memilih proyek tersebut akan diverifikasi terhadap pagu pos RAB yang telah disetujui Direktur Utama untuk mencegah *cost overrun*.
+
+---
+
+## Alur Kerja SDM, Presensi, dan Pengelolaan Pegawai
+
+### 1. Alur Presensi Mandiri (Live Selfie & Geofencing)
+
+`mermaid
+sequenceDiagram
+  autonumber
+  actor Pegawai as Pegawai (Staf / PKWT / Lapangan)
+  participant UI as Portal SDM (Web/Mobile)
+  participant Geo as Geolocation API & Kamera
+  participant Server as Server Action (hr-actions)
+  participant DB as Supabase (employee_attendance)
+
+  Pegawai->>UI: Buka Tab Absensi & Presensi
+  UI->>Geo: Minta Izin Kamera & Koordinat GPS
+  Geo-->>UI: Foto Selfie + Lat/Lng Koordinat Riil
+  alt Mode Kantor Cabang
+    UI->>UI: Hitung Jarak ke Koordinat Kantor (Surabaya/Jogja/Jakarta)
+    Note over UI: Validasi Radius Maksimal 100 Meter
+  else Mode Site / Lapangan
+    UI->>UI: Mode Bebas Lokasi Se-Indonesia (Input Nama Site)
+  end
+  Pegawai->>UI: Klik Tombol Masuk (Check-In) / Pulang (Check-Out)
+  UI->>Server: Kirim Foto (Base64/Storage) + Koordinat + Mode
+  Server->>DB: Catat Baris Presensi (is_within_geofence, timestamps)
+  DB-->>UI: Konfirmasi Berhasil Absen
+  UI-->>Pegawai: Tampilan Status Terverifikasi (Jam Masuk/Pulang Tercatat)
+`
+
+### 2. Alur Pengajuan & Persetujuan Cuti / Izin Pegawai
+
+`mermaid
+sequenceDiagram
+  autonumber
+  actor Pegawai as Pegawai
+  participant UI as Form Pengajuan Cuti
+  actor Mgr as Manager Cabang
+  actor HR as HR / SDM Pusat
+  actor Dir as Direksi
+  participant DB as Supabase (employee_leaves)
+
+  Pegawai->>UI: Pilih Jenis Cuti/Izin, Rentang Tanggal, Alasan & Lampiran
+  UI->>DB: Simpan Pengajuan (status: submitted)
+  DB-->>Mgr: Notifikasi Pengajuan Masuk Cabang
+  Mgr->>DB: Verifikasi Operasional Cabang (status: branch_reviewed)
+  DB-->>HR: Validasi Sisa Hak Cuti & Kebijakan (status: hr_approved)
+  alt Cuti Khusus / Izin Panjang
+    HR->>Dir: Teruskan ke Direksi untuk Persetujuan Akhir
+    Dir->>DB: Persetujuan Akhir (status: director_approved)
+  end
+  DB-->>Pegawai: Notifikasi Cuti Disetujui & Kuota Cuti Terpotong
+`
+
+---
+
+## Alur Ekstraksi Dokumen Cerdas (Smart AI OCR)
+
+`mermaid
+sequenceDiagram
+  autonumber
+  actor User as Pengguna (Staff / Admin)
+  participant UI as Form Invoice / Proyek
+  participant API as Next.js API (/api/invoice-documents/route.ts)
+  participant AI as Google Gemini Vision (gemini-3.5-flash-lite)
+  participant Local as Coordinate PDF Parser / Windows Local OCR
+  participant DB as Supabase Private Storage & Tables
+
+  User->>UI: Unggah Berkas PDF / Gambar Tagihan (Maks 10 MB)
+  UI->>API: POST File + branch_id (Verifikasi Sesi & Izin RLS)
+  API->>DB: Simpan Berkas Asli di Bucket Privat (Enkripsi Storage)
+  alt GEMINI_API_KEY Aktif
+    API->>AI: Kirim Citra Base64 + Schema Deterministik JSON
+    AI-->>API: Data Terstruktur JSON (Nomor, Tanggal, Vendor, NPWP, Rekening, PPN, Baris Item)
+  else Fallback Offline / API Limit
+    API->>Local: Baca Lapisan Teks Koordinat PDF / Windows Media OCR
+    Local-->>API: Teks Rekonstruksi Baris Dokumen
+  end
+  API-->>UI: Kembalikan Data Hasil Ekstraksi
+  Note over UI,User: Human-in-the-Loop: Pengguna Memeriksa & Menyesuaikan Data
+  User->>UI: Konfirmasi & Klik Simpan Transaksi
+  UI->>DB: Simpan Transaksi Bersih ke Database
+`
+
+---
+
+## Alur Autentikasi Google OAuth Terpadu
+
+`mermaid
+sequenceDiagram
+  autonumber
+  actor User as Pengguna (Browser)
+  participant Next as ERP Next.js App
+  participant Supa as Supabase Auth Broker
+  participant Google as Google Identity Services (OAuth 2.0)
+  participant Audit as API Telemetri (api_record_login_attempt)
+
+  User->>Next: Buka Halaman Login (/login)
+  User->>Next: Klik Tombol  Google
+  Next->>Supa: Inisialisasi OAuth (redirectTo: /auth/callback)
+  Supa->>Google: Alihkan ke Dialog Akun Google & Persetujuan
+  Google-->>User: Tampilkan Pemilihan Akun
+  User->>Google: Pilih Akun Google
+  Google-->>Supa: Callback Otorisasi dengan Token Google
+  Supa-->>Next: Redirect ke /auth/callback?code=...
+  Next->>Supa: Server Route: exchangeCodeForSession(code)
+  alt Sesi Valid
+    Next->>Audit: Rekam Log Login Sukses (IP, Browser, Email)
+    Next-->>User: Redirect ke /dashboard
+  else Sesi Gagal / Ditolak
+    Next->>Audit: Rekam Log Login Gagal (Alasan Galat)
+    Next-->>User: Redirect ke /login?error=oauth_failed
+  end
+`
+
+---
+
+## Alur Perencanaan & Eksekusi Proyek Multi-Komponen
+
+1. **Pemicu Awal:** Penjualan SPK resmi disetujui Direktur Utama. Sistem otomatis membangkitkan draf proyek pada daftar Manajemen Proyek (/proyek).
+2. **Pengisian 6 Pilar Perencanaan Proyek:**
+   - *1. Tim SDM / Man Power:* Alokasi personil ahli, sertifikasi SKA/SKT, dan durasi penugasan.
+   - *2. Rincian Teknis & Deliverables:* Uraian pekerjaan detail, laporan antara, laporan akhir, dan kriteria penerimaan.
+   - *3. Alur Proses Pengerjaan:* Metodologi kerja berurutan dari persiapan hingga serah terima.
+   - *4. Jadwal & Timesheet:* Target waktu mingguan/bulanan per tahapan kerja.
+   - *5. Pagu Anggaran (RAB Breakdown):* Rincian komponen biaya proyek (upah, lab, sewa alat, akomodasi, transport, overhead).
+   - *6. Termin Pembayaran:* Rencana penarikan pembayaran bertahap dari klien.
+3. **Pengajuan ke Direksi:** Branch Admin / Project Manager meninjau kelengkapan dan mengajukan proyek ke Direksi (pproval_status = 'director_review').
+4. **Evaluasi & Pengesahan Direktur Utama:**
+   - Direktur Teknis memvalidasi kesiapan personil dan metodologi.
+   - Direktur Keuangan mengevaluasi batas margin laba kotor.
+   - Direktur Utama memberikan persetujuan final (ACC).
+5. **Aktivasi & Baseline Anggaran:** Status proyek berubah menjadi ctive. Seluruh rincian RAB terkunci sebagai Pagu Anggaran (Budget Baseline) yang membatasi pengeluaran kasbon dan pengajuan pembelian proyek.
+6. **Notifikasi Hijau & Tandai Dibaca:** Notifikasi konfirmasi persetujuan proyek muncul di lonceng notifikasi pengguna dengan indikator centang hijau sukses dan tombol Tandai Dibaca.
+
