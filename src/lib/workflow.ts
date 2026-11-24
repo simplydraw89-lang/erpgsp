@@ -138,7 +138,7 @@ export const recordSpecs: Record<RecordType, RecordSpec> = {
     module: "sdm",
     table: "hr_employees",
     writers: ["owner", "hr"],
-    readers: ["owner", "director", "hr"],
+    readers: all,
     fields: [
       field("employee_number", "Nomor karyawan", "text", true),
       field("full_name", "Nama lengkap", "text", true),
