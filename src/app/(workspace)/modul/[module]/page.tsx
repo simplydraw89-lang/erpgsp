@@ -945,6 +945,13 @@ async function SdmLoader({
     myTasksRes,
     branchesRes,
     employeeProfileRes,
+    myReimbursementsRes,
+    mySppdRes,
+    myTimesheetsRes,
+    myDocumentsRes,
+    allLeaveRequestsRes,
+    allAttendanceRes,
+    disciplinaryRes,
   ] = await Promise.all([
     supabase
       .from("payroll_runs")
@@ -1009,6 +1016,53 @@ async function SdmLoader({
       .or(`created_by.eq.${currentUserId},email.ilike.${userEmail}`)
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from("hr_reimbursements")
+      .select("id,title,category,amount,expense_date,receipt_url,description,status,review_note,created_at")
+      .eq("organization_id", organizationId)
+      .eq("user_id", currentUserId)
+      .order("created_at", { ascending: false })
+      .limit(30),
+    supabase
+      .from("hr_sppd")
+      .select("id,sppd_number,destination_city,departure_date,return_date,purpose,daily_allowance,status,field_report_notes,created_at")
+      .eq("organization_id", organizationId)
+      .eq("user_id", currentUserId)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("hr_timesheets")
+      .select("id,log_date,duration_hours,activity_description,project_id,created_at")
+      .eq("organization_id", organizationId)
+      .eq("user_id", currentUserId)
+      .order("log_date", { ascending: false })
+      .limit(30),
+    supabase
+      .from("hr_employee_documents")
+      .select("id,doc_type,title,file_url,certificate_expiry,verification_status,created_at")
+      .eq("organization_id", organizationId)
+      .eq("user_id", currentUserId)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("leave_requests")
+      .select("id,user_id,leave_type,starts_on,ends_on,total_days,reason,status,created_at")
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false })
+      .limit(50),
+    supabase
+      .from("hr_attendance")
+      .select("id,user_id,employee_id,work_date,clock_in,clock_out,attendance_status,attendance_type,latitude,longitude,photo_data,reason,location_note")
+      .eq("organization_id", organizationId)
+      .eq("work_date", today)
+      .order("clock_in", { ascending: false })
+      .limit(50),
+    supabase
+      .from("hr_disciplinary_actions")
+      .select("id,employee_id,sp_number,level,incident_date,issue_description,effective_until,notes,created_at")
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false })
+      .limit(30),
   ])
 
   const branches = branchesRes.data ?? []
@@ -1073,6 +1127,60 @@ async function SdmLoader({
   const canManagePayroll = !isReadOnly && (actorRole === "owner" || ["hr", "finance"].includes(role))
   const canApprovePayroll = !isReadOnly && (actorRole === "owner" || ["director", "finance"].includes(role))
 
+  const myReimbursements = (myReimbursementsRes.data ?? []) as any
+  const mySppdList = (mySppdRes.data ?? []) as any
+  const myTimesheets = (myTimesheetsRes.data ?? []) as any
+  const myDocuments = (myDocumentsRes.data ?? []) as any
+
+  const allLeaveRequests = (allLeaveRequestsRes.data ?? []).map((r) => {
+    const emp = employees.find((e) => e.id === r.user_id)
+    return {
+      id: r.id,
+      employee_name: emp?.full_name || "Staf PT Global Solusi Prima",
+      leave_type: r.leave_type,
+      starts_on: r.starts_on,
+      ends_on: r.ends_on,
+      total_days: Number(r.total_days ?? 1),
+      reason: r.reason,
+      status: r.status,
+      created_at: r.created_at,
+    }
+  })
+
+  const monitoringLogs = (allAttendanceRes.data ?? []).map((att) => {
+    const emp = employees.find((e) => e.id === att.employee_id)
+    return {
+      id: att.id,
+      employee_name: emp?.full_name || "Karyawan Lapangan",
+      branch_name: branches[0]?.name || "Cabang Jakarta",
+      attendance_type: (att.attendance_type || "office") as "office" | "site",
+      clock_in: att.clock_in,
+      clock_out: att.clock_out,
+      attendance_status: att.attendance_status || "present",
+      latitude: att.latitude ? Number(att.latitude) : null,
+      longitude: att.longitude ? Number(att.longitude) : null,
+      photo_data: att.photo_data || null,
+      reason: att.reason || null,
+      location_note: att.location_note || null,
+    }
+  })
+
+  const disciplinaryRecords = (disciplinaryRes.data ?? []).map((d) => {
+    const emp = employees.find((e) => e.id === d.employee_id)
+    return {
+      id: d.id,
+      employee_id: d.employee_id,
+      employee_name: emp?.full_name || "Karyawan Bersangkutan",
+      sp_number: d.sp_number,
+      level: d.level as any,
+      incident_date: d.incident_date,
+      issue_description: d.issue_description,
+      effective_until: d.effective_until,
+      notes: d.notes,
+      created_at: d.created_at,
+    }
+  })
+
   return (
     <SdmTabShell
       profile={profileData}
@@ -1084,12 +1192,19 @@ async function SdmLoader({
       leaveQuota={leaveBalancesRes.data?.annual_quota ?? 12}
       leaveUsed={leaveBalancesRes.data?.used_days ?? 0}
       myLeaveRequests={(leaveRequestsRes.data ?? []) as any}
+      myReimbursements={myReimbursements}
+      mySppdList={mySppdList}
+      myTimesheets={myTimesheets}
+      myDocuments={myDocuments}
       userName={userName}
       canManageHR={canManageHR}
       canManagePayroll={canManagePayroll}
       canApprovePayroll={canApprovePayroll}
       allEmployees={employees}
       allPayrollRuns={runs}
+      allLeaveRequests={allLeaveRequests}
+      monitoringLogs={monitoringLogs}
+      disciplinaryRecords={disciplinaryRecords}
       currentUserId={currentUserId}
       isOwner={actorRole === "owner"}
     />
