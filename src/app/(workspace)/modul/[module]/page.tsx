@@ -29,6 +29,8 @@ import {
   type EmployeeOption,
   type PayrollRunRow,
 } from "@/components/hr/payroll-workbench"
+import { SdmTabShell } from "@/components/hr/sdm-tab-shell"
+import { getDisplayName } from "@/lib/dashboard"
 import {
   AssetDepreciationPanel,
   type AssetDepreciationRow,
@@ -818,13 +820,14 @@ export default async function ModulePage({
         />
       )}
       {key === "sdm" && (
-        <PayrollLoader
+        <SdmLoader
           supabase={supabase}
           organizationId={organizationId}
           employees={(recordsResult.data ?? []) as unknown as EmployeeOption[]}
           role={role}
           actorRole={workspace.actorRole}
           currentUserId={workspace.user.id}
+          userName={getDisplayName(workspace.user)}
           isReadOnly={workspace.isReadOnlyPreview}
         />
       )}
@@ -903,13 +906,14 @@ async function TaxRecapLoader({
   )
 }
 
-async function PayrollLoader({
+async function SdmLoader({
   supabase,
   organizationId,
   employees,
   role,
   actorRole,
   currentUserId,
+  userName,
   isReadOnly,
 }: {
   supabase: Awaited<ReturnType<typeof requireWorkspace>>["supabase"]
@@ -918,22 +922,89 @@ async function PayrollLoader({
   role: string
   actorRole: string
   currentUserId: string
+  userName: string
   isReadOnly: boolean
 }) {
-  const runsRes = await supabase
-    .from("payroll_runs")
-    .select("id,period_month,title,status,total_gross,total_deductions,total_net,created_by,created_at")
-    .eq("organization_id", organizationId)
-    .order("period_month", { ascending: false })
-    .limit(24)
+  const today = new Date().toISOString().slice(0, 10)
 
-  if (isWorkflowMissing(runsRes.error)) return null
+  const [runsRes, attendanceRes, todayAttRes, payslipsRes, leaveBalancesRes, leaveRequestsRes] =
+    await Promise.all([
+      supabase
+        .from("payroll_runs")
+        .select("id,period_month,title,status,total_gross,total_deductions,total_net,created_by,created_at")
+        .eq("organization_id", organizationId)
+        .order("period_month", { ascending: false })
+        .limit(24),
+      supabase
+        .from("hr_attendance")
+        .select("id,work_date,clock_in,clock_out,attendance_status,work_summary,location_note")
+        .eq("organization_id", organizationId)
+        .order("work_date", { ascending: false })
+        .limit(30),
+      supabase
+        .from("hr_attendance")
+        .select("id,work_date,clock_in,clock_out,attendance_status,work_summary,location_note")
+        .eq("organization_id", organizationId)
+        .eq("work_date", today)
+        .eq("user_id", currentUserId)
+        .maybeSingle(),
+      supabase
+        .from("payroll_items")
+        .select("id,payroll_run_id,base_salary,allowances,deductions,pph21_amount,net_pay,notes,created_at")
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: false })
+        .limit(30),
+      supabase
+        .from("leave_balances")
+        .select("annual_quota,used_days")
+        .eq("organization_id", organizationId)
+        .eq("user_id", currentUserId)
+        .eq("leave_year", new Date().getFullYear())
+        .maybeSingle(),
+      supabase
+        .from("leave_requests")
+        .select("id,leave_type,starts_on,ends_on,total_days,reason,status,created_at")
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+    ])
+
+  const runs = (runsRes.data ?? []) as PayrollRunRow[]
+
+  const payslips = (payslipsRes.data ?? []).map((p) => {
+    const run = runs.find((r) => r.id === p.payroll_run_id)
+    return {
+      id: p.id,
+      period_month: run?.period_month || "2026-11",
+      title: run?.title || "Gaji Bulanan",
+      status: run?.status || "paid",
+      base_salary: Number(p.base_salary ?? 0),
+      allowances: Number(p.allowances ?? 0),
+      deductions: Number(p.deductions ?? 0),
+      pph21_amount: Number(p.pph21_amount ?? 0),
+      net_pay: Number(p.net_pay ?? 0),
+      notes: p.notes,
+      created_at: p.created_at,
+      employee_name: userName,
+    }
+  })
+
+  const canManagePayroll = !isReadOnly && (actorRole === "owner" || ["hr", "finance"].includes(role))
+  const canApprovePayroll = !isReadOnly && (actorRole === "owner" || ["director", "finance"].includes(role))
+
   return (
-    <PayrollWorkbench
+    <SdmTabShell
+      todayAttendance={todayAttRes.data ?? null}
+      attendanceRecords={attendanceRes.data ?? []}
+      payslips={payslips}
       employees={employees}
-      runs={(runsRes.data ?? []) as PayrollRunRow[]}
-      canCreate={!isReadOnly && (actorRole === "owner" || ["hr", "finance"].includes(role))}
-      canApprove={!isReadOnly && (actorRole === "owner" || ["director", "finance"].includes(role))}
+      payrollRuns={runs}
+      leaveQuota={leaveBalancesRes.data?.annual_quota ?? 12}
+      leaveUsed={leaveBalancesRes.data?.used_days ?? 0}
+      leaveRequests={leaveRequestsRes.data ?? []}
+      userName={userName}
+      canManagePayroll={canManagePayroll}
+      canApprovePayroll={canApprovePayroll}
       currentUserId={currentUserId}
       isOwner={actorRole === "owner"}
     />

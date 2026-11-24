@@ -1,7 +1,7 @@
 import { requireWorkspace } from "@/lib/auth/context"
 import { getDisplayName } from "@/lib/dashboard"
 import { roleLabels } from "@/lib/app-catalog"
-import { ThemeSettingsView } from "@/components/settings/theme-settings-view"
+import { SettingsTabShell } from "@/components/settings/settings-tab-shell"
 
 export const dynamic = "force-dynamic"
 
@@ -13,7 +13,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <ThemeSettingsView
+      <SettingsTabShell
         userName={userName}
         email={user.email ?? "-"}
         roleLabel={activeRoleLabel}

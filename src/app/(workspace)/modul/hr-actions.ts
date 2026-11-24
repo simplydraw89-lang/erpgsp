@@ -81,3 +81,95 @@ export async function approvePayrollRunAction(data: FormData) {
       : "Payroll ditandai sudah dibayarkan.",
   )
 }
+
+export async function recordAttendanceAction(data: FormData) {
+  const { supabase, organizationId, isReadOnlyPreview } = await requireWorkspace()
+  if (isReadOnlyPreview) {
+    finish("error", "Mode lihat sebagai aktif: absensi dinonaktifkan.")
+  }
+
+  const status = String(data.get("attendance_status") ?? "present").trim()
+  const summary = String(data.get("work_summary") ?? "").trim()
+  const location = String(data.get("location_note") ?? "").trim()
+
+  const { data: res, error } = await supabase.rpc("record_attendance_entry", {
+    p_org: organizationId,
+    p_status: status,
+    p_work_summary: summary || null,
+    p_location_note: location || null,
+  })
+
+  if (error) {
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: existing } = await supabase
+      .from("hr_attendance")
+      .select("id, clock_in")
+      .eq("organization_id", organizationId)
+      .eq("work_date", today)
+      .maybeSingle()
+
+    if (existing) {
+      const { error: updateErr } = await supabase
+        .from("hr_attendance")
+        .update({
+          clock_out: new Date().toISOString(),
+          attendance_status: status,
+          work_summary: summary || null,
+          location_note: location || null,
+        })
+        .eq("id", existing.id)
+      if (updateErr) finish("error", updateErr.message)
+      revalidatePath(sdmPath)
+      finish("notice", "Absen pulang berhasil dicatat.")
+    } else {
+      const { error: insertErr } = await supabase
+        .from("hr_attendance")
+        .insert({
+          organization_id: organizationId,
+          work_date: today,
+          clock_in: new Date().toISOString(),
+          attendance_status: status,
+          work_summary: summary || null,
+          location_note: location || null,
+        })
+      if (insertErr) finish("error", insertErr.message)
+      revalidatePath(sdmPath)
+      finish("notice", "Absen masuk berhasil dicatat.")
+    }
+  }
+
+  revalidatePath(sdmPath)
+  finish("notice", res?.message || "Data kehadiran berhasil dicatat.")
+}
+
+export async function submitLeaveAction(data: FormData) {
+  const { supabase, organizationId, isReadOnlyPreview } = await requireWorkspace()
+  if (isReadOnlyPreview) {
+    finish("error", "Mode lihat sebagai aktif: pengajuan cuti dinonaktifkan.")
+  }
+
+  const leaveType = String(data.get("leave_type") ?? "annual").trim()
+  const startsOn = String(data.get("starts_on") ?? "").trim()
+  const endsOn = String(data.get("ends_on") ?? "").trim()
+  const totalDays = Number(data.get("total_days") ?? 1)
+  const reason = String(data.get("reason") ?? "").trim()
+  const branchId = String(data.get("branch_id") ?? "").trim() || null
+
+  if (!startsOn || !endsOn || !reason) {
+    finish("error", "Tanggal mulai, selesai, dan alasan cuti wajib diisi.")
+  }
+
+  const { error } = await supabase.rpc("submit_leave_request", {
+    p_org: organizationId,
+    p_branch_id: branchId,
+    p_leave_type: leaveType,
+    p_starts_on: startsOn,
+    p_ends_on: endsOn,
+    p_total_days: totalDays,
+    p_reason: reason,
+  })
+
+  if (error) finish("error", error.message)
+  revalidatePath(sdmPath)
+  finish("notice", "Pengajuan cuti berhasil dikirim.")
+}

@@ -9,6 +9,7 @@ import { isProcurementMissing, procurementInput as input, procurementLabel as la
 import { savePortalEntry, setPortalAccess, provisionPortalClientAction, sendClientPasswordResetAction } from "./actions"
 import { ProjectPortalView, type PortalEntryItem } from "@/components/project/project-portal-view"
 import { ProjectMilestonesManager, type MilestoneAttachmentOption } from "@/components/project/project-milestones-manager"
+import { GoogleDriveSyncPanel } from "@/components/project/google-drive-sync-panel"
 import { getProjectMilestones, isMilestoneSyncEntry } from "@/lib/project-milestones"
 
 type PortalProject = {
@@ -223,6 +224,17 @@ export default async function ProjectPortalPage({
   const canSubmit = Boolean(project && (project.is_internal || project.can_submit) && !w.isReadOnlyPreview)
 
   portalEntries = portalEntries.filter((e) => !isMilestoneSyncEntry(e))
+
+  const driveItems = portalEntries
+    .filter((e) => e.body.includes("drive.google.com") || e.kind === "document")
+    .map((e) => ({
+      id: e.id,
+      title: e.title,
+      url: e.body.startsWith("http") ? e.body : `https://${e.body}`,
+      sharedBy: e.metadata?.sender_type === "client" ? "Klien" : "PIC Proyek",
+      sharedAt: new Date(e.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }),
+      type: (e.body.includes("/folders/") ? "folder" : e.body.includes("/spreadsheets/") ? "sheet" : "file") as any,
+    }))
 
   const portalTab = q.tab === "milestones" && isInternal && !isClient ? "milestones" : "kolaborasi"
   const milestones = project ? await getProjectMilestones(project.id, w.organizationId) : []
@@ -514,16 +526,26 @@ export default async function ProjectPortalPage({
                 />
               ) : (
                 /* Interactive 2-Way Collaboration & MoM View */
-                <ProjectPortalView
-                  projectId={project.id}
-                  branchId={project.branch_id}
-                  isInternal={isInternal}
-                  isDirector={isDirector}
-                  isClient={isClient}
-                  canSubmit={canSubmit}
-                  entries={portalEntries}
-                  disabled={w.isReadOnlyPreview}
-                />
+                <div className="space-y-6">
+                  <GoogleDriveSyncPanel
+                    projectId={project.id}
+                    projectName={project.name}
+                    canManage={canSubmit}
+                    isClient={isClient}
+                    driveItems={driveItems}
+                  />
+
+                  <ProjectPortalView
+                    projectId={project.id}
+                    branchId={project.branch_id}
+                    isInternal={isInternal}
+                    isDirector={isDirector}
+                    isClient={isClient}
+                    canSubmit={canSubmit}
+                    entries={portalEntries}
+                    disabled={w.isReadOnlyPreview}
+                  />
+                </div>
               )}
             </div>
           )}

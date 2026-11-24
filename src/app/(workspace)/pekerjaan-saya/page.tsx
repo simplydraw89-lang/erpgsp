@@ -17,6 +17,7 @@ import { SalesKpiCards } from "@/components/director/sales-kpi-cards"
 import { DirectorPurchaseQueue } from "@/components/director/director-purchase-queue"
 import { DirectorSphQueue } from "@/components/director/director-sph-queue"
 import { DirectorSpkQueue } from "@/components/director/director-spk-queue"
+import { JakartaCrossBranchHub } from "@/components/branch/jakarta-cross-branch-hub"
 
 const roleWorkspaces = {
   owner: [
@@ -73,7 +74,7 @@ export default async function MyWorkPage({
   searchParams: Promise<{ tab?: string; sales_tab?: string }>
 }) {
   const query = await searchParams
-  const { supabase, organizationId, user, role, actorRole, workAssignments } = await requireWorkspace()
+  const { supabase, organizationId, user, role, actorRole, workAssignments, isReadOnlyPreview } = await requireWorkspace()
 
   const isDirector =
     role === "owner" ||
@@ -87,7 +88,7 @@ export default async function MyWorkPage({
   const businessSummaryPromise = loadBusinessSummary(supabase, organizationId, { includeReport: false })
   
   // Load tasks, approvals, revisions
-  const [tasks, approvals, revisions, directorData, branchesRes, pendingPurchasesRes, pendingSphRes, pendingSpkRes] =
+  const [tasks, approvals, revisions, directorData, branchesRes, pendingPurchasesRes, pendingSphRes, pendingSpkRes, hubProjectsRes, employeesRes, allTasksRes] =
     await Promise.all([
       supabase
         .from("operational_work_items")
@@ -111,7 +112,7 @@ export default async function MyWorkPage({
         .eq("created_by", user.id)
         .eq("state", "rejected"),
       isDirector ? loadDirectorDashboard(supabase, organizationId) : Promise.resolve(null),
-      supabase.from("business_units").select("id, name").eq("organization_id", organizationId),
+      supabase.from("business_units").select("id, code, name").eq("organization_id", organizationId),
       // Purchases needing director review
       isDirector
         ? supabase
@@ -140,6 +141,23 @@ export default async function MyWorkPage({
             .eq("kind", "spk")
             .order("created_at", { ascending: false })
         : Promise.resolve({ data: [], error: null }),
+      // Data monitoring cabang Jakarta
+      supabase
+        .from("crm_projects")
+        .select("id, code, name, branch_id, status")
+        .eq("organization_id", organizationId)
+        .limit(60),
+      supabase
+        .from("hr_employees")
+        .select("id, full_name, email, job_title")
+        .eq("organization_id", organizationId)
+        .limit(60),
+      supabase
+        .from("operational_work_items")
+        .select("id, title, description, status, priority, due_on, project_id, assigned_to, created_at")
+        .eq("organization_id", organizationId)
+        .order("created_at", { ascending: false })
+        .limit(40),
     ])
 
   if ([tasks.error, approvals.error, revisions.error].some(isWorkflowMissing))
@@ -155,6 +173,12 @@ export default async function MyWorkPage({
   const businessSummary = await businessSummaryPromise
 
   const branches = branchesRes.data ?? []
+  const isJakartaCoordinator =
+    isDirector ||
+    workAssignments.some((j) => {
+      const branch = branches.find((b) => b.id === j.branch_id)
+      return branch?.code === "JKT" || branch?.code === "PUSAT"
+    })
   const pendingPurchases = (pendingPurchasesRes.data ?? []).map((p) => {
     const branch = branches.find((b) => b.id === p.branch_id)
     return {
@@ -271,6 +295,39 @@ export default async function MyWorkPage({
             </div>
           </div>
         </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* HUB PEMANTAUAN & DELEGASI TUGAS CABANG JAKARTA KE CABANG LAIN */}
+      {/* ========================================================================= */}
+      {isJakartaCoordinator && (
+        <JakartaCrossBranchHub
+          branches={(branchesRes.data ?? []).map((b) => ({ id: b.id, code: b.code ?? "", name: b.name }))}
+          projects={(hubProjectsRes.data ?? []).map((p) => ({
+            id: p.id,
+            code: p.code,
+            name: p.name,
+            branch_id: p.branch_id,
+            status: p.status,
+          }))}
+          tasks={(allTasksRes.data ?? []).map((t) => ({
+            id: t.id,
+            title: t.title,
+            description: t.description,
+            status: t.status,
+            priority: t.priority,
+            due_on: t.due_on,
+            project_id: t.project_id,
+            assigned_to: t.assigned_to,
+            created_at: t.created_at,
+          }))}
+          staffList={(employeesRes.data ?? []).map((e) => ({
+            id: e.id,
+            name: e.full_name,
+            phone: e.email ? "" : undefined,
+          }))}
+          canManage={!isReadOnlyPreview}
+        />
       )}
 
       {/* ========================================================================= */}

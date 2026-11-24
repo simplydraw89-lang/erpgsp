@@ -66,3 +66,35 @@ export async function deleteFiscalAdjustmentAction(data: FormData) {
   revalidatePath(taxPath)
   finish("notice", "Koreksi fiskal berhasil dihapus.")
 }
+
+export async function saveWhtProofAction(data: FormData) {
+  const { supabase, organizationId, isReadOnlyPreview } = await requireWorkspace()
+  if (isReadOnlyPreview) {
+    finish("error", "Mode lihat sebagai aktif: pembaruan bukti potong dinonaktifkan.")
+  }
+
+  const invoiceId = String(data.get("invoice_id") ?? "").trim()
+  const whtProofNumber = String(data.get("wht_proof_number") ?? "").trim()
+
+  if (!invoiceId) {
+    finish("error", "Invoice tidak ditemukan.")
+  }
+
+  const { error } = await supabase
+    .from("sales_invoices")
+    .update({
+      wht_proof_number: whtProofNumber || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", invoiceId)
+    .eq("organization_id", organizationId)
+
+  if (error) finish("error", error.message)
+  revalidatePath(taxPath)
+  finish(
+    "notice",
+    whtProofNumber
+      ? `Bukti potong PPh 23 ${whtProofNumber} berhasil dicatat.`
+      : "Nomor bukti potong berhasil dikosongkan."
+  )
+}
